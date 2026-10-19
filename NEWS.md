@@ -30,3 +30,11 @@
   cannot add another unit and enlarge the kernel radius in optimized builds.
 * Excluded local reference PDFs from package builds and made execution of the
   external Providence-data example opt-in for portable package checks.
+# Development: relational neighborhoods
+
+- Euclidean searches now use Boost.Geometry through BH; the vendored nanoflann
+  backend has been removed. Use `search = "boost"` (the default) or `"brute"`.
+- Population kNN includes equidistant boundary units proportionately after the
+  focal unit, avoiding row-order dependence. Radius searches include their closed
+  boundary, including cases affected by square-root rounding.
+

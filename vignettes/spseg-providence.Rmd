@@ -171,7 +171,7 @@ providence_spseg <-
     weighting = "biweight",
     power = 2,
     neighbors = "radius",
-    search = "kdtree",
+    search = "boost",
     surface = 'raw',
     normalize = TRUE,
     scope = "both",

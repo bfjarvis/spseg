@@ -7,7 +7,7 @@ Author: Seong-Yun Hong <syhong@khu.ac.kr> and David O'Sullivan, with code
 Maintainer: Seong-Yun Hong <syhong@khu.ac.kr>
 Depends: R (>= 4.2.0)
 Imports: sf, stats, terra
-LinkingTo: Rcpp, RcppArmadillo
+LinkingTo: Rcpp, RcppArmadillo, BH (>= 1.84.0-0)
 Suggests: ggplot2, knitr, dplyr, tidyr, rmarkdown, roxygen2, testthat (>= 3.0.0)
 Config/testthat/edition: 3
 VignetteBuilder: knitr

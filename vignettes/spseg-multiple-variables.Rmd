@@ -115,11 +115,11 @@ without accounting for population.
 kNN selects exactly the requested eligible population **before distance
 weighting**, to numerical precision. It includes the focal support unit first,
 fractionally if its population exceeds the threshold, then adds other units
-by distance and includes the final unit fractionally. Kernel weighting can
+by distance and includes the boundary distance group proportionately. Kernel weighting can
 reduce the resulting effective population; normalized kernel distances use
 each variable's selected radius. An error identifies any variable whose
 total eligible population is below the requested threshold. The shared
-candidate search expands until all variable populations can reach the largest
+candidate iterator advances until all variable populations can reach the largest
 threshold; variables with identical populations also reuse contributions.
 
 
@@ -131,8 +131,9 @@ selected neighborhoods; it does not select a new neighborhood for every pair.
 To select 100 members of a particular pair, supply a separate categorical
 specification with only those two count columns.
 
-Equidistant units are ordered by row index, with the focal unit first. This
-geographic convention is separate from ties in the attribute.
+The focal unit enters first. All other units at the boundary distance receive
+the same population inclusion fraction, making boundary selection independent
+of row order. This geographic convention is separate from ties in the attribute.
 Radius zero includes all coincident support points, matching the existing
 radius-search implementation; with distinct support points it uses the focal
 unit's distribution. Individual-level radius zero need not describe a

@@ -16,7 +16,7 @@ spseg(
   power = 3,
   normalize = TRUE,
   neighbors = c("radius", "knn"),
-  search = c("kdtree", "brute"),
+  search = c("boost", "brute"),
   surface = c("raw", "grid", "pycno"),
   surface_audit = FALSE,
   scope = c("both", "multigroup", "pairwise"),
@@ -82,8 +82,8 @@ the search radius when `neighbors = "radius"`.}
 \item{neighbors}{Neighborhood strategy. "radius" uses distance
 bandwidths. "knn" uses count-based adaptive neighborhoods.}
 
-\item{search}{Neighbor-search backend. "kdtree" uses the exact
-nanoflann kd-tree backend. "brute" computes candidate distances
+\item{search}{Neighbor-search backend. "boost" uses the exact
+Boost.Geometry R-tree backend. "brute" computes candidate distances
 directly and is mainly useful for validation.}
 
 \item{surface}{Population surface used before local environments are
@@ -148,9 +148,9 @@ support points, or just the focal unit when coordinates are distinct.
 
 When `neighbors = "knn"`, `bands` is interpreted as population-count
 thresholds before distance weighting. Each variable
-selects the requested eligible population, including the focal or final
-boundary unit fractionally when needed. Neighboring units are added in
-order of centroid distance. An unattainable threshold raises an error.
+selects the requested eligible population, truncating the focal unit when
+needed and including equidistant boundary units proportionately. Neighboring
+units are added by centroid distance. An unattainable threshold raises an error.
 
 Each named variable has a result in `result$analyses`. Its multigroup
 measures are stored in `indices$multigroup` and requested pairwise

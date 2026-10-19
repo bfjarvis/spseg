@@ -539,15 +539,15 @@ test_that("kNN uses count-based thresholds with fractional boundary units", {
   expect_equal(result$neighbors$units, "population")
   expect_equal(unname(result$analyses$groups$env[[1]]), unname(values/rowSums(values)))
   expect_equal(result$analyses$groups$env[[2]][1, ], c(a = 2/3, b = 1/3))
-  expect_equal(result$analyses$groups$env[[2]][2, ], c(a = 1/3, b = 2/3))
+  expect_equal(result$analyses$groups$env[[2]][2, ], c(a = 1/6, b = 5/6))
   expect_equal(result$analyses$groups$env[[2]][3, ], c(a = 0, b = 1))
 })
 
-test_that("brute force search matches kd-tree search", {
+test_that("brute force search matches Boost search", {
   toy <- toy_grid(cols = 5:6)
 
   radius_tree <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
-                       search = "kdtree", output = "full")
+                       search = "boost", output = "full")
   radius_brute <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
                         search = "brute", output = "full")
 
@@ -557,7 +557,7 @@ test_that("brute force search matches kd-tree search", {
 
   knn_tree <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(10, 25),
                     neighbors = "knn", weighting = "unweighted",
-                    normalize = FALSE, search = "kdtree", output = "full")
+                    normalize = FALSE, search = "boost", output = "full")
   knn_brute <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(10, 25),
                      neighbors = "knn", weighting = "unweighted",
                      normalize = FALSE, search = "brute", output = "full")

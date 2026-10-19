@@ -1,6 +1,5 @@
 #include <RcppArmadillo.h>
-// [[Rcpp::depends(RcppArmadillo)]]
-#include "nanoflann.h"
+// [[Rcpp::depends(RcppArmadillo, BH)]]
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -8,6 +7,7 @@
 #include <vector>
 #include <numeric>
 #include "spseg_neighbors.h"
+#include "spseg_euclidean.h"
 
 using namespace Rcpp;
 using namespace spseg_spatial;
@@ -364,8 +364,7 @@ List spseg_engine_cpp(NumericMatrix coords, List variables,
   const int n=coords.nrow(), B=bands.size();
   arma::vec X(coords.begin(),n,false), Y(coords.begin()+n,n,false);
   const double largest=*std::max_element(bands.begin(),bands.end());
-  PointCloud cloud{X,Y}; std::unique_ptr<KDTree> tree;
-  if(search==0) tree.reset(new KDTree(2,cloud,nanoflann::KDTreeSingleIndexAdaptorParams(10)));
+  EuclideanSearch discovery(X,Y,search==0);
   std::vector<std::unique_ptr<Model>> models;
   for(int v=0;v<variables.size();++v)
     models.emplace_back(new Model(as<List>(variables[v]),n,B,keep_env,keep_indices,scope[0],scope[1]));
@@ -384,9 +383,7 @@ List spseg_engine_cpp(NumericMatrix coords, List variables,
   int focal_searches=0;
   for(int i=0;i<n;++i) {
     if(i%256==0) checkUserInterrupt();
-    const auto candidates=knn ?
-      variable_knn_neighbors(tree.get(),i,X,Y,eligible,largest) :
-      (tree ? radius_neighbors(*tree,i,X,Y,largest) : all_neighbors(i,X,Y));
+    const auto candidates=discovery.find(i,largest,knn,eligible);
     ++focal_searches;
     for(int b=0;b<B;++b) {
       if(knn) {

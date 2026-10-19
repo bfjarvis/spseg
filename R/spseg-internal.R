@@ -85,7 +85,7 @@
     stop("'variables' must be a uniquely named list of spseg_variable specifications",
          call. = FALSE)
   neighbors <- match.arg(neighbors, c("radius", "knn"))
-  search <- match.arg(search, c("kdtree", "brute"))
+  search <- match.arg(search, c("boost", "brute"))
   weighting <- match.arg(weighting, c("biweight", "unweighted", "inverse", "exponential"))
   surface <- match.arg(surface, c("raw", "grid", "pycno"))
   scope <- match.arg(scope, c("both", "multigroup", "pairwise"))
@@ -147,7 +147,7 @@
   engine <- spseg_engine_cpp(checked$coords, compiled, as.numeric(bands),
                          power, .spseg_weighting_id(weighting), normalize,
                          match(neighbors, c("radius", "knn")) - 1L,
-                         match(search, c("kdtree", "brute")) - 1L,
+                         match(search, c("boost", "brute")) - 1L,
                          as.integer(.spseg_scope_flags(scope)), output != "indices",
                          output != "localenv")
   analyses <- Map(.spseg_restore_analysis, engine$analyses, compiled,
