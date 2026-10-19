@@ -1,6 +1,6 @@
 Package: seg
-Version: 1.0.0
-Date: 2026-05-18
+Version: 1.0.0.9000
+Date: 2026-10-19
 Title: Measuring Spatial Segregation
 Author: Seong-Yun Hong <syhong@khu.ac.kr> and David O'Sullivan, with code 
   contributions by Benjamin Jarvis and Changlock Choi

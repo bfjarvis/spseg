@@ -9,6 +9,10 @@ seg_indices_env_cpp <- function(data, env, measures, scope) {
     .Call(`_seg_seg_indices_env_cpp`, data, env, measures, scope)
 }
 
+seg_multi_cpp <- function(coords, population, variables, bands, power, weighting, normalize, neighbors, search, scope, keep_env, keep_indices) {
+    .Call(`_seg_seg_multi_cpp`, coords, population, variables, bands, power, weighting, normalize, neighbors, search, scope, keep_env, keep_indices)
+}
+
 seg_pycno_cpp <- function(zone_ids, values, nx, ny, max_iter, converge) {
     .Call(`_seg_seg_pycno_cpp`, zone_ids, values, nx, ny, max_iter, converge)
 }

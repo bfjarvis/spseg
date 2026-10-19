@@ -364,7 +364,7 @@ as.data.frame.seg_result <- function(
   if (what == "indices") {
     multigroup <- x$indices$multigroup
     out <- data.frame()
-    scalar_names <- intersect(c("d", "r", "h"), names(multigroup))
+    scalar_names <- intersect(c("d", "r", "h", "s"), names(multigroup))
     for (nm in scalar_names) {
       values <- multigroup[[nm]]
       if (length(values) > 0) {
@@ -386,7 +386,7 @@ as.data.frame.seg_result <- function(
   if (what == "pairwise") {
     pairwise <- x$indices$pairwise
     out <- data.frame()
-    scalar_names <- intersect(c("d", "r", "h"), names(pairwise))
+    scalar_names <- intersect(c("d", "r", "h", "s"), names(pairwise))
     for (nm in scalar_names) {
       mats <- pairwise[[nm]]
       if (length(mats) == 0) {

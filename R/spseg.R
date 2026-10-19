@@ -47,13 +47,16 @@
 #'
 #' @param x A numeric matrix or data frame with two coordinate columns, or
 #'   an object of class [sf::sf]. For polygon [sf::sf] inputs, centroids
-#'   are used as the focal coordinates.
-#' @param data A numeric matrix or data frame with one row per coordinate or
-#'   feature and at least two population-group columns. If `x` is an
-#'   [sf::sf] object, `data` may be omitted and the non-geometry columns
-#'   of `x` are used.
+#'   are used as the focal coordinates. With `variables`, a plain data frame
+#'   may contain both attributes and the columns selected by `coords`.
+#' @param data Optional attribute data with one row per coordinate or feature.
+#'   Legacy calls require numeric population counts in at least two columns.
+#'   With `variables`, this may instead contain category memberships, observed
+#'   numerical values, and counts selected by the specifications. If omitted,
+#'   attributes come from `x` (excluding sf geometry).
 #' @param measures A character vector naming measures to compute: "all",
-#'   "exposure", "information", "diversity", and "dissimilarity".
+#'   "exposure", "information", "diversity", "dissimilarity", or "square_root".
+#'   See `variables` for aliases and the legacy/new meaning of `"all"`.
 #' @param bands Neighborhood thresholds. With `neighbors = "radius"`, these
 #'   are distance bandwidths in the units of `x`. With `neighbors = "knn"`,
 #'   these are population-count thresholds. If omitted for radius
@@ -82,11 +85,30 @@
 #'   counts when applicable. The default retains only lightweight grid and
 #'   fallback metadata.
 #' @param scope Whether to calculate "multigroup" measures, "pairwise"
-#'   two-group measures, or "both".
+#'   two-group measures, or "both" for categorical outcomes. Ordered outcomes
+#'   always return their cumulative-threshold summaries; exposure is separate.
 #' @param output Return mode. "indices" stores only segregation indices.
 #'   "full" stores both indices and local environments. "localenv"
 #'   stores local environments without calculating indices.
 #' @param verbose Logical. If `TRUE`, report progress messages.
+#' @param variables Optional uniquely named list of [seg_variables]
+#'   specifications. All variables share neighborhood searches and spatial
+#'   weights. The new interface supports `surface = "raw"`. The measure
+#'   `"square_root"` and aliases `"relative_diversity"`/`"variance_ratio"` are
+#'   available. With `variables`, `"all"` includes the root family; legacy
+#'   `"all"` retains its existing four-family selection. Each specification can
+#'   override `measures`. See `vignette("seg-multiple-variables")` for formulas,
+#'   estimator conventions, sources, and properties.
+#' @param coords For the multiple-variable interface with plain data frames,
+#'   two coordinate column names or positions. For sf input, omit this argument
+#'   to use the active geometry. Distances are Euclidean in coordinate units;
+#'   use an appropriate projected CRS for metric bandwidths.
+#' @param population Common neighborhood population column or numeric vector
+#'   for the multiple-variable interface. Defaults to one per individual row,
+#'   or consistent count/weight totals. Supply it explicitly when variable
+#'   populations differ. Each variable retains its own eligible population for
+#'   index averaging and its reference distribution. kNN thresholds use this
+#'   common population, not a sum across variable specifications.
 #' @param ... Additional population-surface options, such as `cellsize`,
 #'   `celldim`, `nrow`, `ncol`, `max_iter`, `converge`,
 #'   `surface_geometry`. Grid and pycnophylactic surfaces use
@@ -101,7 +123,9 @@
 #' @return An S3 object of class `seg_result`. It is a list with fields
 #'   including `bands`, `indices`, `env`, `coords`, `data`,
 #'   `geometry`, `neighbors`, `surface_info`, and `crs`. Some fields are
-#'   `NULL` depending on `output`.
+#'   `NULL` depending on `output`. Calls with `variables` return a
+#'   [seg_multi_result] inheriting from `seg_result`, with named results under
+#'   `analyses` and shared geometry/neighborhood metadata.
 #'
 #' @note
 #' The exposure/isolation index, P, is presented in matrix form. The spatial
@@ -163,9 +187,23 @@ spseg <- function(
   scope = c("both", "multigroup", "pairwise"),
   output = c("indices", "full", "localenv"),
   verbose = FALSE,
+  variables = NULL,
+  coords = NULL,
+  population = NULL,
   ...
 ) {
   call <- match.call()
+  if (!is.null(variables)) {
+    return(.spseg_multiple(
+      x, data, variables, coords, population, measures, bands,
+      if (missing(weighting)) "biweight" else weighting,
+      power, normalize, neighbors, search, surface, surface_audit,
+      scope, output, verbose, call, list(...)
+    ))
+  }
+  if (!is.null(coords) || !is.null(population)) {
+    stop("'coords' and 'population' require 'variables'", call. = FALSE)
+  }
   output <- match.arg(output)
   scope <- match.arg(scope)
   neighbors <- match.arg(neighbors)
@@ -224,9 +262,13 @@ spseg <- function(
   measures_to_compute <- if (identical(output, "localenv")) {
     character()
   } else {
-    measures
+    spseg_measures(measures)
   }
-  engine <- seg_engine_coords(
+  engine <- if ("square_root" %in% measures_to_compute) {
+    .seg_legacy_engine(pop_surface$coords, pop_surface$data, bands, power,
+                       weighting, normalize, measures_to_compute, scope,
+                       neighbors, search, output)
+  } else seg_engine_coords(
     coords = pop_surface$coords,
     data = pop_surface$data,
     bands = bands,

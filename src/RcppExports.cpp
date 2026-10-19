@@ -48,6 +48,27 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// seg_multi_cpp
+List seg_multi_cpp(NumericMatrix coords, NumericVector population, List variables, NumericVector bands, double power, int weighting, bool normalize, int neighbors, int search, IntegerVector scope, bool keep_env, bool keep_indices);
+RcppExport SEXP _seg_seg_multi_cpp(SEXP coordsSEXP, SEXP populationSEXP, SEXP variablesSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP neighborsSEXP, SEXP searchSEXP, SEXP scopeSEXP, SEXP keep_envSEXP, SEXP keep_indicesSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::traits::input_parameter< NumericMatrix >::type coords(coordsSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type population(populationSEXP);
+    Rcpp::traits::input_parameter< List >::type variables(variablesSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type bands(bandsSEXP);
+    Rcpp::traits::input_parameter< double >::type power(powerSEXP);
+    Rcpp::traits::input_parameter< int >::type weighting(weightingSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< int >::type neighbors(neighborsSEXP);
+    Rcpp::traits::input_parameter< int >::type search(searchSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type scope(scopeSEXP);
+    Rcpp::traits::input_parameter< bool >::type keep_env(keep_envSEXP);
+    Rcpp::traits::input_parameter< bool >::type keep_indices(keep_indicesSEXP);
+    rcpp_result_gen = Rcpp::wrap(seg_multi_cpp(coords, population, variables, bands, power, weighting, normalize, neighbors, search, scope, keep_env, keep_indices));
+    return rcpp_result_gen;
+END_RCPP
+}
 // seg_pycno_cpp
 NumericMatrix seg_pycno_cpp(IntegerVector zone_ids, NumericMatrix values, int nx, int ny, int max_iter, double converge);
 RcppExport SEXP _seg_seg_pycno_cpp(SEXP zone_idsSEXP, SEXP valuesSEXP, SEXP nxSEXP, SEXP nySEXP, SEXP max_iterSEXP, SEXP convergeSEXP) {
@@ -68,6 +89,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_seg_seg_engine_cpp", (DL_FUNC) &_seg_seg_engine_cpp, 13},
     {"_seg_seg_indices_env_cpp", (DL_FUNC) &_seg_seg_indices_env_cpp, 4},
+    {"_seg_seg_multi_cpp", (DL_FUNC) &_seg_seg_multi_cpp, 12},
     {"_seg_seg_pycno_cpp", (DL_FUNC) &_seg_seg_pycno_cpp, 6},
     {NULL, NULL, 0}
 };

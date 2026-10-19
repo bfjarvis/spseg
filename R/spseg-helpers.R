@@ -4,13 +4,15 @@
 # Author: Seong-Yun Hong <hong.seongyun@gmail.com>
 # ------------------------------------------------------------------------------
 spseg_measures <- function(measures) {
+  measures[measures %in% c("relative_diversity", "variance_ratio")] <- "diversity"
   measures <- match.arg(
     measures,
-    c("exposure", "information", "diversity", "dissimilarity", "all"),
+    c("exposure", "information", "diversity", "dissimilarity", "square_root", "all"),
     several.ok = TRUE
   )
   if ("all" %in% measures) {
-    measures <- c("exposure", "information", "diversity", "dissimilarity")
+    measures <- unique(c("exposure", "information", "diversity", "dissimilarity",
+                         setdiff(measures, "all")))
   }
 
   measures
@@ -77,6 +79,7 @@ default_bands <- function(
   }
 
   if (n_points > sample_n) {
+    if (!is.null(weights)) sample_n <- min(sample_n, sum(weights > 0))
     has_seed <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
     if (has_seed) {
       old_seed <- get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
@@ -180,7 +183,7 @@ seg_engine_coords <- function(
       p
     })
   }
-  for (nm in intersect(c("d", "r", "h"), names(out$indices$pairwise))) {
+  for (nm in intersect(c("d", "r", "h", "s"), names(out$indices$pairwise))) {
     out$indices$pairwise[[nm]] <- lapply(
       out$indices$pairwise[[nm]],
       function(x) {
@@ -198,6 +201,9 @@ spseg_indices_from_engine <- function(indices, bands) {
     return(list())
   }
   for (group in intersect(c("multigroup", "pairwise"), names(indices))) {
+    if (length(indices[[group]]$s) > 0) {
+      indices[[group]]$s <- setNames(indices[[group]]$s, bands)
+    }
     if (length(indices[[group]]$d) > 0) {
       indices[[group]]$d <- setNames(indices[[group]]$d, bands)
     }
@@ -222,17 +228,53 @@ spseg_indices_from_env <- function(data, env, measures, scope = "both") {
     measures = as.integer(spseg_measure_flags(measures)),
     scope = as.integer(spseg_scope_flags(scope))
   )
+  if ("square_root" %in% measures) {
+    root <- .seg_root_from_env(data, env, scope)
+    indices$multigroup$s <- root$multigroup
+    indices$pairwise$s <- root$pairwise
+  }
   if (length(indices$multigroup$p) > 0) {
     indices$multigroup$p <- lapply(indices$multigroup$p, function(p) {
       rownames(p) <- colnames(p) <- colnames(data)
       p
     })
   }
-  for (nm in intersect(c("d", "r", "h"), names(indices$pairwise))) {
+  for (nm in intersect(c("d", "r", "h", "s"), names(indices$pairwise))) {
     indices$pairwise[[nm]] <- lapply(indices$pairwise[[nm]], function(x) {
       rownames(x) <- colnames(x) <- colnames(data)
       x
     })
   }
   indices
+}
+
+.seg_root_from_env <- function(data, env, scope) {
+  mass <- rowSums(data)
+  total <- sum(mass)
+  shares <- colSums(data) / total
+  local_mass <- rowSums(env)
+  p <- env / local_mass
+  p[!is.finite(p)] <- 0
+  active <- shares > 0
+  value <- NA_real_
+  if (sum(active) > 1L && !any(mass > 0 & local_mass <= 0)) {
+    local <- exp(rowMeans(log(p[, active, drop = FALSE])))
+    value <- 1-sum(mass*local)/(total*exp(mean(log(shares[active]))))
+  }
+  pairwise <- list()
+  if (scope %in% c("both", "pairwise")) {
+    out <- matrix(NA_real_, ncol(data), ncol(data))
+    for (a in seq_len(ncol(data)-1L)) for (b in seq.int(a+1L,ncol(data))) {
+      if (!active[a] || !active[b]) next
+      m <- data[, a]+data[, b]
+      l <- env[, a]+env[, b]
+      if (any(m > 0 & l <= 0)) next
+      v <- ifelse(l > 0, env[, a]/l, 0)
+      q <- shares[a]/(shares[a]+shares[b])
+      out[a,b] <- out[b,a] <- 1-sum(m*sqrt(v*(1-v)))/(sum(m)*sqrt(q*(1-q)))
+    }
+    pairwise <- list(out)
+  }
+  list(multigroup = if (scope %in% c("both", "multigroup")) value else numeric(),
+       pairwise = pairwise)
 }
