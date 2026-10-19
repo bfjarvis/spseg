@@ -1,5 +1,9 @@
 # spseg 0.9.0.9000
 
+- Added a synthetic-population overview covering individual, regular-grid,
+  Voronoi, and pycnophylactic workflows. The older overview is retained and
+  marked as a legacy introductory guide.
+
 - Euclidean searches now use Boost.Geometry through BH; the vendored nanoflann
   backend has been removed. Use `search = "boost"` (the default) or `"brute"`.
 - Population kNN includes equidistant boundary units proportionately after the

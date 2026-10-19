@@ -1,8 +1,8 @@
 ---
-title: "Measuring Spatial Segregation with spseg"
+title: "Legacy overview: bundled population patterns"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Measuring Spatial Segregation with spseg}
+  %\VignetteIndexEntry{Legacy overview: bundled population patterns}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -17,6 +17,11 @@ knitr::opts_chunk$set(
 ```
 
 # Introduction
+
+**This overview is deprecated as the introductory guide and retained for its
+bundled population examples.** Start with
+[An overview of spseg: from people to population surfaces](spseg-getting-started.html).
+The examples below continue to use the supported interface.
 
 The `spseg` package measures segregation across categorical, ordinal, grouped
 continuous, and observed continuous variables using a shared spatial engine.

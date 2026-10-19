@@ -3,6 +3,11 @@ R package 'spseg' for measuring and visualising population segregation
 
 Pre-1.0 development: the interface may change before the first stable release.
 
+Start with `vignette("spseg-getting-started")` for a reproducible 10,000-person
+example covering individual data, regular and Voronoi aggregation, and
+count-preserving population surfaces. The older `spseg-overview` vignette is
+retained as a legacy guide to the bundled population patterns.
+
 The development interface measures several attributes with shared spatial
 neighborhood searches. Euclidean distance is the default:
 
