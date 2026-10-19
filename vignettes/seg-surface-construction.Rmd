@@ -70,7 +70,11 @@ make_irregular_case <- function(edge_width) {
         c(edge_width, 0)
       ))),
       st_polygon(list(rbind(
-        c(3, 0), c(6, 0), c(6, 6), c(4, 6), c(3, 0)
+        c(3, 0),
+        c(6, 0),
+        c(6, 6),
+        c(4, 6),
+        c(3, 0)
       )))
     )
   ) |>
@@ -140,13 +144,23 @@ plot_surface <- function(x, title, labels = c("all", "fallback")) {
   label_data <- cbind(st_drop_geometry(x), st_coordinates(centroids)) |>
     mutate(
       label = if (labels == "all") {
-        paste0("cell ", cell, "\nsource ", source_id,
-               "\nA=", round(A, 1), "\nB=", round(B, 1))
-      } else if_else(
-        fallback_cell,
-        paste0("cell ", cell, "\nA=", round(A, 1), "\nB=", round(B, 1)),
-        as.character(cell)
-      )
+        paste0(
+          "cell ",
+          cell,
+          "\nsource ",
+          source_id,
+          "\nA=",
+          round(A, 1),
+          "\nB=",
+          round(B, 1)
+        )
+      } else {
+        if_else(
+          fallback_cell,
+          paste0("cell ", cell, "\nA=", round(A, 1), "\nB=", round(B, 1)),
+          as.character(cell)
+        )
+      }
     )
 
   ggplot(x) +
