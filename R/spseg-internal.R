@@ -77,7 +77,7 @@
 .spseg_compute <- function(x, data, variables, coords, population, measures,
                             bands, weighting, power, normalize, neighbors,
                             search, surface, surface_audit, scope, output,
-                            verbose, call, dots) {
+                            verbose, call, dots, network = NULL, node_id = NULL) {
   if (!is.list(variables) || !length(variables) || is.null(names(variables)) ||
       anyNA(names(variables)) || any(!nzchar(names(variables))) ||
       anyDuplicated(names(variables)) ||
@@ -88,6 +88,9 @@
   search <- match.arg(search, c("boost", "brute"))
   weighting <- match.arg(weighting, c("biweight", "unweighted", "inverse", "exponential"))
   surface <- match.arg(surface, c("raw", "grid", "pycno"))
+  relational <- !is.null(network)
+  if (relational && surface != "raw")
+    stop("Network input requires surface = 'raw'", call. = FALSE)
   scope <- match.arg(scope, c("both", "multigroup", "pairwise"))
   output <- match.arg(output, c("indices", "full", "localenv"))
   if (!is.logical(surface_audit) || length(surface_audit) != 1L || is.na(surface_audit))
@@ -101,9 +104,18 @@
     stop("'power' must be a positive finite number", call. = FALSE)
   if (!is.logical(normalize) || length(normalize) != 1L || is.na(normalize))
     stop("'normalize' must be TRUE or FALSE", call. = FALSE)
-  checked <- .spseg_geometry(x, data, coords)
+  prepared_network <- NULL
+  if (relational) {
+    if (search != "boost") stop("Network input requires search = 'boost'", call. = FALSE)
+    if (is.null(bands)) stop("Supply explicit 'bands' for network neighborhoods", call. = FALSE)
+    prepared_network <- .spseg_network_input(x, data, coords, network, node_id)
+    checked <- prepared_network$checked
+  } else {
+    if (!is.null(node_id)) stop("'node_id' requires a network", call. = FALSE)
+    checked <- .spseg_geometry(x, data, coords)
+  }
   supplied_population <- !is.null(population)
-  population <- if (neighbors == "knn") {
+  population <- if (neighbors == "knn" || relational) {
     .spseg_mass(population, checked$data, nrow(checked$data))
   } else .spseg_population(population, variables, checked$data)
   if (neighbors == "radius" && (!is.finite(sum(population)) || sum(population) <= 0))
@@ -144,10 +156,12 @@
     }
   }
   if (verbose) message("Calculating ", length(compiled), " variables with shared neighborhood searches")
-  engine <- spseg_engine_cpp(checked$coords, compiled, as.numeric(bands),
+  engine <- spseg_engine_cpp(checked$coords %||% matrix(numeric(), 0L, 2L),
+                         compiled, as.numeric(bands),
                          power, .spseg_weighting_id(weighting), normalize,
                          match(neighbors, c("radius", "knn")) - 1L,
                          match(search, c("boost", "brute")) - 1L,
+                         if (relational) prepared_network$graph else list(),
                          as.integer(.spseg_scope_flags(scope)), output != "indices",
                          output != "localenv")
   analyses <- Map(.spseg_restore_analysis, engine$analyses, compiled,
@@ -160,8 +174,13 @@
                  crs = checked$crs, weighting = weighting, power = power,
                  normalize = normalize, surface = surface, output = output,
                  surface_info = surface_info,
+                 network = if (relational) prepared_network$summary else NULL,
+                 node_id = if (relational && output != "indices") prepared_network$ids else NULL,
                  neighbors = list(type = neighbors, values = bands,
-                                  units = if (neighbors == "knn") "population" else "distance",
+                                  space = if (relational) "network" else "euclidean",
+                                  units = if (neighbors == "knn") "population" else
+                                    if (relational) prepared_network$summary$units else "distance",
+                                  distance_units = if (relational) prepared_network$summary$units else "coordinate",
                                   population = if (neighbors == "knn") "variable" else NULL,
                                   engine = search, scope = scope),
                  diagnostics = engine$diagnostics, call = call)

@@ -1,14 +1,15 @@
 Package: spseg
 Version: 0.9.0.9000
 Date: 2026-10-19
-Title: Measuring Spatial Segregation
+Title: Measuring Spatial and Network Segregation
 Author: Seong-Yun Hong <syhong@khu.ac.kr> and David O'Sullivan, with code 
   contributions by Benjamin Jarvis and Changlock Choi
 Maintainer: Seong-Yun Hong <syhong@khu.ac.kr>
 Depends: R (>= 4.2.0)
 Imports: sf, stats, terra
 LinkingTo: Rcpp, RcppArmadillo, BH (>= 1.84.0-0)
-Suggests: ggplot2, knitr, dplyr, tidyr, rmarkdown, roxygen2, testthat (>= 3.0.0)
+Suggests: ggplot2, knitr, dplyr, tidyr, rmarkdown, roxygen2, sfnetworks,
+        testthat (>= 3.0.0)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Encoding: UTF-8
@@ -17,7 +18,9 @@ Description: Measuring spatial segregation for categorical, ordinal,
         or aggregated population data. Calculates dissimilarity, information
         theory, relative diversity, root-family, and exposure/isolation indices
         using shared spatial searches for fixed-radius and population-count
-        nearest-neighbor environments. Supports spatial geometries, coordinate
+        nearest-neighbor environments. Supports Euclidean distances and supplied
+        networks with shortest-path hop counts or nonnegative traversal costs.
+        Supports spatial geometries, coordinate
         columns, and count-preserving grid and pycnophylactic population surfaces.
         The framework builds on Reardon and Firebaugh (2002)
         <doi:10.1111/1467-9531.00110>, Reardon and O'Sullivan (2004)

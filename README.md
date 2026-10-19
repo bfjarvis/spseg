@@ -4,7 +4,7 @@ R package 'spseg' for measuring and visualising population segregation
 Pre-1.0 development: the interface may change before the first stable release.
 
 The development interface measures several attributes with shared spatial
-neighborhood searches:
+neighborhood searches. Euclidean distance is the default:
 
 ```r
 library(spseg)
@@ -36,6 +36,21 @@ when the variables cover different populations. Neighbor discovery is shared.
 See `vignette("spseg-multiple-variables")` for definitions, sources, deterministic
 tie handling, population-count kNN neighborhoods, and exposure cuts. Polygon count specifications also support shared grid and pycnophylactic
 surface construction through the same interface.
+
+For network neighborhoods, supply an edge list and map observation rows to nodes:
+
+```r
+network <- spseg_network(edges, from="source", to="destination",
+                         cost="minutes", units="minutes", directed=FALSE)
+spseg(nodes, variables, network=network, node_id="node",
+      bands=c(5,10), weighting="unweighted")
+```
+
+Omit `cost` for hop distances. Geometry is optional and never determines network
+relationships. Users prepare adjacency, road networks, and population allocation
+outside spseg. See `vignette("spseg-networks")` for examples, including preparation
+with sfnetworks. Boost.Geometry and Boost.Graph are supplied through BH; the
+measurement engine remains single-threaded.
 
 spseg originated as a fork of the [seg package](https://github.com/syunhong/seg)
 by Seong-Yun Hong and David O'Sullivan. It now provides its own interface and

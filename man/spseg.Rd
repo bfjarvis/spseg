@@ -2,7 +2,7 @@
 % Please edit documentation in R/spseg.R
 \name{spseg}
 \alias{spseg}
-\title{Spatial Segregation Measures}
+\title{Spatial and Network Segregation Measures}
 \usage{
 spseg(
   x,
@@ -22,6 +22,8 @@ spseg(
   scope = c("both", "multigroup", "pairwise"),
   output = c("indices", "full", "localenv"),
   verbose = FALSE,
+  network = NULL,
+  node_id = NULL,
   ...
 )
 }
@@ -29,7 +31,8 @@ spseg(
 \item{x}{A numeric matrix or data frame with two coordinate columns, or
 an object of class [sf::sf]. For polygon [sf::sf] inputs, centroids
 are used as the focal coordinates. With `variables`, a plain data frame
-may contain both attributes and the columns selected by `coords`.}
+may contain both attributes and the columns selected by `coords`.
+With `network`, supply an observation table; coordinates are optional.}
 
 \item{variables}{Required uniquely named list of [spseg_variables]
 specifications, including for a single segregation dimension. A count
@@ -57,7 +60,9 @@ kNN defaults to one per observed-value row and selects each variable's
 own eligible population after omissions. For radius neighborhoods,
 consistent count/weight totals can supply the default; specify this
 reference population explicitly when those totals differ. It also controls
-population-based default distance bands for radius neighborhoods.}
+population-based default distance bands for radius neighborhoods.
+Network observed-value specifications default to one per row unless weights
+are supplied; count specifications always use their own row totals.}
 
 \item{measures}{A character vector naming measures to compute: "all",
 "exposure", "information", "diversity", "dissimilarity", or "square_root".
@@ -83,8 +88,8 @@ the search radius when `neighbors = "radius"`.}
 bandwidths. "knn" uses count-based adaptive neighborhoods.}
 
 \item{search}{Neighbor-search backend. "boost" uses the exact
-Boost.Geometry R-tree backend. "brute" computes candidate distances
-directly and is mainly useful for validation.}
+Boost.Geometry R-tree or Boost.Graph traversal. "brute" computes Euclidean
+distances directly and is mainly useful for validation.}
 
 \item{surface}{Population surface used before local environments are
 calculated. "raw" uses the input support directly. "grid"
@@ -109,6 +114,18 @@ stores local environments without calculating indices.}
 
 \item{verbose}{Logical. If `TRUE`, report progress messages.}
 
+\item{network}{Optional [spseg_network()] specification. If omitted,
+neighborhoods use Euclidean distances. Supplying a network uses shortest
+paths exclusively, regardless of any geometry. Network calculations require
+explicit `bands`, `search = "boost"`, and `surface = "raw"`. Radius bands
+are in hops or cost units; kNN bands remain variable-specific populations.
+Unreachable population does not count toward kNN; an unattainable target
+raises an error identifying the variable and focal observation. The global
+reference distribution still includes all supplied observations.}
+
+\item{node_id}{Single attribute column name or position mapping each
+observation to a network node. Required with `network`; otherwise omit.}
+
 \item{...}{Additional population-surface options, such as `cellsize`,
 `celldim`, `nrow`, `ncol`, `max_iter`, `converge`,
 `surface_geometry`. Grid and pycnophylactic surfaces use
@@ -128,7 +145,7 @@ A [spseg_result] with named variable results in `analyses`, plus
 }
 \description{
 Calculates spatial segregation measures from point coordinates or [sf::sf]
-geometries using local population environments.
+geometries, or a supplied network, using local population environments.
 }
 \details{
 `spseg()` is the primary interface for the package. Local environments

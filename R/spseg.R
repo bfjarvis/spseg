@@ -1,7 +1,7 @@
-#' Spatial Segregation Measures
+#' Spatial and Network Segregation Measures
 #'
 #' Calculates spatial segregation measures from point coordinates or [sf::sf]
-#' geometries using local population environments.
+#' geometries, or a supplied network, using local population environments.
 #'
 #' `spseg()` is the primary interface for the package. Local environments
 #' and segregation indices are produced by a unified C++ engine. The default
@@ -49,6 +49,7 @@
 #'   an object of class [sf::sf]. For polygon [sf::sf] inputs, centroids
 #'   are used as the focal coordinates. With `variables`, a plain data frame
 #'   may contain both attributes and the columns selected by `coords`.
+#'   With `network`, supply an observation table; coordinates are optional.
 #' @param data Optional attribute data with one row per coordinate or feature.
 #'   This may contain category memberships, observed
 #'   numerical values, and counts selected by the specifications. If omitted,
@@ -71,8 +72,8 @@
 #' @param neighbors Neighborhood strategy. "radius" uses distance
 #'   bandwidths. "knn" uses count-based adaptive neighborhoods.
 #' @param search Neighbor-search backend. "boost" uses the exact
-#'   Boost.Geometry R-tree backend. "brute" computes candidate distances
-#'   directly and is mainly useful for validation.
+#'   Boost.Geometry R-tree or Boost.Graph traversal. "brute" computes Euclidean
+#'   distances directly and is mainly useful for validation.
 #' @param surface Population surface used before local environments are
 #'   calculated. "raw" uses the input support directly. "grid"
 #'   redistributes areal counts over a square grid. "pycno" applies
@@ -103,6 +104,16 @@
 #'   two coordinate column names or positions. For sf input, omit this argument
 #'   to use the active geometry. Distances are Euclidean in coordinate units;
 #'   use an appropriate projected CRS for metric bandwidths.
+#' @param network Optional [spseg_network()] specification. If omitted,
+#'   neighborhoods use Euclidean distances. Supplying a network uses shortest
+#'   paths exclusively, regardless of any geometry. Network calculations require
+#'   explicit `bands`, `search = "boost"`, and `surface = "raw"`. Radius bands
+#'   are in hops or cost units; kNN bands remain variable-specific populations.
+#'   Unreachable population does not count toward kNN; an unattainable target
+#'   raises an error identifying the variable and focal observation. The global
+#'   reference distribution still includes all supplied observations.
+#' @param node_id Single attribute column name or position mapping each
+#'   observation to a network node. Required with `network`; otherwise omit.
 #' @param population Default population-weight column or numeric vector for
 #'   observed-value specifications.
 #'   Descriptor `weights` override it; count specifications use their row totals.
@@ -111,6 +122,8 @@
 #'   consistent count/weight totals can supply the default; specify this
 #'   reference population explicitly when those totals differ. It also controls
 #'   population-based default distance bands for radius neighborhoods.
+#'   Network observed-value specifications default to one per row unless weights
+#'   are supplied; count specifications always use their own row totals.
 #' @param ... Additional population-surface options, such as `cellsize`,
 #'   `celldim`, `nrow`, `ncol`, `max_iter`, `converge`,
 #'   `surface_geometry`. Grid and pycnophylactic surfaces use
@@ -178,11 +191,14 @@ spseg <- function(
   scope = c("both", "multigroup", "pairwise"),
   output = c("indices", "full", "localenv"),
   verbose = FALSE,
+  network = NULL,
+  node_id = NULL,
   ...
 ) {
   if (missing(variables))
     stop("Supply a named 'variables' list of spseg_variable specifications", call. = FALSE)
   .spseg_compute(x, data, variables, coords, population, measures, bands,
                  match.arg(weighting), power, normalize, neighbors, search,
-                 surface, surface_audit, scope, output, verbose, match.call(), list(...))
+                 surface, surface_audit, scope, output, verbose, match.call(), list(...),
+                 network, node_id)
 }

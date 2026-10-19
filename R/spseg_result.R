@@ -24,6 +24,8 @@
 #'   table with the analysis name, type, method, and band. Environment tables
 #'   identify the input row as `location`. Spatial extraction returns this
 #'   environment table with the corresponding input geometry attached.
+#'   Network environments also identify `node`. Network-only results support
+#'   ordinary extraction; spatial extraction requires stored geometry or coordinates.
 #' @name spseg_result
 NULL
 
@@ -33,6 +35,7 @@ NULL
 print.spseg_result <- function(x, ...) {
   cat("\nSpatial segregation across", length(x$analyses), "variables\n")
   cat("Neighborhoods:", x$neighbors$type, "| bands:", paste(x$bands, collapse = ", "), "\n")
+  cat("Space:", x$neighbors$space, "| search:", x$neighbors$engine, "\n")
   for (name in names(x$analyses)) {
     a <- x$analyses[[name]]
     cat(" ", name, ": ", a$definition$type, " (", a$definition$method, ")\n", sep = "")
@@ -109,6 +112,8 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     }
   }
   out <- if (length(rows)) do.call(rbind, rows) else data.frame()
+  if (what == "env" && nrow(out) && !is.null(x$node_id))
+    out$node <- x$node_id[out$location]
   rownames(out) <- row.names
   out
 }
@@ -118,8 +123,9 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
 #' @export
 st_as_sf.spseg_result <- function(x, ..., variables = NULL, bands = NULL) {
   .spseg_unused_arguments(list(...))
-  if (is.null(x$coords)) stop("Coordinates were not stored; use output = 'full' or 'localenv'",
-                              call. = FALSE)
+  if (is.null(x$coords) && is.null(x$geometry))
+    stop("No stored geometry or coordinates; network-only results cannot be mapped",
+         call. = FALSE)
   out <- as.data.frame(x, what = "env", variables = variables, bands = bands)
   if (!nrow(out)) stop("No stored environment rows to extract", call. = FALSE)
   if (!is.null(x$geometry)) sf::st_sf(out, geometry = x$geometry[out$location]) else {

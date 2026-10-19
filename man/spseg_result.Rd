@@ -43,6 +43,8 @@ Printing returns `x` invisibly. Data-frame extraction returns a long
   table with the analysis name, type, method, and band. Environment tables
   identify the input row as `location`. Spatial extraction returns this
   environment table with the corresponding input geometry attached.
+  Network environments also identify `node`. Network-only results support
+  ordinary extraction; spatial extraction requires stored geometry or coordinates.
 }
 \description{
 [spseg()] returns a `spseg_result`. Each element of `analyses` contains `indices`, optional

@@ -1,0 +1,157 @@
+---
+title: "Segregation in supplied networks"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Segregation in supplied networks}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse=TRUE, comment="#>")
+library(spseg)
+```
+
+`spseg()` uses Euclidean distance unless a `network` is supplied. In network
+mode it measures proximity using shortest paths through a supplied edge list.
+Constructing geographic adjacency, preparing road topology, snapping locations,
+and allocating population are the user's responsibility. Geometry, if supplied,
+is retained for mapping and does not define the network.
+
+## An edge list and population table
+
+```{r supplied-network}
+edges <- data.frame(
+  from=c("a","b","b","c"),
+  to=c("b","c","d","e")
+)
+nodes <- data.frame(
+  node=letters[1:5],
+  group_a=c(20,5,0,10,0), group_b=c(0,5,20,0,10),
+  low=c(6,2,0,3,0), high=c(0,2,8,0,4)
+)
+variables <- list(
+  ethnicity=spseg_categorical(counts=c("group_a","group_b")),
+  income=spseg_grouped(counts=c("low","high"))
+)
+network <- spseg_network(edges)
+result <- spseg(nodes, variables, network=network, node_id="node",
+                bands=c(1,2), weighting="unweighted", output="full")
+as.data.frame(result)
+head(as.data.frame(result, what="env"))
+```
+
+Every row is an observation attached to exactly one node. Several observations
+may occupy the same node, preserving individual values without aggregation.
+Nodes present only in the edge list can connect observations without adding
+population. Observation nodes absent from the edge list are isolated.
+Self-loops and parallel edges do not duplicate population. If an entity is
+allocated to several nodes, apportion its counts or weights before calling
+spseg; repeating its full population would count that population repeatedly.
+
+The categorical, ordinal, grouped continuous and observed continuous variable
+specifications and index formulas are the same as for Euclidean environments.
+Global reference distributions cover all supplied observations, including those
+in other connected components. The interpretation of an environment depends
+on the network; using these formulas does not establish every spatial-index
+property for an arbitrary directed or weighted graph.
+
+## Costs, direction and kernels
+
+Supply a `cost` column for shortest paths based on summed nonnegative costs.
+Costs can express travel time, distance, or another additive measure. Without
+costs, each edge has length one and bands are hop counts. Zero costs are allowed.
+With `directed=TRUE`, paths follow edges from `from` to `to`, outward from the
+focal observation. Reverse the edges to measure incoming proximity.
+
+Traversal costs and kernels have different roles: costs determine distance;
+`weighting` then determines contributions within the selected neighborhood.
+The default biweight kernel gives zero weight at a radius-band boundary. For
+example, with a one-hop band it excludes first-order neighbors through zero
+kernel weights. Use `weighting="unweighted"` when all selected hops should
+contribute equally. Population KNN also selects its target before applying
+the kernel, so its effective weighted population may be smaller.
+
+Network bands must be explicit; there is no implicit conversion from Euclidean
+default bands. Network calculations require `surface="raw"` and `search="boost"`.
+
+## Variable-specific population KNN
+
+```{r network-knn}
+adaptive <- spseg(nodes, variables, network=network, node_id="node",
+                  neighbors="knn", bands=c(10,20), weighting="unweighted")
+adaptive$analyses$ethnicity$knn
+adaptive$analyses$income$knn
+```
+
+One traversal serves the variables. Each selects its own eligible population;
+transit nodes add none. The focal observation enters first, fractionally if
+necessary. If the remaining population falls within a tied distance group,
+every member of that group receives the same inclusion fraction. With $C$
+people strictly closer, $B$ in the boundary group, and target $k$, this fraction
+is $(k-C)/B$. Weighted paths complete the full distance group, including nodes
+reached through zero-cost edges.
+
+An unattainable target raises an error identifying the variable, focal row,
+node, and reachable eligible population. A large regional population does not
+guarantee that every focal observation can reach the requested population.
+
+## Preparing a small road network with sfnetworks
+
+The following self-contained example places population points on road segments,
+inserts network nodes at those positions, and passes the resulting tables to
+spseg. No road preparation occurs inside the measurement engine.
+
+```{r road-preparation, eval=requireNamespace("sfnetworks", quietly=TRUE)}
+roads <- sf::st_sf(geometry=sf::st_sfc(
+  sf::st_linestring(rbind(c(0,0),c(2,0))),
+  sf::st_linestring(rbind(c(2,0),c(4,0))), crs=3857
+))
+population <- sf::st_as_sf(
+  data.frame(x=c(.5,3.5), y=0, A=c(30,0), B=c(0,70)),
+  coords=c("x","y"), crs=3857
+)
+roads_network <- sfnetworks::as_sfnetwork(roads, directed=FALSE)
+roads_network <- sfnetworks::st_network_blend(roads_network, population)
+
+node_features <- sf::st_as_sf(roads_network, active="nodes")
+node_features$node <- seq_len(nrow(node_features))
+observations <- node_features[!is.na(node_features$A),]
+edge_features <- sf::st_as_sf(roads_network, active="edges")
+edge_features$cost <- as.numeric(sf::st_length(edge_features))
+edge_table <- sf::st_drop_geometry(edge_features)
+
+prepared <- spseg_network(edge_table, cost="cost", units="metres")
+road_result <- spseg(observations,
+  list(groups=spseg_categorical(counts=c("A","B"))),
+  network=prepared, node_id="node", bands=c(1,3),
+  weighting="unweighted", output="full"
+)
+as.data.frame(road_result)
+sf::st_as_sf(road_result, bands=3)
+```
+
+These points already lie on their roads. With off-network points, choose an
+appropriate snapping tolerance and decide whether access costs should enter
+the network. For population known only as a segment total, choose and document
+a discrete allocation to nodes or inserted points before measurement.
+
+Geographic polygon adjacency can be prepared similarly: derive pairs using
+`sf::st_touches()` or an explicitly chosen shared-boundary rule, attach stable
+feature IDs, and supply the resulting edges. spseg does not infer an adjacency
+definition from polygon geometry.
+
+## Implementation and attribution
+
+Euclidean queries use Boost.Geometry. Unweighted networks use Boost.Graph
+breadth-first traversal; weighted networks use Boost.Graph Dijkstra traversal.
+Both are supplied by BH, under the Boost Software License. Graphs use sparse
+storage and bounded searches, without a dense all-pairs distance matrix.
+Search buffers are reused within a call; graph-only nodes have no population.
+The backend is single-threaded and can be called within an external parallel
+loop over independent cities or simulations.
+
+- [Boost.Geometry](https://github.com/boostorg/geometry)
+- [Boost.Graph](https://github.com/boostorg/graph)
+- [BH](https://CRAN.R-project.org/package=BH)
+- [sfnetworks](https://luukvdmeer.github.io/sfnetworks/)

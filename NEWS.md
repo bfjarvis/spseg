@@ -1,5 +1,14 @@
 # spseg 0.9.0.9000
 
+- Euclidean searches now use Boost.Geometry through BH; the vendored nanoflann
+  backend has been removed. Use `search = "boost"` (the default) or `"brute"`.
+- Population kNN includes equidistant boundary units proportionately after the
+  focal unit, avoiding row-order dependence. Radius searches include their closed
+  boundary, including cases affected by square-root rounding.
+- Supplied networks now support shortest-path hop or nonnegative-cost neighborhoods
+  through Boost.Graph, with optional geometry, transit nodes, and variable-specific
+  population KNN. Added `spseg_network()` and a network/road-preparation vignette.
+
 * Renamed the package to `spseg`, with `spseg_*` constructors, result classes,
   default-band helper, and native bindings. Examples and internal helpers use
   the same naming convention; no compatibility aliases are retained.
@@ -30,11 +39,3 @@
   cannot add another unit and enlarge the kernel radius in optimized builds.
 * Excluded local reference PDFs from package builds and made execution of the
   external Providence-data example opt-in for portable package checks.
-# Development: relational neighborhoods
-
-- Euclidean searches now use Boost.Geometry through BH; the vendored nanoflann
-  backend has been removed. Use `search = "boost"` (the default) or `"brute"`.
-- Population kNN includes equidistant boundary units proportionately after the
-  focal unit, avoiding row-order dependence. Radius searches include their closed
-  boundary, including cases affected by square-root rounding.
-
