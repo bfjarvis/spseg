@@ -1,5 +1,8 @@
-# seg 0.9.0.9000
+# spseg 0.9.0.9000
 
+* Renamed the package to `spseg`, with `spseg_*` constructors, result classes,
+  default-band helper, and native bindings. Examples and internal helpers use
+  the same naming convention; no compatibility aliases are retained.
 * Pre-1.0 development: `spseg()` requires named categorical, ordinal, grouped-continuous, and
   observed-continuous specifications, sharing spatial discovery.
 * Multiple-variable kNN selects each variable's eligible population, including
@@ -18,7 +21,7 @@
   supports raw support and shared grid/pycnophylactic construction for count specifications.
 * Removed the previous calling convention, duplicate result methods, and
   categorical calculation engine. Every call uses variable specifications,
-  one calculation engine, and named analyses in a `seg_result`.
+  one calculation engine, and named analyses in a `spseg_result`.
 * Removed the pre-fork concentration-profile, standalone dissimilarity, and
   spatial-proximity functions, their adjustment helpers, the old data validator,
   and unused test fixtures. Default bands use the current coordinate/population

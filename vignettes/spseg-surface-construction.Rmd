@@ -25,7 +25,7 @@ when every polygon receives grid cells directly, and what happens when one or
 more populated polygons are too small to receive a grid-cell centroid.
 
 ```{r setup}
-library(seg)
+library(spseg)
 library(sf)
 library(dplyr)
 library(ggplot2)
@@ -82,8 +82,8 @@ make_irregular_case <- function(edge_width) {
 }
 
 surface_from_polygons <- function(x, nrow, ncol, surface = "grid") {
-  checked <- seg:::.seg_geometry(x[, c("A", "B")], NULL, NULL)
-  seg:::spseg_surface(
+  checked <- spseg:::.spseg_geometry(x[, c("A", "B")], NULL, NULL)
+  spseg:::.spseg_surface(
     x = x[, c("A", "B")],
     coords = checked$coords,
     data = as.matrix(checked$data),
@@ -499,7 +499,7 @@ internally before local environments and segregation indices are calculated.
 ```{r spseg-surface-call}
 grid_result <- spseg(
   fallback_case[, c("A", "B")],
-  variables = list(groups = seg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
   surface = "grid",
   nrow = 6,
   ncol = 6,
@@ -509,7 +509,7 @@ grid_result <- spseg(
 
 pycno_result <- spseg(
   fallback_case[, c("A", "B")],
-  variables = list(groups = seg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
   surface = "pycno",
   surface_audit = TRUE,
   nrow = 6,

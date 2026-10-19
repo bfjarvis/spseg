@@ -65,8 +65,8 @@ ordered_reference <- function(counts, local, type, scores = seq_len(ncol(counts)
 test_that("categorical measures match independent formulas across spatial options", {
   set.seed(103)
   d <- data.frame(x=runif(18),y=runif(18),a=rpois(18,4),b=rpois(18,6),c=rpois(18,3))
-  variables <- list(first=seg_categorical(counts=c("a","b","c")),
-                    second=seg_categorical(counts=c("a","b","c")))
+  variables <- list(first=spseg_categorical(counts=c("a","b","c")),
+                    second=spseg_categorical(counts=c("a","b","c")))
   for (neighborhood in c("radius","knn")) for (kernel in c("unweighted","biweight","inverse","exponential")) {
     bands <- if (neighborhood=="radius") c(0,.35,.8) else c(10,40,100)
     result <- spseg(d, variables, coords=c("x","y"), bands=bands,
@@ -95,9 +95,9 @@ test_that("ordinal, grouped, and empirical calculators match independent referen
   distance <- abs(outer(d$x,d$x,"-"))
   w <- (1-(distance/2.5)^3)^3; w[distance>2.5] <- 0
   local <- w %*% counts
-  variables <- list(o=seg_ordinal(counts=colnames(counts)),
-                    g=seg_grouped(counts=colnames(counts)),
-                    c=seg_continuous(counts=colnames(counts),scores=c(-5,0,1,100)))
+  variables <- list(o=spseg_ordinal(counts=colnames(counts)),
+                    g=spseg_grouped(counts=colnames(counts)),
+                    c=spseg_continuous(counts=colnames(counts),scores=c(-5,0,1,100)))
   result <- spseg(d,coords=c("x","y"),variables=variables,bands=2.5)
   for (v in names(variables)) {
     reference <- ordered_reference(counts,local,c(o="ordinal",g="grouped",c="continuous")[[v]])
@@ -111,11 +111,11 @@ test_that("raw tied and weighted observations equal exact-value count input", {
   expanded <- d[rep(seq_len(nrow(d)),d$w),]
   counts <- cbind(a=ifelse(d$v==-3,d$w,0),b=ifelse(d$v==2,d$w,0),c=ifelse(d$v==9,d$w,0))
   a <- spseg(d,coords=c("x","y"),population="w",
-             variables=list(v=seg_continuous(values="v")),bands=c(0,2,10),output="full")
-  b <- spseg(expanded,coords=c("x","y"),variables=list(v=seg_continuous(values="v")),
+             variables=list(v=spseg_continuous(values="v")),bands=c(0,2,10),output="full")
+  b <- spseg(expanded,coords=c("x","y"),variables=list(v=spseg_continuous(values="v")),
              bands=c(0,2,10))
   c <- spseg(cbind(d,counts),coords=c("x","y"),population="w",
-             variables=list(v=seg_continuous(counts=c("a","b","c"),scores=c(-3, -3+5,9))),
+             variables=list(v=spseg_continuous(counts=c("a","b","c"),scores=c(-3, -3+5,9))),
              bands=c(0,2,10))
   expect_equal(a$analyses$v$indices,b$analyses$v$indices,tolerance=1e-12)
   expect_equal(a$analyses$v$indices,c$analyses$v$indices,tolerance=1e-12)
@@ -125,7 +125,7 @@ test_that("raw tied and weighted observations equal exact-value count input", {
   permutation <- c(4,2,1,3)
   changed <- d[permutation,]; changed$v <- exp(changed$v)
   r <- spseg(changed,coords=c("x","y"),population="w",
-             variables=list(v=seg_continuous(values="v")),bands=c(0,2,10))
+             variables=list(v=spseg_continuous(values="v")),bands=c(0,2,10))
   expect_equal(a$analyses$v$indices,r$analyses$v$indices,tolerance=1e-12,
                ignore_attr=TRUE)
 })
@@ -134,11 +134,11 @@ test_that("categorical root is Hutchens for two groups and Atkinson for several"
   counts <- rbind(c(50,50,0),c(0,50,50),c(50,0,50))
   colnames(counts) <- c("a","b","c")
   d <- data.frame(x=1:3,y=0,counts)
-  result <- spseg(d,coords=c("x","y"),variables=list(g=seg_categorical(counts=c("a","b","c"))),
+  result <- spseg(d,coords=c("x","y"),variables=list(g=spseg_categorical(counts=c("a","b","c"))),
                   bands=0,measures="square_root")
   expect_equal(unname(result$analyses$g$indices$multigroup$s),1)
   expect_equal(result$analyses$g$indices$pairwise$s[[1]][upper.tri(counts)],rep(.5,3))
-  binary <- spseg(as.matrix(d[c("x","y")]), variables = list(groups = seg_categorical(counts = seq_len(ncol(counts[,1:2])))), data = counts[,1:2],bands=c(0,2),
+  binary <- spseg(as.matrix(d[c("x","y")]), variables = list(groups = spseg_categorical(counts = seq_len(ncol(counts[,1:2])))), data = counts[,1:2],bands=c(0,2),
                   measures=c("square_root","information"),output="full")
   totals <- colSums(counts[,1:2])
   direct <- 1-sum(sqrt(counts[,1]/totals[1]*counts[,2]/totals[2]))
@@ -154,7 +154,7 @@ test_that("categorical root is Hutchens for two groups and Atkinson for several"
 test_that("two-category ordinal measures reduce to binary categorical measures", {
   d <- data.frame(x=1:3,y=0,a=c(80,60,10),b=c(20,40,90))
   result <- spseg(d,coords=c("x","y"),variables=list(
-    cat=seg_categorical(counts=c("a","b")),ord=seg_ordinal(counts=c("a","b"))),bands=0)
+    cat=spseg_categorical(counts=c("a","b")),ord=spseg_ordinal(counts=c("a","b"))),bands=0)
   expect_equal(result$analyses$cat$indices$multigroup,result$analyses$ord$indices$multigroup,
                tolerance=1e-12)
   expect_equal(unname(result$analyses$ord$indices$multigroup$d),8/15)
@@ -164,8 +164,8 @@ test_that("proportional subdivision of a continuous interval preserves the inter
   d <- data.frame(x=1:4,y=0,a=c(1,4,6,2),b=c(2,6,1,3),c=c(8,2,3,6))
   d$b1 <- d$b*.3; d$b2 <- d$b*.7
   result <- spseg(d,coords=c("x","y"),variables=list(
-    original=seg_grouped(counts=c("a","b","c")),
-    split=seg_grouped(counts=c("a","b1","b2","c"))),
+    original=spseg_grouped(counts=c("a","b","c")),
+    split=spseg_grouped(counts=c("a","b1","b2","c"))),
     measures=c("information","diversity","dissimilarity","square_root"),bands=c(0,2))
   expect_equal(result$analyses$original$indices,result$analyses$split$indices,tolerance=1e-10)
 })
@@ -174,8 +174,8 @@ test_that("exposure cut selection affects only exposure, and preserves ties and 
   d <- data.frame(x=1:20,y=0,v=rep(c(0,5,10,20),c(12,3,3,2)))
   set.seed(701); seed <- .Random.seed
   result <- spseg(d,coords=c("x","y"),variables=list(
-    deciles=seg_continuous(values="v"),
-    values=seg_continuous(values="v",exposure=list(breaks=c(-Inf,6,Inf)))),
+    deciles=spseg_continuous(values="v"),
+    values=spseg_continuous(values="v",exposure=list(breaks=c(-Inf,6,Inf)))),
     bands=c(0,3),output="full")
   expect_identical(.Random.seed,seed)
   expect_equal(nrow(result$analyses$deciles$indices$multigroup$p[[1]]),4L)
@@ -186,7 +186,7 @@ test_that("exposure cut selection affects only exposure, and preserves ties and 
   expect_equal(rowSums(result$analyses$values$indices$multigroup$p[[2]]),c(1,1),ignore_attr=TRUE)
   unique <- transform(d, v=seq_len(nrow(d)))
   ten <- spseg(unique[1:10,],coords=c("x","y"),
-                variables=list(v=seg_continuous(values="v")),bands=1)
+                variables=list(v=spseg_continuous(values="v")),bands=1)
   expect_equal(ten$analyses$v$definition$exposure$shares,rep(.1,10))
 })
 
@@ -200,17 +200,17 @@ test_that("deterministic new-interface calls do not create an RNG state", {
   })
   if (existed) rm(".Random.seed",envir=.GlobalEnv)
   d <- data.frame(x=1:4,y=0,v=c(0,0,1,2))
-  spseg(d,coords=c("x","y"),variables=list(v=seg_continuous(values="v")),bands=2)
+  spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(values="v")),bands=2)
   expect_false(exists(".Random.seed",envir=.GlobalEnv,inherits=FALSE))
 })
 
 test_that("single populated intervals and near-endpoint grouped integrals are stable", {
   d <- data.frame(x=1:3,y=0,a=c(1,4,2),b=0)
-  r <- spseg(d,coords=c("x","y"),variables=list(v=seg_grouped(counts=c("a","b"))),bands=2)
+  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_grouped(counts=c("a","b"))),bands=2)
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-12)
   d$a <- c(1e-8,2e-8,3e-8); d$b <- c(1,2,3)
   d$c <- c(1e8,2e8,3e8)
-  r <- spseg(d,coords=c("x","y"),variables=list(v=seg_grouped(counts=c("a","b","c"))),bands=2)
+  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_grouped(counts=c("a","b","c"))),bands=2)
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-10)
 })
 
@@ -219,7 +219,7 @@ test_that("mixed SF results, sparse output, and search backends work together", 
                   o=ordered(c("low","low","mid","high","mid"),levels=c("low","mid","high")),
                   v=c(0,0,2,3,4))
   sfdata <- sf::st_as_sf(d,coords=c("x","y"),sf_column_name="location_geometry",crs=3857)
-  variables <- list(g=seg_categorical(values="g"),o=seg_ordinal(values="o"),v=seg_continuous(values="v"))
+  variables <- list(g=spseg_categorical(values="g"),o=spseg_ordinal(values="o"),v=spseg_continuous(values="v"))
   for (neighborhood in c("radius","knn")) {
     a <- spseg(sfdata,variables=variables,bands=c(1,3),neighbors=neighborhood,output="full")
     b <- spseg(d,coords=c("x","y"),variables=variables,bands=c(1,3),neighbors=neighborhood,
@@ -236,21 +236,21 @@ test_that("mixed SF results, sparse output, and search backends work together", 
 
 test_that("populations, omissions, constants, and invalid specifications are explicit", {
   d <- data.frame(x=1:4,y=0,a=c(2,0,4,1),b=c(0,5,2,4),v=c(1,NA,1,1),pop=10)
-  variables <- list(g=seg_categorical(counts=c("a","b")),v=seg_continuous(values="v",na.action="omit"))
+  variables <- list(g=spseg_categorical(counts=c("a","b")),v=spseg_continuous(values="v",na.action="omit"))
   r <- spseg(d,coords=c("x","y"),population="pop",variables=variables,bands=2,output="full")
   expect_true(all(is.na(as.data.frame(r,variables="v")$value)))
   expect_equal(r$analyses$v$status, c("2"="constant"))
   expect_equal(r$population,d$pop)
   expect_equal(r$analyses$v$indices$multigroup$p[[1]][1,1],1)
-  expect_error(spseg(d,coords=c("x","y"),variables=list(v=seg_continuous(values="v")),bands=2),"Missing")
+  expect_error(spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(values="v")),bands=2),"Missing")
   d$c <- 1
   expect_error(spseg(d,coords=c("x","y"),variables=list(
-    a=seg_categorical(counts=c("a","b")),b=seg_categorical(counts=c("a","c"))),bands=2),
+    a=spseg_categorical(counts=c("a","b")),b=spseg_categorical(counts=c("a","c"))),bands=2),
     "populations differ")
-  expect_error(seg_continuous(values="v",counts="a"),"exactly one")
+  expect_error(spseg_continuous(values="v",counts="a"),"exactly one")
   expect_error(spseg(d,coords=c("x","y"),variables=variables,bands=2,surface="grid"),"counts")
-  expect_error(spseg(d,coords=c("x","y"),variables=list(v=seg_ordinal(values="a")),bands=2),"ordered")
-  expect_error(spseg(d,coords=c("x","y"),variables=list(v=seg_continuous(values="a")),bands=2,
+  expect_error(spseg(d,coords=c("x","y"),variables=list(v=spseg_ordinal(values="a")),bands=2),"ordered")
+  expect_error(spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(values="a")),bands=2,
                      measures="unknown"),"Unknown")
   env <- spseg(d,coords=c("x","y"),population="pop",variables=variables,bands=2,output="localenv")
   expect_error(as.data.frame(env),"not calculated")
@@ -260,8 +260,8 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
   d <- data.frame(x=seq_len(140), y=0, race=rep(c("a","b"),70),
                   income=as.numeric(seq_len(140)))
   d$income[89:100] <- NA_real_
-  variables <- list(race=seg_categorical(values="race"),
-                    income=seg_continuous(values="income",na.action="omit"))
+  variables <- list(race=spseg_categorical(values="race"),
+                    income=spseg_continuous(values="income",na.action="omit"))
   r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
              bands=100,weighting="unweighted",scope="multigroup",output="full")
   expected <- c(1:88,101:112)
@@ -273,7 +273,7 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
   }
   adults <- d[!is.na(d$income),]
   income_only <- spseg(adults,coords=c("x","y"),neighbors="knn",bands=100,
-                       variables=list(income=seg_continuous(values="income")),
+                       variables=list(income=spseg_continuous(values="income")),
                        weighting="unweighted",scope="multigroup")
   expect_equal(r$analyses$income$indices,income_only$analyses$income$indices,
                tolerance=1e-12)
@@ -285,8 +285,8 @@ test_that("aggregate kNN populations and boundary fractions are variable-specifi
   d <- data.frame(x=c(0,1,3,5,9),y=0,
                   race_a=c(4,10,9,12,15),race_b=c(6,10,31,8,25),
                   income_low=c(0,4,2,8,6),income_high=c(0,6,2,16,4))
-  vars <- list(race=seg_categorical(counts=c("race_a","race_b")),
-                income=seg_grouped(counts=c("income_low","income_high")))
+  vars <- list(race=spseg_categorical(counts=c("race_a","race_b")),
+                income=spseg_grouped(counts=c("income_low","income_high")))
   for (kernel in c("unweighted","biweight","inverse","exponential")) {
     r <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=c(7,20),
                weighting=kernel,output="full")
@@ -314,18 +314,18 @@ test_that("kNN reports unattainable eligible thresholds and audits exact focal t
   d <- data.frame(x=1:3,y=0,race_a=c(40,20,30),race_b=c(60,30,20),
                   income=c(1,NA,2))
   expect_error(spseg(d,coords=c("x","y"),neighbors="knn",bands=100,
-    variables=list(race=seg_categorical(counts=c("race_a","race_b")),
-                   income=seg_continuous(values="income",na.action="omit"))),
+    variables=list(race=spseg_categorical(counts=c("race_a","race_b")),
+                   income=spseg_continuous(values="income",na.action="omit"))),
     "Variable 'income'.*population 2.*threshold 100")
   r <- spseg(d,coords=c("x","y"),neighbors="knn",bands=10,output="full",
-    variables=list(race=seg_categorical(counts=c("race_a","race_b"))))
+    variables=list(race=spseg_categorical(counts=c("race_a","race_b"))))
   expect_equal(r$analyses$race$knn$min_population,10)
   expect_equal(r$analyses$race$knn$max_population,10)
   expect_equal(r$analyses$race$knn$max_radius,0)
   expect_equal(unname(r$analyses$race$env[[1]][1,]),c(.4,.6))
   fractional <- data.frame(x=1:2000,y=0,a=.04,b=.06)
   r <- spseg(fractional,coords=c("x","y"),neighbors="knn",bands=200,
-              variables=list(g=seg_categorical(counts=c("a","b"))))
+              variables=list(g=spseg_categorical(counts=c("a","b"))))
   expect_equal(r$analyses$g$knn$min_population,200,tolerance=1e-12)
   expect_equal(r$analyses$g$knn$max_population,200,tolerance=1e-12)
 })
@@ -333,8 +333,8 @@ test_that("kNN reports unattainable eligible thresholds and audits exact focal t
 test_that("shared candidate discovery includes distance ties across query boundaries", {
   d <- data.frame(x=rep(0,80),y=0,race=rep(c("a","b"),40),income=as.numeric(1:80))
   d$income[seq(3,80,3)] <- NA_real_
-  vars <- list(race=seg_categorical(values="race"),
-                income=seg_continuous(values="income",na.action="omit"))
+  vars <- list(race=spseg_categorical(values="race"),
+                income=spseg_continuous(values="income",na.action="omit"))
   kd <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=5,output="full")
   brute <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=5,
                  output="full",search="brute")
@@ -344,7 +344,7 @@ test_that("shared candidate discovery includes distance ties across query bounda
 test_that("fractional kNN boundaries do not expand the kernel radius through rounding", {
   xy <- cbind(x=0:2,y=0)
   counts <- cbind(a=c(1,0,2),b=c(0,3,4))
-  coordinate_input <- spseg(xy, variables = list(groups = seg_categorical(counts = seq_len(ncol(counts)))), data = counts,neighbors="knn",bands=3,
+  coordinate_input <- spseg(xy, variables = list(groups = spseg_categorical(counts = seq_len(ncol(counts)))), data = counts,neighbors="knn",bands=3,
                    weighting="exponential",output="full")
   # Location 1 selects itself and 2/3 of location 2, with radius 1.
   expected <- c(1,2*exp(-1/(1+sqrt(.Machine$double.eps))))
@@ -352,7 +352,7 @@ test_that("fractional kNN boundaries do not expand the kernel radius through rou
   d <- data.frame(xy,counts)
   multi <- spseg(d,coords=c("x","y"),neighbors="knn",bands=3,
                   weighting="exponential",output="full",
-                  variables=list(g=seg_categorical(counts=c("a","b"))))
+                  variables=list(g=spseg_categorical(counts=c("a","b"))))
   expect_equal(unname(multi$analyses$g$env[[1]][1,]),expected/sum(expected),
                tolerance=1e-12)
 })
@@ -363,8 +363,8 @@ test_that("shared kNN radius expansion retains nonzero-distance boundary candida
   d <- data.frame(x=runif(n),y=runif(n),race=sample(letters[1:3],n,TRUE),
                   income=rnorm(n))
   d$income[seq(1,n,4)] <- NA_real_
-  variables <- list(race=seg_categorical(values="race"),
-                    income=seg_continuous(values="income",na.action="omit"))
+  variables <- list(race=spseg_categorical(values="race"),
+                    income=spseg_continuous(values="income",na.action="omit"))
   r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
              bands=100,measures="information",scope="multigroup")
   brute <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",

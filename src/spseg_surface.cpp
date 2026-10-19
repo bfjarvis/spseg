@@ -144,7 +144,7 @@ arma::vec pycno_group(const arma::ivec& zone_ids, const arma::vec& initial,
 } // namespace
 
 // [[Rcpp::export]]
-NumericMatrix seg_pycno_cpp(IntegerVector zone_ids, NumericMatrix values,
+NumericMatrix spseg_pycno_cpp(IntegerVector zone_ids, NumericMatrix values,
                             int nx, int ny, int max_iter, double converge)
 {
   const int n = zone_ids.size();

@@ -1,8 +1,8 @@
-#ifndef SEG_NEIGHBORS_H
-#define SEG_NEIGHBORS_H
+#ifndef SPSEG_NEIGHBORS_H
+#define SPSEG_NEIGHBORS_H
 
 // Shared, single-threaded spatial search and kernel helpers.
-namespace seg_spatial {
+namespace spseg_spatial {
 struct Neighbor {
   int id;
   double d;
@@ -27,7 +27,7 @@ using KDTree = nanoflann::KDTreeSingleIndexAdaptor<
   nanoflann::L2_Simple_Adaptor<double, PointCloud>,
   PointCloud, 2, size_t>;
 
-inline double seg_weight(double d, double bw, double power, int weighting_id)
+inline double spseg_weight(double d, double bw, double power, int weighting_id)
 {
   double w = 0.0;
 
@@ -139,7 +139,7 @@ inline Contributions radius_contributions(const std::vector<Neighbor>& neighbors
     if (band >= 0.0 && neighbor.d > band) break;
     double d = neighbor.d;
     if (weighting == 2 && d == 0.0) d = tolerance;
-    const double w = seg_weight(d, bw, power, weighting);
+    const double w = spseg_weight(d, bw, power, weighting);
     out.ids.push_back(neighbor.id);
     out.weights.push_back(w);
   }
@@ -192,7 +192,7 @@ inline Contributions knn_contributions(const std::vector<Neighbor>& neighbors,
     while (neighbors[q].id != out.ids[k]) ++q;
     double d = neighbors[q].d;
     if (weighting == 2 && d == 0.0) d = local_tolerance;
-    out.weights[k] *= seg_weight(d, bw, power, weighting);
+    out.weights[k] *= spseg_weight(d, bw, power, weighting);
   }
   return out;
 }
@@ -255,5 +255,5 @@ inline std::vector<Neighbor> variable_knn_neighbors(const KDTree* tree, int i,
 }
 
 
-} // namespace seg_spatial
+} // namespace spseg_spatial
 #endif

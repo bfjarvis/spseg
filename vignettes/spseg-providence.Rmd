@@ -25,7 +25,7 @@ knitr::opts_chunk$set(
   comment = "#>",
   fig.width = 7,
   fig.height = 5,
-  eval = have_resources && identical(Sys.getenv("SEG_RUN_EXTERNAL_VIGNETTES"), "true")
+  eval = have_resources && identical(Sys.getenv("SPSEG_RUN_EXTERNAL_VIGNETTES"), "true")
 )
 ```
 
@@ -47,7 +47,7 @@ have_resources
 If the result above is `FALSE`, the local source files are not available and
 the executable chunks below are skipped. The full import code is left in place
 so the workflow can be rerun once the source files are available.
-Set `SEG_RUN_EXTERNAL_VIGNETTES=true` to execute the external-data chunks.
+Set `SPSEG_RUN_EXTERNAL_VIGNETTES=true` to execute the external-data chunks.
 They are skipped during ordinary package builds, even when the files exist.
 
 The population data come from IPUMS NHGIS table P5, Hispanic or Latino Origin
@@ -55,7 +55,7 @@ by Race, for 2010 Census blocks in Rhode Island. The block geometries are 2010
 Census TIGER/Line block shapes for Rhode Island.
 
 ```{r setup}
-library(seg)
+library(spseg)
 library(sf)
 library(tidyverse)
 library(ggplot2)
@@ -162,11 +162,11 @@ block composition.
 
 ```{r local-environments}
 bands <- c(1, 500, 1000, 2000, 4000)
-providence_seg <-
+providence_spseg <-
   providence |>
   select(all_of(group_cols)) |>
   spseg(
-    variables = list(race = seg_categorical(counts = group_cols)),
+    variables = list(race = spseg_categorical(counts = group_cols)),
     bands = bands,
     weighting = "biweight",
     power = 2,
@@ -182,7 +182,7 @@ providence_seg <-
 Extract local Hispanic shares with their geometry for mapping.
 
 ```{r local-share-data}
-local_maps <- st_as_sf(providence_seg) |>
+local_maps <- st_as_sf(providence_spseg) |>
   filter(category == "Hispanic") |>
   st_join(select(providence, PLACEA, Raw = Total), join = st_equals) |>
   mutate(Hispanic_Share = share)
@@ -211,9 +211,9 @@ The ratio of segregation based on the 500m and 4km band is also calculated.
 
 ```{r multiband-indices}
 bind_rows(
-  as.data.frame(providence_seg, what = 'pairwise') |>
+  as.data.frame(providence_spseg, what = 'pairwise') |>
     filter(group_a == 'White'),
-  as.data.frame(providence_seg, what = 'indices')
+  as.data.frame(providence_spseg, what = 'indices')
 ) |>
   filter(measure == 'information', band %in% c(500, 4000)) |>
   arrange(group_a, group_b, band) |>

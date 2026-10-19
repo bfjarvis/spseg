@@ -31,14 +31,14 @@ an object of class [sf::sf]. For polygon [sf::sf] inputs, centroids
 are used as the focal coordinates. With `variables`, a plain data frame
 may contain both attributes and the columns selected by `coords`.}
 
-\item{variables}{Required uniquely named list of [seg_variables]
+\item{variables}{Required uniquely named list of [spseg_variables]
 specifications, including for a single segregation dimension. A count
 specification can select several columns. All variables share spatial
 discovery; kNN uses each variable's eligible population and adaptive
 distance weights. Each specification can override `measures`.
 Grid and pycnophylactic surfaces require count specifications for all
 variables and polygonal sf input; raw support also accepts observed values.
-See `vignette("seg-multiple-variables")` for formulas and sources.}
+See `vignette("spseg-multiple-variables")` for formulas and sources.}
 
 \item{coords}{With plain data frames,
 two coordinate column names or positions. For sf input, omit this argument
@@ -67,7 +67,7 @@ population-based default distance bands for radius neighborhoods.}
 \item{bands}{Neighborhood thresholds. With `neighbors = "radius"`, these
 are distance bandwidths in the units of `x`. With `neighbors = "knn"`,
 these are population-count thresholds. If omitted for radius
-neighborhoods, [default_bands()] is used.}
+neighborhoods, [spseg_default_bands()] is used.}
 
 \item{weighting}{Spatial weighting scheme used within each neighborhood.
 One of "biweight", "unweighted", "inverse", or "exponential".}
@@ -121,7 +121,7 @@ store square grid-cell geometries for mapping. By default, generated
 surfaces store only centroid coordinates and population counts.}
 }
 \value{
-A [seg_result] with named variable results in `analyses`, plus
+A [spseg_result] with named variable results in `analyses`, plus
   shared `bands`, `neighbors`, `diagnostics`, and `surface_info`. Input data,
   coordinates, geometry, and environments are retained for `output = "full"`
   or `"localenv"`. Surface audits are retained when requested.
@@ -138,7 +138,7 @@ and radius neighborhoods.
 
 By default, `spseg()` returns indices over default distance bands. These
 default bands are distance quantiles from a reproducible population-weighted
-sample of support points; see [default_bands()] for the quantile defaults.
+sample of support points; see [spseg_default_bands()] for the quantile defaults.
 If `output = "indices"`, coordinates, input data, and local environments
 are not stored in the result.
 
@@ -179,17 +179,17 @@ exposure of group 'm' to group 'n' is located in row 'm' and column 'n'.
 The matrix is rarely symmetric in practice.
 }
 \examples{
-data(segdata)
+data(spseg_data)
 xy <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
-variables <- list(ethnicity = seg_categorical(counts = c("A1", "A2")))
-result <- spseg(xy, variables, data = segdata, bands = c(0, 2), output = "full")
+variables <- list(ethnicity = spseg_categorical(counts = c("A1", "A2")))
+result <- spseg(xy, variables, data = spseg_data, bands = c(0, 2), output = "full")
 as.data.frame(result)
 head(as.data.frame(result, what = "env"))
 result$analyses$ethnicity$env[[1]]
 
 geom <- sf::st_polygon(list(rbind(c(0,0), c(10,0), c(10,10),
   c(0,10), c(0,0)))) |> sf::st_make_grid(cellsize = 1)
-blocks <- sf::st_sf(segdata, geometry = geom)
+blocks <- sf::st_sf(spseg_data, geometry = geom)
 gridded <- spseg(blocks, variables, surface = "grid", nrow = 10, ncol = 10,
                  bands = 2, output = "localenv")
 sf::st_as_sf(gridded)
@@ -205,5 +205,5 @@ Reardon, S. F., Farrell, C. R., Matthews, S. A., O'Sullivan, D., Bischoff,
   *Social Science Research*, **38**, 55-70.
 }
 \seealso{
-[default_bands()], [as.data.frame.seg_result()]
+[spseg_default_bands()], [as.data.frame.spseg_result()]
 }

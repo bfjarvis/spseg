@@ -11,9 +11,9 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// seg_engine_cpp
-List seg_engine_cpp(NumericMatrix coords, List variables, NumericVector bands, double power, int weighting, bool normalize, int neighbors, int search, IntegerVector scope, bool keep_env, bool keep_indices);
-RcppExport SEXP _seg_seg_engine_cpp(SEXP coordsSEXP, SEXP variablesSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP neighborsSEXP, SEXP searchSEXP, SEXP scopeSEXP, SEXP keep_envSEXP, SEXP keep_indicesSEXP) {
+// spseg_engine_cpp
+List spseg_engine_cpp(NumericMatrix coords, List variables, NumericVector bands, double power, int weighting, bool normalize, int neighbors, int search, IntegerVector scope, bool keep_env, bool keep_indices);
+RcppExport SEXP _spseg_spseg_engine_cpp(SEXP coordsSEXP, SEXP variablesSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP neighborsSEXP, SEXP searchSEXP, SEXP scopeSEXP, SEXP keep_envSEXP, SEXP keep_indicesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type coords(coordsSEXP);
@@ -27,13 +27,13 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerVector >::type scope(scopeSEXP);
     Rcpp::traits::input_parameter< bool >::type keep_env(keep_envSEXP);
     Rcpp::traits::input_parameter< bool >::type keep_indices(keep_indicesSEXP);
-    rcpp_result_gen = Rcpp::wrap(seg_engine_cpp(coords, variables, bands, power, weighting, normalize, neighbors, search, scope, keep_env, keep_indices));
+    rcpp_result_gen = Rcpp::wrap(spseg_engine_cpp(coords, variables, bands, power, weighting, normalize, neighbors, search, scope, keep_env, keep_indices));
     return rcpp_result_gen;
 END_RCPP
 }
-// seg_pycno_cpp
-NumericMatrix seg_pycno_cpp(IntegerVector zone_ids, NumericMatrix values, int nx, int ny, int max_iter, double converge);
-RcppExport SEXP _seg_seg_pycno_cpp(SEXP zone_idsSEXP, SEXP valuesSEXP, SEXP nxSEXP, SEXP nySEXP, SEXP max_iterSEXP, SEXP convergeSEXP) {
+// spseg_pycno_cpp
+NumericMatrix spseg_pycno_cpp(IntegerVector zone_ids, NumericMatrix values, int nx, int ny, int max_iter, double converge);
+RcppExport SEXP _spseg_spseg_pycno_cpp(SEXP zone_idsSEXP, SEXP valuesSEXP, SEXP nxSEXP, SEXP nySEXP, SEXP max_iterSEXP, SEXP convergeSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -43,18 +43,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type ny(nySEXP);
     Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
     Rcpp::traits::input_parameter< double >::type converge(convergeSEXP);
-    rcpp_result_gen = Rcpp::wrap(seg_pycno_cpp(zone_ids, values, nx, ny, max_iter, converge));
+    rcpp_result_gen = Rcpp::wrap(spseg_pycno_cpp(zone_ids, values, nx, ny, max_iter, converge));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_seg_seg_engine_cpp", (DL_FUNC) &_seg_seg_engine_cpp, 11},
-    {"_seg_seg_pycno_cpp", (DL_FUNC) &_seg_seg_pycno_cpp, 6},
+    {"_spseg_spseg_engine_cpp", (DL_FUNC) &_spseg_spseg_engine_cpp, 11},
+    {"_spseg_spseg_pycno_cpp", (DL_FUNC) &_spseg_spseg_pycno_cpp, 6},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_seg(DllInfo *dll) {
+RcppExport void R_init_spseg(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

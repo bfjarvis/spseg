@@ -2,7 +2,7 @@
 
 #' Spatial segregation results
 #'
-#' [spseg()] returns a `seg_result`. Each element of `analyses` contains `indices`, optional
+#' [spseg()] returns a `spseg_result`. Each element of `analyses` contains `indices`, optional
 #' `env`, `definition`, `normalizers`, and a status for each band. Stored
 #' categorical/ordinal/grouped environments are category-share matrices;
 #' continuous environments are sparse lists of exact values, global midranks,
@@ -13,7 +13,7 @@
 #' population before distance weighting, and minimum/maximum neighborhood
 #' radius, by band across focal rows with positive eligible population.
 #'
-#' @param x A `seg_result`.
+#' @param x A `spseg_result`.
 #' @param variables Optional names of analyses to extract.
 #' @param what Extract scalar `"indices"`, categorical `"pairwise"` indices,
 #'   `"exposure"` matrices, or stored `"env"` distributions.
@@ -24,12 +24,13 @@
 #'   table with the analysis name, type, method, and band. Environment tables
 #'   identify the input row as `location`. Spatial extraction returns this
 #'   environment table with the corresponding input geometry attached.
-#' @name seg_result
+#' @name spseg_result
 NULL
 
-#' @rdname seg_result
+#' @rdname spseg_result
+#' @method print spseg_result
 #' @export
-print.seg_result <- function(x, ...) {
+print.spseg_result <- function(x, ...) {
   cat("\nSpatial segregation across", length(x$analyses), "variables\n")
   cat("Neighborhoods:", x$neighbors$type, "| bands:", paste(x$bands, collapse = ", "), "\n")
   for (name in names(x$analyses)) {
@@ -41,7 +42,7 @@ print.seg_result <- function(x, ...) {
   invisible(x)
 }
 
-.seg_analysis_subset <- function(x, variables, bands) {
+.spseg_analysis_subset <- function(x, variables, bands) {
   if (is.null(variables)) variables <- names(x$analyses)
   if (!is.character(variables) || !length(variables) || anyNA(variables) ||
       !all(variables %in% names(x$analyses)))
@@ -51,14 +52,15 @@ print.seg_result <- function(x, ...) {
   list(variables = variables, bands = b)
 }
 
-#' @rdname seg_result
+#' @rdname spseg_result
+#' @method as.data.frame spseg_result
 #' @export
-as.data.frame.seg_result <- function(x, row.names = NULL, optional = FALSE,
+as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     ..., what = c("indices", "pairwise", "exposure", "env"), variables = NULL,
     bands = NULL) {
-  .seg_unused_arguments(list(...))
+  .spseg_unused_arguments(list(...))
   what <- match.arg(what)
-  selected <- .seg_analysis_subset(x, variables, bands)
+  selected <- .spseg_analysis_subset(x, variables, bands)
   rows <- list()
   keys <- c(d = "dissimilarity", h = "information", r = "diversity", s = "square_root")
   for (name in selected$variables) {
@@ -111,10 +113,11 @@ as.data.frame.seg_result <- function(x, row.names = NULL, optional = FALSE,
   out
 }
 
-#' @rdname seg_result
+#' @rdname spseg_result
+#' @method st_as_sf spseg_result
 #' @export
-st_as_sf.seg_result <- function(x, ..., variables = NULL, bands = NULL) {
-  .seg_unused_arguments(list(...))
+st_as_sf.spseg_result <- function(x, ..., variables = NULL, bands = NULL) {
+  .spseg_unused_arguments(list(...))
   if (is.null(x$coords)) stop("Coordinates were not stored; use output = 'full' or 'localenv'",
                               call. = FALSE)
   out <- as.data.frame(x, what = "env", variables = variables, bands = bands)
@@ -126,11 +129,12 @@ st_as_sf.seg_result <- function(x, ..., variables = NULL, bands = NULL) {
   }
 }
 
-#' @rdname seg_result
+#' @rdname spseg_result
+#' @method as.list spseg_result
 #' @export
-as.list.seg_result <- function(x, ...) unclass(x)
+as.list.spseg_result <- function(x, ...) unclass(x)
 
-.seg_unused_arguments <- function(dots) {
+.spseg_unused_arguments <- function(dots) {
   if (length(dots)) stop("Unused extraction arguments: ",
                          paste(names(dots), collapse = ", "), call. = FALSE)
 }

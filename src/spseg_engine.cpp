@@ -7,10 +7,10 @@
 #include <memory>
 #include <vector>
 #include <numeric>
-#include "seg_neighbors.h"
+#include "spseg_neighbors.h"
 
 using namespace Rcpp;
-using namespace seg_spatial;
+using namespace spseg_spatial;
 
 namespace {
 constexpr double pi = 3.1415926535897932384626433832795;
@@ -357,7 +357,7 @@ struct Model {
 } // namespace
 
 // [[Rcpp::export(rng = false)]]
-List seg_engine_cpp(NumericMatrix coords, List variables,
+List spseg_engine_cpp(NumericMatrix coords, List variables,
     NumericVector bands, double power, int weighting, bool normalize,
     int neighbors, int search, IntegerVector scope, bool keep_env, bool keep_indices)
 {

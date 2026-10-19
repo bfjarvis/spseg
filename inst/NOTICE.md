@@ -2,7 +2,7 @@
 
 ## nanoflann
 
-`src/nanoflann.hpp` is a vendored copy of the `nanoflann` header-only C++
+`src/nanoflann.h` is a vendored copy of the `nanoflann` header-only C++
 kd-tree library.
 
 - Project: https://github.com/jlblancoc/nanoflann
@@ -17,4 +17,4 @@ The vendored header was scanned for obvious unsafe behavior on 2026-05-15. No
 process execution, network access, filesystem mutation, dynamic loading, or
 inline assembly was found. The header includes stream serialization helpers and
 a pooled allocator using `malloc`/`free`; these are normal library internals and
-are not used for external IO by `seg`.
+are not used for external IO by `spseg`.

@@ -4,7 +4,7 @@
 
 #' Construct a population surface for spatial segregation calculations
 #'
-#' `spseg_surface()` prepares the coordinate and count matrix that will be passed
+#' `.spseg_surface()` prepares the coordinate and count matrix that will be passed
 #' to the segregation engine. The `"raw"` surface returns the input coordinates
 #' and data unchanged. The `"grid"` and `"pycno"` surfaces require polygonal
 #' `sf` input and redistribute polygon counts to a regular square grid before
@@ -23,7 +23,7 @@
 #'   surfaces may also include source-polygon identifiers and fallback metadata.
 #'
 #' @noRd
-spseg_surface <- function(
+.spseg_surface <- function(
   x,
   coords,
   data,
@@ -53,9 +53,9 @@ spseg_surface <- function(
     )
   }
   if (surface == "grid") {
-    return(spseg_surface_grid(x, data, args, audit, verbose))
+    return(.spseg_surface_grid(x, data, args, audit, verbose))
   }
-  spseg_surface_pycno(x, data, args, audit, verbose)
+  .spseg_surface_pycno(x, data, args, audit, verbose)
 }
 
 #' Redistribute polygon counts to a square grid
@@ -65,31 +65,31 @@ spseg_surface <- function(
 #' fallback assignment for non-empty polygons too small to contain a grid-cell
 #' centroid.
 #'
-#' @inheritParams spseg_surface
+#' @inheritParams .spseg_surface
 #'
 #' @return A compact surface list with grid-cell coordinates, redistributed group
 #'   counts, optional grid geometry, source polygon identifiers, and fallback
 #'   metadata.
 #'
 #' @noRd
-spseg_surface_grid <- function(x, data, args, audit = FALSE, verbose = FALSE) {
+.spseg_surface_grid <- function(x, data, args, audit = FALSE, verbose = FALSE) {
   if (verbose) {
     beg_time <- Sys.time()
-    message("spseg_surface_grid: redistributing population data ...")
+    message(".spseg_surface_grid: redistributing population data ...")
   }
 
-  grid <- surface_grid(x, data, args, audit)
-  surface_warn_fallback(grid$fallback, "grid")
-  out <- surface_compact_grid(
+  grid <- .spseg_grid(x, data, args, audit)
+  .spseg_warn_fallback(grid$fallback, "grid")
+  out <- .spseg_compact_grid(
     grid,
     st_crs(x),
-    surface_geometry_type(args),
+    .spseg_geometry_type(args),
     "grid"
   )
 
   if (verbose) {
     elapsed <- as.numeric(difftime(Sys.time(), beg_time, units = "sec"))
-    message("spseg_surface_grid: done! [", elapsed, " seconds]")
+    message(".spseg_surface_grid: done! [", elapsed, " seconds]")
   }
 
   out
@@ -97,31 +97,31 @@ spseg_surface_grid <- function(x, data, args, audit = FALSE, verbose = FALSE) {
 
 #' Build a pycnophylactic population surface
 #'
-#' First constructs the same count-preserving grid as `spseg_surface_grid()`,
+#' First constructs the same count-preserving grid as `.spseg_surface_grid()`,
 #' then applies the package's internal pycnophylactic smoother. The smoother
 #' iteratively averages neighboring cells and corrects each source zone so that
 #' group counts remain equal to the gridded counts supplied to the smoother.
 #'
-#' @inheritParams spseg_surface
+#' @inheritParams .spseg_surface
 #'
 #' @return A compact surface list with smoothed grid-cell coordinates, group
 #'   counts, optional grid geometry, source polygon identifiers, and fallback
 #'   metadata.
 #'
 #' @noRd
-spseg_surface_pycno <- function(x, data, args, audit = FALSE, verbose = FALSE) {
+.spseg_surface_pycno <- function(x, data, args, audit = FALSE, verbose = FALSE) {
   max_iter <- args$max_iter %||% 1000
   converge <- args$converge %||% 3
 
   if (verbose) {
     beg_time <- Sys.time()
-    message("spseg_surface_pycno: pycnophylactic interpolation ...")
+    message(".spseg_surface_pycno: pycnophylactic interpolation ...")
   }
 
-  grid <- surface_grid(x, data, args, audit)
-  surface_warn_fallback(grid$fallback, "pycno")
+  grid <- .spseg_grid(x, data, args, audit)
+  .spseg_warn_fallback(grid$fallback, "pycno")
   group_names <- colnames(grid$values)
-  grid$values <- seg_pycno_cpp(
+  grid$values <- spseg_pycno_cpp(
     zone_ids = grid$zone_ids,
     values = grid$values,
     nx = grid$ncol,
@@ -131,16 +131,16 @@ spseg_surface_pycno <- function(x, data, args, audit = FALSE, verbose = FALSE) {
   )
   grid$values[is.na(grid$values)] <- 0
   colnames(grid$values) <- group_names
-  out <- surface_compact_grid(
+  out <- .spseg_compact_grid(
     grid,
     st_crs(x),
-    surface_geometry_type(args),
+    .spseg_geometry_type(args),
     "pycno"
   )
 
   if (verbose) {
     elapsed <- as.numeric(difftime(Sys.time(), beg_time, units = "sec"))
-    message("spseg_surface_pycno: done! [", elapsed, " seconds]")
+    message(".spseg_surface_pycno: done! [", elapsed, " seconds]")
   }
 
   out
@@ -163,12 +163,12 @@ spseg_surface_pycno <- function(x, data, args, audit = FALSE, verbose = FALSE) {
 #'   and cell size.
 #'
 #' @noRd
-surface_grid <- function(x, data, args, audit = FALSE) {
-  grid_dims <- surface_grid_dims(x, args)
-  template <- surface_raster_template(x, grid_dims)
-  zone_ids <- surface_rasterize_zones(x, template)
-  fallback <- surface_fallback_counts(zone_ids, x, data, template)
-  values <- surface_distribute_counts(zone_ids, data)
+.spseg_grid <- function(x, data, args, audit = FALSE) {
+  grid_dims <- .spseg_grid_dims(x, args)
+  template <- .spseg_raster_template(x, grid_dims)
+  zone_ids <- .spseg_rasterize_zones(x, template)
+  fallback <- .spseg_fallback_counts(zone_ids, x, data, template)
+  values <- .spseg_distribute_counts(zone_ids, data)
 
   if (length(fallback$cells) > 0) {
     fallback_values <- rowsum(fallback$data, fallback$cells, reorder = FALSE)
@@ -182,7 +182,7 @@ surface_grid <- function(x, data, args, audit = FALSE) {
     }
   }
 
-  surface_warn_unrepresented_zones(zone_ids, data, fallback$ids)
+  .spseg_warn_unrepresented_zones(zone_ids, data, fallback$ids)
 
   out <- list(
     coords = terra::xyFromCell(template, seq_len(terra::ncell(template))),
@@ -213,7 +213,7 @@ surface_grid <- function(x, data, args, audit = FALSE) {
 #' @return A list with integer `nrow` and `ncol` entries.
 #'
 #' @noRd
-surface_grid_dims <- function(x, args) {
+.spseg_grid_dims <- function(x, args) {
   if (!is.null(args$nrow) && !is.null(args$ncol)) {
     return(list(nrow = args$nrow, ncol = args$ncol))
   }
@@ -241,7 +241,7 @@ surface_grid_dims <- function(x, args) {
 #' @return A terra raster with the extent and CRS of `x`.
 #'
 #' @noRd
-surface_raster_template <- function(x, grid_dims) {
+.spseg_raster_template <- function(x, grid_dims) {
   bbox <- st_bbox(x)
   terra::rast(
     nrows = grid_dims$nrow,
@@ -266,12 +266,12 @@ surface_raster_template <- function(x, grid_dims) {
 #'   cell.
 #'
 #' @noRd
-surface_rasterize_zones <- function(x, template) {
-  x$.seg_zone_id <- seq_len(nrow(x))
+.spseg_rasterize_zones <- function(x, template) {
+  x$.spseg_zone_id <- seq_len(nrow(x))
   zone_raster <- terra::rasterize(
     terra::vect(x),
     template,
-    field = ".seg_zone_id",
+    field = ".spseg_zone_id",
     background = NA,
     touches = FALSE
   )
@@ -290,7 +290,7 @@ surface_rasterize_zones <- function(x, template) {
 #' @return Numeric matrix of grid-cell group counts.
 #'
 #' @noRd
-surface_distribute_counts <- function(zone_ids, data) {
+.spseg_distribute_counts <- function(zone_ids, data) {
   values <- matrix(0, nrow = length(zone_ids), ncol = ncol(data))
   assigned <- !is.na(zone_ids)
   if (!any(assigned)) {
@@ -322,7 +322,7 @@ surface_distribute_counts <- function(zone_ids, data) {
 #' @return A list with fallback cell numbers, source polygon ids, and count rows.
 #'
 #' @noRd
-surface_fallback_counts <- function(zone_ids, x, data, template) {
+.spseg_fallback_counts <- function(zone_ids, x, data, template) {
   positive <- which(rowSums(data) > 0)
   represented <- unique(zone_ids[!is.na(zone_ids)])
   missing <- setdiff(positive, represented)
@@ -364,7 +364,7 @@ surface_fallback_counts <- function(zone_ids, x, data, template) {
 #' Keeps cells assigned to source polygons and returns the compact
 #' representation expected by `spseg()`.
 #'
-#' @param grid Full grid list from `surface_grid()`.
+#' @param grid Full grid list from `.spseg_grid()`.
 #' @param crs Coordinate reference system for returned geometry.
 #' @param geometry_type Character scalar: `"none"`, `"points"`, or `"polygons"`.
 #' @param surface_type Character scalar identifying the constructed surface.
@@ -373,14 +373,14 @@ surface_fallback_counts <- function(zone_ids, x, data, template) {
 #'   and fallback metadata.
 #'
 #' @noRd
-surface_compact_grid <- function(grid, crs, geometry_type, surface_type) {
+.spseg_compact_grid <- function(grid, crs, geometry_type, surface_type) {
   keep <- !is.na(grid$zone_ids)
   cell_ids <- which(keep)
 
   coords <- grid$coords[keep, , drop = FALSE]
   values <- grid$values[keep, , drop = FALSE]
   zone_ids <- grid$zone_ids[keep]
-  geometry <- surface_make_geometry(
+  geometry <- .spseg_make_geometry(
     coords,
     crs,
     geometry_type,
@@ -457,13 +457,13 @@ surface_compact_grid <- function(grid, crs, geometry_type, surface_type) {
 
 #' Warn when populated source polygons require fallback assignment
 #'
-#' @param fallback Fallback assignment list from `surface_fallback_counts()`.
+#' @param fallback Fallback assignment list from `.spseg_fallback_counts()`.
 #' @param surface Character scalar identifying the surface type.
 #'
 #' @return Invisibly returns `NULL`; called for its warning side effect.
 #'
 #' @noRd
-surface_warn_fallback <- function(fallback, surface) {
+.spseg_warn_fallback <- function(fallback, surface) {
   n <- length(fallback$ids)
   if (n == 0) {
     return(invisible(NULL))
@@ -498,7 +498,7 @@ surface_warn_fallback <- function(fallback, surface) {
 #' @return Invisibly returns `NULL`; called for its warning side effect.
 #'
 #' @noRd
-surface_warn_unrepresented_zones <- function(
+.spseg_warn_unrepresented_zones <- function(
   zone_ids,
   data,
   fallback_ids = integer()
@@ -528,7 +528,7 @@ surface_warn_unrepresented_zones <- function(
 #' @return One of `"none"`, `"points"`, or `"polygons"`.
 #'
 #' @noRd
-surface_geometry_type <- function(args) {
+.spseg_geometry_type <- function(args) {
   geometry <- args$surface_geometry %||% args$keep_geometry %||% FALSE
   if (is.logical(geometry)) {
     if (length(geometry) != 1 || is.na(geometry)) {
@@ -563,7 +563,7 @@ surface_geometry_type <- function(args) {
 #' @return An `sfc` geometry vector, or `NULL` when `type = "none"`.
 #'
 #' @noRd
-surface_make_geometry <- function(coords, crs, type, width, height = width) {
+.spseg_make_geometry <- function(coords, crs, type, width, height = width) {
   if (identical(type, "none")) {
     return(NULL)
   }

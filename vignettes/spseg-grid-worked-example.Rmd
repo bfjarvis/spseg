@@ -28,7 +28,7 @@ lower-right three cells contain only group B, and the remaining diagonal cells
 contain equal counts of A and B.
 
 ```{r setup}
-library(seg)
+library(spseg)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
@@ -289,7 +289,7 @@ spseg_to_table <- function(result, scenario) {
 
 spseg_raw <- spseg(
   coords,
-  variables = list(groups = seg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
   data = counts,
   bands = 0,
   weighting = "unweighted",
@@ -299,7 +299,7 @@ spseg_raw <- spseg(
 
 spseg_unweighted <- spseg(
   coords,
-  variables = list(groups = seg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
   data = counts,
   bands = 1,
   weighting = "unweighted",
@@ -310,7 +310,7 @@ spseg_unweighted <- spseg(
 
 spseg_weighted <- spseg(
   coords,
-  variables = list(groups = seg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
   data = counts,
   bands = 1,
   weighting = "exponential",

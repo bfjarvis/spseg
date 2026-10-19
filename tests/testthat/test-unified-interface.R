@@ -1,11 +1,11 @@
 test_that("the variable interface is required and returns one result class", {
   d <- data.frame(x=1:4,y=0,a=c(1,2,3,4),b=c(4,3,2,1))
-  vars <- list(groups=seg_categorical(counts=c("a","b")))
+  vars <- list(groups=spseg_categorical(counts=c("a","b")))
   expect_error(spseg(d,coords=c("x","y"),bands=1), "variables")
   expect_error(spseg(as.matrix(d[c("x","y")]),as.matrix(d[c("a","b")]),bands=1),
                "named list|named.*list")
   result <- spseg(d,vars,coords=c("x","y"),bands=1,output="full")
-  expect_identical(class(result), "seg_result")
+  expect_identical(class(result), "spseg_result")
   expect_setequal(names(result$analyses$groups$indices$multigroup),c("d","h","r","s","p"))
   expect_null(result$indices)
   expect_null(result$env)
@@ -21,10 +21,10 @@ test_that("all count variable types share grid surfaces and neighborhood discove
     low=c(2,3,4,5),middle=c(3,1,2,1),high=c(1,2,2,2),
     inc0=c(0,2,3,1),inc1=c(3,2,2,4),
     age1=c(1,2,1,3),age2=c(2,1,2,1),age3=c(2,3,4,2),geometry=geom)
-  vars <- list(race=seg_categorical(counts=c("a","b")),
-                education=seg_ordinal(counts=c("low","middle","high")),
-                income=seg_grouped(counts=c("inc0","inc1")),
-                age=seg_continuous(counts=c("age1","age2","age3"),scores=c(20,20,40)))
+  vars <- list(race=spseg_categorical(counts=c("a","b")),
+                education=spseg_ordinal(counts=c("low","middle","high")),
+                income=spseg_grouped(counts=c("inc0","inc1")),
+                age=spseg_continuous(counts=c("age1","age2","age3"),scores=c(20,20,40)))
   totals <- vapply(vars, function(z) sum(as.matrix(sf::st_drop_geometry(areas)[z$counts])),numeric(1))
   for (surface in c("grid","pycno")) for (neighbors in c("radius","knn")) {
     band <- if(neighbors=="radius") .9 else 3

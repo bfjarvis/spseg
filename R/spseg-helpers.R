@@ -19,19 +19,19 @@
 #' @seealso [spseg()]
 #' @examples
 #' points <- data.frame(x = 1:10, y = 0, residents = 1:10)
-#' default_bands(points, coords = c("x", "y"), population = "residents")
+#' spseg_default_bands(points, coords = c("x", "y"), population = "residents")
 #' @export
-default_bands <- function(x, coords = NULL, population = NULL, n = 500,
+spseg_default_bands <- function(x, coords = NULL, population = NULL, n = 500,
                           probs = c(0.01, 0.05, seq(0.1, 0.7, 0.1))) {
   if (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 2 || n != floor(n))
     stop("'n' must be an integer of at least 2", call. = FALSE)
   if (!is.numeric(probs) || !length(probs) || any(!is.finite(probs)) ||
       any(probs < 0 | probs > 1))
     stop("'probs' must contain probabilities in [0, 1]", call. = FALSE)
-  checked <- .seg_geometry(x, NULL, coords)
+  checked <- .spseg_geometry(x, NULL, coords)
   coords <- checked$coords
   n_points <- nrow(coords)
-  weights <- .seg_mass(population, checked$data, n_points)
+  weights <- .spseg_mass(population, checked$data, n_points)
   if (!is.finite(sum(weights)) || !any(weights > 0))
     stop("Population total must be positive and finite", call. = FALSE)
   sample_n <- min(n_points, n)
@@ -74,11 +74,11 @@ default_bands <- function(x, coords = NULL, population = NULL, n = 500,
   as.numeric(quantile(d, probs = probs, names = FALSE, type = 8))
 }
 
-spseg_weighting_id <- function(weighting) {
+.spseg_weighting_id <- function(weighting) {
   match(weighting, c("unweighted", "biweight", "inverse", "exponential")) - 1L
 }
 
-spseg_scope_flags <- function(scope) {
+.spseg_scope_flags <- function(scope) {
   c(
     multigroup = scope %in% c("multigroup", "both"),
     pairwise = scope %in% c("pairwise", "both")

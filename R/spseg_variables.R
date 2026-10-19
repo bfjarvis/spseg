@@ -24,17 +24,17 @@
 #'   (value boundaries covering the observations). Defaults to deciles.
 #'   Equal values stay together; empty groups are removed. These cuts affect
 #'   exposure only, not the rank-order indices.
-#' @return A `seg_variable` specification for `spseg(variables = ...)`.
+#' @return A `spseg_variable` specification for `spseg(variables = ...)`.
 #' @seealso [spseg()]
 #' @examples
-#' seg_categorical(values = "ethnicity")
-#' seg_ordinal(counts = c("primary", "secondary", "tertiary"))
-#' seg_grouped(counts = c("low", "middle", "high"))
-#' seg_continuous(values = "income", exposure = list(probs = c(0, .2, .8, 1)))
-#' @name seg_variables
+#' spseg_categorical(values = "ethnicity")
+#' spseg_ordinal(counts = c("primary", "secondary", "tertiary"))
+#' spseg_grouped(counts = c("low", "middle", "high"))
+#' spseg_continuous(values = "income", exposure = list(probs = c(0, .2, .8, 1)))
+#' @name spseg_variables
 NULL
 
-.seg_variable <- function(type, values, counts, levels, measures, weights,
+.spseg_variable <- function(type, values, counts, levels, measures, weights,
                           na.action, interpolation = NULL, scores = NULL,
                           exposure = NULL) {
   if (is.null(values) == is.null(counts)) {
@@ -54,53 +54,53 @@ NULL
                  levels = levels, measures = measures, weights = weights,
                  na.action = match.arg(na.action, c("fail", "omit")),
                  interpolation = interpolation, scores = scores,
-                 exposure = exposure), class = "seg_variable")
+                 exposure = exposure), class = "spseg_variable")
 }
 
-#' @rdname seg_variables
+#' @rdname spseg_variables
 #' @export
-seg_categorical <- function(values = NULL, counts = NULL, levels = NULL,
+spseg_categorical <- function(values = NULL, counts = NULL, levels = NULL,
                             measures = NULL, weights = NULL,
                             na.action = c("fail", "omit")) {
-  .seg_variable("categorical", values, counts, levels, measures, weights,
+  .spseg_variable("categorical", values, counts, levels, measures, weights,
                 match.arg(na.action))
 }
 
-#' @rdname seg_variables
+#' @rdname spseg_variables
 #' @export
-seg_ordinal <- function(values = NULL, counts = NULL, levels = NULL,
+spseg_ordinal <- function(values = NULL, counts = NULL, levels = NULL,
                        measures = NULL, weights = NULL,
                        na.action = c("fail", "omit")) {
-  .seg_variable("ordinal", values, counts, levels, measures, weights,
+  .spseg_variable("ordinal", values, counts, levels, measures, weights,
                 match.arg(na.action))
 }
 
-#' @rdname seg_variables
+#' @rdname spseg_variables
 #' @export
-seg_grouped <- function(values = NULL, counts = NULL, levels = NULL,
+spseg_grouped <- function(values = NULL, counts = NULL, levels = NULL,
                        measures = NULL, weights = NULL,
                        na.action = c("fail", "omit"),
                        interpolation = "linear") {
   if (!identical(interpolation, "linear")) {
     stop("Only 'linear' interpolation is supported", call. = FALSE)
   }
-  .seg_variable("grouped", values, counts, levels, measures, weights,
+  .spseg_variable("grouped", values, counts, levels, measures, weights,
                 match.arg(na.action), interpolation = interpolation)
 }
 
-#' @rdname seg_variables
+#' @rdname spseg_variables
 #' @export
-seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
+spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
                           measures = NULL, weights = NULL,
                           na.action = c("fail", "omit"), exposure = NULL) {
   if (!is.null(values) && !is.null(scores)) {
     stop("'scores' applies only to continuous count columns", call. = FALSE)
   }
-  .seg_variable("continuous", values, counts, NULL, measures, weights,
+  .spseg_variable("continuous", values, counts, NULL, measures, weights,
                 match.arg(na.action), scores = scores, exposure = exposure)
 }
 
-.seg_select <- function(data, columns) {
+.spseg_select <- function(data, columns) {
   if (is.character(columns)) {
     if (anyNA(columns) || !all(columns %in% names(data)))
       stop("Unknown column: ", paste(setdiff(columns, names(data)), collapse = ", "),
@@ -115,10 +115,10 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
   data[, index, drop = FALSE]
 }
 
-.seg_mass <- function(value, data, n, default = rep(1, n)) {
+.spseg_mass <- function(value, data, n, default = rep(1, n)) {
   if (is.null(value)) return(default)
   if (is.character(value) && length(value) == 1L)
-    value <- .seg_select(data, value)[[1L]]
+    value <- .spseg_select(data, value)[[1L]]
   if (!is.numeric(value) || length(value) != n ||
       any(!is.finite(value) | value < 0)) {
     stop("Population weights must be finite, nonnegative, and have one value per row",
@@ -127,8 +127,8 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
   as.numeric(value)
 }
 
-.seg_counts <- function(spec, data) {
-  out <- .seg_select(data, spec$counts)
+.spseg_counts <- function(spec, data) {
+  out <- .spseg_select(data, spec$counts)
   if (!all(vapply(out, is.numeric, logical(1))))
     stop("Count columns must be numeric", call. = FALSE)
   out <- as.matrix(out)
@@ -144,7 +144,7 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
   out
 }
 
-.seg_measures <- function(measures) {
+.spseg_measures <- function(measures) {
   measures[measures %in% c("relative_diversity", "variance_ratio")] <- "diversity"
   valid <- c("exposure", "information", "diversity", "dissimilarity", "square_root")
   if (!is.character(measures) || !length(measures) || anyNA(measures) ||
@@ -153,7 +153,7 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
   if ("all" %in% measures) valid else unique(measures)
 }
 
-.seg_exposure <- function(scores, totals, options) {
+.spseg_exposure <- function(scores, totals, options) {
   if (is.null(options)) options <- list(probs = seq(0, 1, .1))
   if (!is.list(options) || length(options) != 1L || is.null(names(options)) ||
       !all(names(options) %in% c("probs", "breaks")))
@@ -190,14 +190,14 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
                          labels = levels(groups)[keep], shares = shares[keep] / sum(shares)))
 }
 
-.seg_compile <- function(spec, data, population, measures) {
+.spseg_compile <- function(spec, data, population, measures) {
   n <- nrow(data)
-  selected <- .seg_measures(spec$measures %||% measures)
+  selected <- .spseg_measures(spec$measures %||% measures)
   counts <- matrix(numeric(), 0L, 0L)
   code <- rep(-1L, n)
   scores <- numeric()
   if (!is.null(spec$counts)) {
-    counts <- .seg_counts(spec, data)
+    counts <- .spseg_counts(spec, data)
     labels <- colnames(counts)
     mass <- rowSums(counts)
     totals <- colSums(counts)
@@ -222,8 +222,8 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
       labels <- as.character(scores)
     }
   } else {
-    values <- .seg_select(data, spec$values)[[1L]]
-    mass <- .seg_mass(spec$weights, data, n, population)
+    values <- .spseg_select(data, spec$values)[[1L]]
+    mass <- .spseg_mass(spec$weights, data, n, population)
     bad <- is.na(values)
     if (any(bad) && spec$na.action == "fail")
       stop("Missing observed values; choose na.action = 'omit' explicitly", call. = FALSE)
@@ -263,7 +263,7 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
   type <- match(spec$type, c("categorical", "ordinal", "grouped", "continuous")) - 1L
   method <- c("categorical", "ordinal_cutoffs", "linear_cdf", "empirical_midrank")[type + 1L]
   exposure <- if (type == 3L) {
-    if ("exposure" %in% selected) .seg_exposure(scores, totals, spec$exposure) else
+    if ("exposure" %in% selected) .spseg_exposure(scores, totals, spec$exposure) else
       list(map = integer(), labels = character(), definition = NULL)
   } else list(map = seq_along(labels) - 1L, labels = labels, definition = NULL)
   list(type = type, counts = counts, code = as.integer(code), mass = mass,

@@ -23,7 +23,7 @@ are included as external package files so the examples can be run after the
 package is installed.
 
 ```{r setup}
-library(seg)
+library(spseg)
 library(sf)
 library(ggplot2)
 ```
@@ -34,7 +34,7 @@ Files in `inst/extdata` are installed with the package. Use `system.file()` to
 find them.
 
 ```{r data-paths}
-auck_dir <- system.file("extdata", "auck", package = "seg")
+auck_dir <- system.file("extdata", "auck", package = "spseg")
 
 if (auck_dir == "") {
   auck_dir <- file.path("..", "inst", "extdata", "auck")
@@ -89,8 +89,8 @@ ggplot(auck) +
 `spseg()` produces both local environment data for specified bands as well as segregation indices based on those local environments. You can return the environments, the indices, or both. Here we specify `output='full'` to get both the indices and the local environments back. `search='kdtree'`, `neighbors='radius'`, and `measures='all'` are specified explicitly as well, but these are also the defaults.
 
 ```{r first-run}
-variables <- list(ethnicity = seg_categorical(counts = c("Korean", "Non_Korean")))
-auck_poly_seg <- spseg(
+variables <- list(ethnicity = spseg_categorical(counts = c("Korean", "Non_Korean")))
+auck_poly_spseg <- spseg(
   auck[, c("Korean", "Non_Korean")],
   variables = variables,
   bands = c(1, 2000, 5000),
@@ -104,7 +104,7 @@ auck_poly_seg <- spseg(
 And we can view the indices in  a `data.frame`
 
 ```{r}
-(auck_poly_ind <- as.data.frame(auck_poly_seg, what = "indices"))
+(auck_poly_ind <- as.data.frame(auck_poly_spseg, what = "indices"))
 ```
 
 
@@ -113,7 +113,7 @@ And we can view the indices in  a `data.frame`
 `as.data.frame()` returns tidy tables; `st_as_sf()` attaches geometry to local shares.
 
 ```{r localenv-map}
-auck_poly_env <- sf::st_as_sf(auck_poly_seg) |>
+auck_poly_env <- sf::st_as_sf(auck_poly_spseg) |>
   dplyr::filter(category == "Korean") |>
   dplyr::mutate(Korean_Share = share)
 
@@ -139,7 +139,7 @@ ggplot(auck_poly_env) +
 The default `surface="raw"` uses the area-unit data directly. For areal data, it is sometimes useful to first redistribute the counts to a grid. The `surface="grid"` option spreads the population in each polygon evenly over square-grid points before the local environments are calculated.
 
 ```{r grid-surface}
-auck_grid_seg <- spseg(
+auck_grid_spseg <- spseg(
   auck[, c("Korean", "Non_Korean")],
   variables = variables,
   surface = "grid",
@@ -153,9 +153,9 @@ auck_grid_seg <- spseg(
 The same `spseg()` call also produces segregation indices and local environments from the grid-based population surface.
 
 ```{r grid-surface-indices}
-(auck_grid_ind <- as.data.frame(auck_grid_seg, what = "indices"))
+(auck_grid_ind <- as.data.frame(auck_grid_spseg, what = "indices"))
 
-auck_grid_env <- sf::st_as_sf(auck_grid_seg) |>
+auck_grid_env <- sf::st_as_sf(auck_grid_spseg) |>
   dplyr::filter(category == "Korean") |>
   dplyr::mutate(Korean_Share = share)
 ```
@@ -163,7 +163,7 @@ auck_grid_env <- sf::st_as_sf(auck_grid_seg) |>
 The `surface="pycno"` option also constructs a grid, then applies groupwise pycnophylactic interpolation. Each group is smoothed separately, then rescaled within each area unit after every iteration so the known group totals are preserved.
 
 ```{r pycno-surface}
-auck_pycno_seg <- spseg(
+auck_pycno_spseg <- spseg(
   auck[, c("Korean", "Non_Korean")],
   variables = variables,
   surface = "pycno",
@@ -177,9 +177,9 @@ auck_pycno_seg <- spseg(
 The segregation indices and local environments can be extracted in the same way.
 
 ```{r pycno-surface-indices}
-(auck_pycno_ind <- as.data.frame(auck_pycno_seg, what = "indices"))
+(auck_pycno_ind <- as.data.frame(auck_pycno_spseg, what = "indices"))
 
-auck_pycno_env <- sf::st_as_sf(auck_pycno_seg) |>
+auck_pycno_env <- sf::st_as_sf(auck_pycno_spseg) |>
   dplyr::filter(category == "Korean") |>
   dplyr::mutate(Korean_Share = share)
 ```
@@ -235,7 +235,7 @@ powers <- 3:5
 incr <- seq(0.2, 1, by = 0.1)
 bws <- c(1, 1000, 1500, seq(2000, 20000, by = 1000))
 
-auck_seg_bw <- spseg(
+auck_spseg_bw <- spseg(
   auck[, c("Korean", "Non_Korean")],
   variables = variables,
   bands = bws,
@@ -253,7 +253,7 @@ We can extract the corresponding segregation measures using `as.data.frame()` wi
 
 ```{r bandwidth-sequence}
 head(
-  auck_ind_bw <- as.data.frame(auck_seg_bw, what = "indices")
+  auck_ind_bw <- as.data.frame(auck_spseg_bw, what = "indices")
 )
 ```
 
@@ -296,7 +296,7 @@ spseg(
 The exposure/isolation values are a bit more complicated, but can be returned in long form using the `what='exposure'` option in `as.data.frame()`.
 
 ```{r exposure-curve}
-head(auck_poly_exp <- as.data.frame(auck_seg_bw, what = "exposure"))
+head(auck_poly_exp <- as.data.frame(auck_spseg_bw, what = "exposure"))
 
 auck_poly_exp |>
   ggplot(aes(x = band, y = exposure, color = from_group)) +

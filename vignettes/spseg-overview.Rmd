@@ -1,8 +1,8 @@
 ---
-title: "Measuring Spatial Segregation with seg"
+title: "Measuring Spatial Segregation with spseg"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Measuring Spatial Segregation with seg}
+  %\VignetteIndexEntry{Measuring Spatial Segregation with spseg}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -18,36 +18,36 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-The `seg` package measures segregation across categorical, ordinal, grouped
+The `spseg` package measures segregation across categorical, ordinal, grouped
 continuous, and observed continuous variables using a shared spatial engine.
 Information theory, dissimilarity, relative diversity, root-family, and
 exposure/isolation measures are available through `spseg()`.
 
 This vignette demonstrates the current package interface using the bundled
-`segdata` example data.
+`spseg_data` example data.
 
 ```{r setup}
-library(seg)
+library(spseg)
 ```
 
 # Example Data
 
-The `segdata` data set contains eight hypothetical two-group population
+The `spseg_data` data set contains eight hypothetical two-group population
 patterns on a 10 by 10 grid. Each pattern uses two adjacent columns. For
 example, columns `A1` and `A2` describe the first pattern.
 
 ```{r data}
-data(segdata)
+data(spseg_data)
 
-head(segdata[, 1:4])
+head(spseg_data[, 1:4])
 ```
 
 For examples that require coordinates, create the centroids of a 10 by 10 grid.
 
 ```{r coordinates}
 coords <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
-pattern_a <- segdata[, 1:2]
-variables <- list(groups = seg_categorical(counts = c("A1", "A2")))
+pattern_a <- spseg_data[, 1:2]
+variables <- list(groups = spseg_categorical(counts = c("A1", "A2")))
 
 head(coords)
 head(pattern_a)
@@ -69,9 +69,9 @@ are shared even though each uses a separate pair of count columns.
 
 ```{r all-dissimilarity}
 patterns <- setNames(lapply(seq_len(8), function(i) {
-  seg_categorical(counts=names(segdata)[c(2*i-1,2*i)])
+  spseg_categorical(counts=names(spseg_data)[c(2*i-1,2*i)])
 }), LETTERS[1:8])
-as.data.frame(spseg(coords, patterns, data=segdata, bands=0,
+as.data.frame(spseg(coords, patterns, data=spseg_data, bands=0,
                     measures="dissimilarity", scope="multigroup"))
 ```
 
@@ -137,7 +137,7 @@ as.data.frame(selected)
 # Working with sf Objects
 
 `spseg()` also accepts `sf` objects. The next example builds a 10 by 10
-polygon grid and attaches `segdata` to it.
+polygon grid and attaches `spseg_data` to it.
 
 ```{r sf-grid}
 geom <- sf::st_polygon(
@@ -145,13 +145,13 @@ geom <- sf::st_polygon(
 ) |>
   sf::st_make_grid(cellsize = 1)
 
-grid_sf <- sf::st_sf(segdata, geometry = geom)
+grid_sf <- sf::st_sf(spseg_data, geometry = geom)
 
 nrow(grid_sf)
 sf::st_geometry_type(grid_sf)[1]
 ```
 
-If `data` is omitted, `seg` uses the non-geometry columns attached to the `sf`
+If `data` is omitted, `spseg` uses the non-geometry columns attached to the `sf`
 object.
 
 ```{r sf-input}

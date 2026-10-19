@@ -1,5 +1,5 @@
 #' @import sf
 #' @importFrom stats dist quantile setNames
-#' @useDynLib seg, .registration = TRUE
+#' @useDynLib spseg, .registration = TRUE
 #' @keywords internal
 NULL

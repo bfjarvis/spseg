@@ -10,7 +10,7 @@ vignette: >
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(collapse=TRUE, comment="#>")
-library(seg)
+library(spseg)
 ```
 
 `spseg()` can measure several attributes in one call. It discovers neighbors
@@ -36,18 +36,18 @@ people <- data.frame(
   age = c(18, 20, 20, 25, 30, 31, 35, 40, 45, 50, 60, 70)
 )
 variables <- list(
-  ethnicity = seg_categorical(values="ethnicity"),
-  education = seg_ordinal(values="education"),
-  income = seg_continuous(values="income"),
-  age = seg_continuous(values="age")
+  ethnicity = spseg_categorical(values="ethnicity"),
+  education = spseg_ordinal(values="education"),
+  income = spseg_continuous(values="income"),
+  age = spseg_continuous(values="age")
 )
 result <- spseg(people, coords=c("x", "y"), variables=variables,
                 measures="all", bands=c(2, 4), scope="multigroup")
 as.data.frame(result)
 ```
 
-`seg_ordinal(values=...)` requires an ordered factor or explicit `levels`.
-`seg_grouped(values=..., levels=...)` describes membership in intervals hiding
+`spseg_ordinal(values=...)` requires an ordered factor or explicit `levels`.
+`spseg_grouped(values=..., levels=...)` describes membership in intervals hiding
 an underlying continuous variable. Supplied interval labels do not determine
 numerical spacing. `values` and `counts` are mutually exclusive.
 
@@ -57,9 +57,9 @@ blocks <- data.frame(x=1:4, y=0,
 aggregate_result <- spseg(
   blocks, coords=c("x", "y"),
   variables=list(
-    education=seg_ordinal(counts=c("low", "middle", "high")),
-    income=seg_grouped(counts=c("low", "middle", "high")),
-    exact_age=seg_continuous(counts=c("low", "middle", "high"), scores=c(20, 40, 60))
+    education=spseg_ordinal(counts=c("low", "middle", "high")),
+    income=spseg_grouped(counts=c("low", "middle", "high")),
+    exact_age=spseg_continuous(counts=c("low", "middle", "high"), scores=c(20, 40, 60))
   ), bands=c(0, 2), measures=c("information", "diversity", "square_root", "dissimilarity")
 )
 as.data.frame(aggregate_result)
@@ -293,7 +293,7 @@ stored in `definition$exposure`. Group membership is reused across bands.
 
 ```{r exposure}
 custom <- spseg(people, coords=c("x", "y"), bands=3,
-  variables=list(income=seg_continuous(values="income",
+  variables=list(income=spseg_continuous(values="income",
     exposure=list(probs=c(0, .2, .8, 1)))), measures=c("information", "exposure"))
 custom$analyses$income$definition$exposure
 as.data.frame(custom, what="exposure")
@@ -337,8 +337,8 @@ polygons <- sf::st_make_grid(sf::st_as_sfc(sf::st_bbox(
   c(xmin=0,ymin=0,xmax=2,ymax=2))), n=c(2,2))
 areas <- sf::st_sf(blocks, geometry=polygons)
 gridded <- spseg(areas,
-  variables=list(education=seg_ordinal(counts=c("low","middle","high")),
-                 income=seg_grouped(counts=c("low","middle","high"))),
+  variables=list(education=spseg_ordinal(counts=c("low","middle","high")),
+                 income=spseg_grouped(counts=c("low","middle","high"))),
   surface="grid", nrow=4, ncol=4, bands=1, output="full")
 as.data.frame(gridded)
 ```
