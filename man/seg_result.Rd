@@ -3,16 +3,12 @@
 \name{seg_result}
 \alias{seg_result}
 \alias{print.seg_result}
-\alias{as.list.seg_result}
 \alias{as.data.frame.seg_result}
 \alias{st_as_sf.seg_result}
-\title{Spatial Segregation Result Objects}
+\alias{as.list.seg_result}
+\title{Spatial segregation results}
 \usage{
 \method{print}{seg_result}(x, ...)
-
-\method{as.list}{seg_result}(x, ...)
-
-\method{st_as_sf}{seg_result}(x, ..., bands = NULL, columns = NULL, shape = c("wide", "long"))
 
 \method{as.data.frame}{seg_result}(
   x,
@@ -20,44 +16,43 @@
   optional = FALSE,
   ...,
   what = c("indices", "pairwise", "exposure", "env"),
-  bands = NULL,
-  columns = NULL,
-  shape = c("wide", "long")
+  variables = NULL,
+  bands = NULL
 )
+
+\method{st_as_sf}{seg_result}(x, ..., variables = NULL, bands = NULL)
+
+\method{as.list}{seg_result}(x, ...)
 }
 \arguments{
-\item{x}{A `seg_result` object.}
+\item{x}{A `seg_result`.}
 
-\item{...}{Ignored.}
+\item{...}{Reserved for generic methods. Extraction rejects unused arguments.}
 
-\item{bands}{Optional subset of bands to extract. Values must match
-`x$bands`.}
+\item{row.names, optional}{Standard data-frame generic arguments.}
 
-\item{columns}{Optional subset of local-environment columns to extract.}
+\item{what}{Extract scalar `"indices"`, categorical `"pairwise"` indices,
+`"exposure"` matrices, or stored `"env"` distributions.}
 
-\item{shape}{Whether local environments should be returned in wide or long
-format.}
+\item{variables}{Optional names of analyses to extract.}
 
-\item{row.names, optional}{Arguments passed from the `as.data.frame()`
-generic.}
-
-\item{what}{Which part of the result to extract.}
+\item{bands}{Optional subset of neighborhood bands.}
 }
 \value{
-`as.data.frame()` returns a data frame. `sf::st_as_sf()` returns
-  an [sf::sf] object containing stored local environments.
+Printing returns `x` invisibly. Data-frame extraction returns a long
+  table with the analysis name, type, method, and band. Environment tables
+  identify the input row as `location`. Spatial extraction returns this
+  environment table with the corresponding input geometry attached.
 }
 \description{
-S3 result objects returned by [spseg()].
-}
-\details{
-A `seg_result` is a plain S3 list. The most commonly used fields are:
-`bands`, `indices`, `env`, `coords`, `data`, `geometry`, `neighbors`,
-`surface_info`, and `crs`. When `spseg(output = "indices")`, local
-environments and input data are not stored. Surface audit information is
-retained when requested. When `spseg(output = "localenv")`, indices are not
-calculated.
-}
-\seealso{
-[spseg()]
+[spseg()] returns a `seg_result`. Each element of `analyses` contains `indices`, optional
+`env`, `definition`, `normalizers`, and a status for each band. Stored
+categorical/ordinal/grouped environments are category-share matrices;
+continuous environments are sparse lists of exact values, global midranks,
+and local population shares. Inputs and environments are omitted in the
+default `output = "indices"` mode.
+Each definition records its `eligible_population`. For kNN, each analysis
+also contains a `knn` table: requested population, minimum/maximum selected
+population before distance weighting, and minimum/maximum neighborhood
+radius, by band across focal rows with positive eligible population.
 }

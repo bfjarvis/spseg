@@ -74,9 +74,7 @@ Each specification can override `measures`. The common selectors are
 `"information"`, `"diversity"`, `"dissimilarity"`, `"square_root"`, and `"exposure"`.
 `"relative_diversity"` and `"variance_ratio"` are aliases for the diversity
 family; the nominal measure is specifically relative diversity, not the other
-multigroup indices that share its binary reduction. New-interface `"all"`
-includes all five families. Legacy `spseg(coords, counts, measures="all")`
-retains its previous selection; request `"square_root"` explicitly to add it.
+multigroup indices that share its binary reduction. `"all"` includes all five families.
 `scope` controls categorical multigroup/pairwise calculations. Ordered
 summaries are computed across cumulative thresholds, not all pairs of slices.
 
@@ -123,7 +121,7 @@ each variable's selected radius. An error identifies any variable whose
 total eligible population is below the requested threshold. The shared
 candidate search expands until all variable populations can reach the largest
 threshold; variables with identical populations also reuse contributions.
-Legacy calls without `variables` retain full focal-unit inclusion.
+
 
 Each analysis's `knn` table records the requested population and the minimum
 and maximum selected population and radius across eligible focal rows. For
@@ -303,7 +301,7 @@ as.data.frame(custom, what="exposure")
 
 These exposure cuts do not coarsen the continuous segregation indices.
 
-# Results, properties, and compatibility
+# Results and properties
 
 `result$analyses[[name]]` contains scalar and optional categorical pairwise
 indices, exposure matrices, method metadata, actual normalizers, and per-band
@@ -323,10 +321,31 @@ environments, the population-weighted mixture of local CDFs need not equal
 the regional CDF. Variation ratios can be negative, and bounds/proofs based
 on nonoverlapping partitions must not be assumed for every spatial analogue.
 
-The new interface currently supports `surface="raw"`. Legacy grid and
-pycnophylactic calls retain their existing behavior. Mixed-variable surfaces
-need coherent population surfaces across marginals and will be validated
-separately. No fixed-geometry cache, grouping argument, or internal parallelism
-is introduced.
+There is no fixed-geometry cache, grouping argument, or internal parallelism.
+
+# Population surfaces and development status
+
+For polygonal `sf` data, `surface="grid"` and `surface="pycno"` accept count
+specifications for all requested variables. All count columns are transported
+through one grid construction, then each variable is calculated using its own
+count table and eligible population. Exact continuous count inputs retain their
+`scores`. Observed-value specifications use raw support; an area mean does not
+supply a resident-level distribution to interpolate.
+
+```{r multi-surface}
+polygons <- sf::st_make_grid(sf::st_as_sfc(sf::st_bbox(
+  c(xmin=0,ymin=0,xmax=2,ymax=2))), n=c(2,2))
+areas <- sf::st_sf(blocks, geometry=polygons)
+gridded <- spseg(areas,
+  variables=list(education=seg_ordinal(counts=c("low","middle","high")),
+                 income=seg_grouped(counts=c("low","middle","high"))),
+  surface="grid", nrow=4, ncol=4, bands=1, output="full")
+as.data.frame(gridded)
+```
+
+The package is in pre-1.0 development. Every `spseg()` call uses an explicit
+named `variables` list, including single-variable analyses. Results always use
+`result$analyses[[variable_name]]`; stored local environments contain shares.
+There is no compatibility calling convention or alternate result layout.
 
 # References

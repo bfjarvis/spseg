@@ -47,6 +47,7 @@ For examples that require coordinates, create the centroids of a 10 by 10 grid.
 ```{r coordinates}
 coords <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
 pattern_a <- segdata[, 1:2]
+variables <- list(groups = seg_categorical(counts = c("A1", "A2")))
 
 head(coords)
 head(pattern_a)
@@ -98,22 +99,22 @@ The Reardon and O'Sullivan measures are based on local environments. Use
 around each point.
 
 ```{r local-environment}
-env_a <- spseg(coords, data = pattern_a, bands = 2, output = "localenv")
+env_a <- spseg(coords, variables = variables, data = pattern_a, bands = 2, output = "localenv")
 
 env_a
-head(env_a$env[[1]])
+head(env_a$analyses$groups$env[[1]])
 ```
 
 With `weighting = "unweighted"` and a large enough bandwidth, all points
 receive equal weight. In that case every local environment equals the overall
-group means.
+group shares.
 
 ```{r local-environment-equal-weight}
-env_equal <- spseg(coords, data = pattern_a, bands = 20,
+env_equal <- spseg(coords, variables = variables, data = pattern_a, bands = 20,
                    weighting = "unweighted", output = "localenv")
 
-head(env_equal$env[[1]])
-colMeans(pattern_a)
+head(env_equal$analyses$groups$env[[1]])
+colSums(pattern_a) / sum(as.matrix(pattern_a))
 ```
 
 # Reardon and O'Sullivan Measures
@@ -122,17 +123,17 @@ Use `spseg()` to calculate spatial segregation indices directly from
 coordinates and population data.
 
 ```{r spseg-localenv}
-spatial_a <- spseg(coords, data = pattern_a, bands = 2)
+spatial_a <- spseg(coords, variables = variables, data = pattern_a, bands = 2)
 
 as.data.frame(spatial_a)
 ```
 
 Use `spseg()` as a wrapper when you want to start from coordinates and
-population data. By default, the package uses the compiled C implementation for
+population data. The package uses the shared C++ engine for
 the index calculations.
 
 ```{r spseg}
-spatial_a_2 <- spseg(coords, data = pattern_a, bands = 2)
+spatial_a_2 <- spseg(coords, variables = variables, data = pattern_a, bands = 2)
 
 as.data.frame(spatial_a_2)
 ```
@@ -141,7 +142,7 @@ You can request a subset of measures with `measures`.
 
 ```{r selected-measures}
 selected <- spseg(
-  coords,
+  coords, variables = variables,
   data = pattern_a,
   measures = c("information", "dissimilarity"),
   bands = 2
@@ -173,8 +174,8 @@ object.
 ```{r sf-input}
 isp(grid_sf[, c("A1", "A2")])
 
-env_sf <- spseg(grid_sf[, c("A1", "A2")], bands = 2, output = "localenv")
-head(env_sf$env[[1]])
+env_sf <- spseg(grid_sf[, c("A1", "A2")], variables = variables, bands = 2, output = "localenv")
+head(env_sf$analyses$groups$env[[1]])
 ```
 
 # Population Surfaces
@@ -186,7 +187,7 @@ over a square grid before local environments are calculated.
 
 ```{r grid-surface}
 spseg(
-  grid_sf,
+  grid_sf, variables = variables,
   data = pattern_a,
   surface = "grid",
   nrow = 10,

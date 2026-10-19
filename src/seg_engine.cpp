@@ -1,504 +1,414 @@
 #include <RcppArmadillo.h>
 // [[Rcpp::depends(RcppArmadillo)]]
-// Vendored nanoflann provenance, license, and checksum are recorded in
-// inst/NOTICE.md.
 #include "nanoflann.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
 #include <vector>
+#include <numeric>
+#include "seg_neighbors.h"
 
 using namespace Rcpp;
-#include "seg_neighbors.h"
 using namespace seg_spatial;
 
 namespace {
+constexpr double pi = 3.1415926535897932384626433832795;
 
-struct GroupPair {
-  int a;
-  int b;
-  double T_ab;
-  double P_a;
-  double P_b;
-  double E_ab;
-  double I_ab;
-  bool valid;
-};
+double variation(double p, int family) {
+  p = std::max(0.0, std::min(1.0, p));
+  if (p == 0.0 || p == 1.0) return 0.0;
+  if (family == 1) return -p * std::log(p) - (1.0-p) * std::log1p(-p);
+  if (family == 2) return p * (1.0-p);
+  return 2.0 * std::sqrt(p * (1.0-p));
+}
 
-double entropy(const arma::vec& p_m, double log_base)
-{
-  double out = 0.0;
-  for (arma::uword m = 0; m < p_m.n_elem; ++m) {
-    if (p_m[m] > 0.0)
-      out -= p_m[m] * std::log(p_m[m]) / log_base;
+double entropy_primitive(double p) {
+  if (p <= 0.0) return 0.0;
+  if (p >= 1.0) return 0.5;
+  if (p > 0.5) return 0.5 - entropy_primitive(1.0-p);
+  if (p < 0.1) {
+    double out = p*p * (0.75 - 0.5*std::log(p));
+    double term = p*p*p;
+    for (int n=2; n<30; ++n) {
+      out -= term / (double(n)*(n-1)*(n+1));
+      term *= p;
+    }
+    return out;
   }
-  return out;
+  return (p - p*p*std::log(p) + (1-p)*(1-p)*std::log1p(-p))/2;
 }
 
-double interaction(const arma::vec& p_m)
-{
-  return arma::accu(p_m % (1.0 - p_m));
+// Mean of f along a linear CDF segment. Symmetry and narrow-interval limits
+// avoid cancellation in entropy/arcsine divided differences.
+double segment_mean(double a, double b, int family) {
+  a = std::max(0.0, std::min(1.0, a));
+  b = std::max(a, std::min(1.0, b));
+  if (a == b) return variation(a, family);
+  if (family == 2) return (a+b)/2 - (a*a+a*b+b*b)/3;
+  if (a+b > 1.0) { const double old=a; a=1-b; b=1-old; }
+  const double width = b-a;
+  if (width < 1e-6 * std::max(a, 1e-300)) {
+    // Three-point Gauss rule in the smooth, narrow-interval limit.
+    const double mid=(a+b)/2, d=width/2*std::sqrt(3.0/5.0);
+    return (5*variation(mid-d,family)+8*variation(mid,family)+
+            5*variation(mid+d,family))/18;
+  }
+  if (family == 1) return (entropy_primitive(b)-entropy_primitive(a))/width;
+  const double ta=std::atan2(std::sqrt(a),std::sqrt(1-a));
+  const double tb=std::atan2(std::sqrt(b),std::sqrt(1-b));
+  const double dt=std::atan2(std::sqrt(b)*std::sqrt(1-a)-
+                           std::sqrt(a)*std::sqrt(1-b),
+                           std::sqrt(a*b)+std::sqrt((1-a)*(1-b)));
+  const double x=2*dt;
+  const double one_minus_sinc = std::abs(x)<0.01 ?
+    x*x/6 - std::pow(x,4)/120 + std::pow(x,6)/5040 : 1-std::sin(x)/x;
+  const double angle=ta+tb;
+  return dt/2 * (2*std::pow(std::sin(angle),2) +
+                std::cos(2*angle)*one_minus_sinc)/width;
 }
 
-void normalize_composition(const arma::vec& L_m, arma::vec& p_m)
-{
-  const double L = arma::accu(L_m);
-  if (L > 0.0)
-    p_m = L_m / L;
-  else
-    p_m.zeros();
+double abs_segment(double a, double b) {
+  if (a*b >= 0) return (std::abs(a)+std::abs(b))/2;
+  return (a*a+b*b)/(2*(std::abs(a)+std::abs(b)));
 }
 
-std::vector<GroupPair> make_pairs(const arma::vec& T_m)
-{
-  const int M = T_m.size();
-  std::vector<GroupPair> pairs;
-  pairs.reserve(M * (M - 1) / 2);
-  const double log2 = std::log(2.0);
+struct Model {
+  int type, k, groups, bands;
+  NumericMatrix input;
+  arma::mat counts;
+  IntegerVector code, exposure_map, flags;
+  NumericVector mass, shares, scores, z;
+  CharacterVector labels;
+  std::vector<double> q, prefix;
+  double total, reference[5] = {0,0,0,0,0};
+  int active=0;
+  std::vector<int> active_groups;
+  arma::mat accum;
+  arma::cube exposure_acc;
+  std::vector<std::pair<int,int>> pairs;
+  arma::cube pair_acc;
+  List environments;
+  bool keep_env, indices, multigroup, pairwise;
+  std::vector<bool> empty;
+  NumericVector knn_target, knn_min, knn_max, radius_min, radius_max;
+  bool has_knn = false;
 
-  for (int a = 0; a < M - 1; ++a) {
-    for (int b = a + 1; b < M; ++b) {
-      GroupPair pair;
-      pair.a = a;
-      pair.b = b;
-      pair.T_ab = T_m[a] + T_m[b];
-      pair.valid = T_m[a] > 0.0 && T_m[b] > 0.0;
-      pair.P_a = pair.valid ? T_m[a] / pair.T_ab : NA_REAL;
-      pair.P_b = pair.valid ? T_m[b] / pair.T_ab : NA_REAL;
-      pair.E_ab = pair.valid ?
-        -(pair.P_a * std::log(pair.P_a) + pair.P_b * std::log(pair.P_b)) /
-          log2 : NA_REAL;
-      pair.I_ab = pair.valid ?
-        pair.P_a * (1.0 - pair.P_a) + pair.P_b * (1.0 - pair.P_b) :
-        NA_REAL;
-      pairs.push_back(pair);
+  Model(List config, int n, int b, bool store, bool calculate, bool multi, bool pair)
+    : type(as<int>(config["type"])), bands(b),
+      input(as<NumericMatrix>(config["counts"])),
+      counts(input.begin(), input.nrow(), input.ncol(), false),
+      code(config["code"]), exposure_map(config["exposure_map"]),
+      flags(config["flags"]), mass(config["mass"]), shares(config["shares"]),
+      scores(config["scores"]), z(config["z"]), labels(config["exposure_labels"]),
+      accum(b,5,arma::fill::zeros), environments(store ? b : 0),
+      keep_env(store), indices(calculate), multigroup(multi || type!=0),
+      pairwise(pair && type==0), empty(b,false),
+      knn_target(b), knn_min(b,R_PosInf), knn_max(b,0.0),
+      radius_min(b,R_PosInf), radius_max(b,0.0)
+  {
+    k=shares.size(); groups=labels.size();
+    total=std::accumulate(mass.begin(),mass.end(),0.0);
+    double cumulative=0;
+    for(int g=0;g<k;++g) {
+      cumulative+=shares[g]; q.push_back(std::min(1.0,cumulative));
+      if(shares[g]>0) {++active; active_groups.push_back(g);}
+    }
+    if(k) q.back()=1.0;
+    prefix.assign(k,0.0);
+    for(int g=1;g<k;++g) prefix[g]=prefix[g-1]+(z[g]-z[g-1])*q[g-1];
+    if(type==0) {
+      double logroot=0;
+      for(int g:active_groups) {
+        reference[1]-=shares[g]*std::log(shares[g]);
+        reference[2]+=shares[g]*(1-shares[g]);
+        logroot+=std::log(shares[g]);
+      }
+      reference[4]=active>1 ? std::exp(logroot/active) : 0;
+    } else if(type==2) {
+      reference[1]=0.5; reference[2]=1.0/6; reference[4]=pi/4;
+      // A single populated interval still represents unobserved variation.
+    } else {
+      for(int g=0;g<k-1;++g) {
+        const double width=type==1 ? 1.0 : z[g+1]-z[g];
+        for(int f:{1,2,4}) reference[f]+=width*variation(q[g],f);
+      }
+    }
+    reference[3]=2*reference[2];
+    if(indices && flags[0]) exposure_acc.zeros(groups,groups,b);
+    if(indices && pairwise) {
+      for(int a=0;a<k-1;++a) for(int c=a+1;c<k;++c) pairs.push_back({a,c});
+      pair_acc.zeros(pairs.size(),5,b);
+    }
+    if(keep_env) for(int band=0;band<b;++band) {
+      if(type==3) environments[band]=List(n);
+      else environments[band]=NumericMatrix(n,k);
     }
   }
 
-  return pairs;
-}
-
-// Nomenclature follows Reardon and O'Sullivan (2004)
-// P: exposure/isolation
-void accumulate_P_multigroup(arma::cube& P_acc, int b, int i,
-                          const arma::mat& N,
-                          const arma::vec& T_m,
-                          const arma::vec& p_m)
-{
-  P_acc.slice(b) += (N.row(i).t() / T_m) * p_m.t();
-}
-
-// H: information theory
-void accumulate_H_multigroup(arma::vec& H_acc, int b, double T_i,
-                          const arma::vec& p_m, double logM)
-{
-  H_acc[b] += T_i * entropy(p_m, logM);
-}
-
-// R: relative diversity
-void accumulate_R_multigroup(arma::vec& R_acc, int b, double T_i,
-                          const arma::vec& p_m)
-{
-  R_acc[b] += T_i * interaction(p_m);
-}
-
-// D: dissimilarity
-void accumulate_D_multigroup(arma::vec& D_acc, int b, double T_i,
-                          const arma::vec& p_m,
-                          const arma::vec& P_m,
-                          double denominator)
-{
-  D_acc[b] += (T_i / denominator) * arma::accu(arma::abs(p_m - P_m));
-}
-
-void radius_environment(arma::vec& L_m, const std::vector<Neighbor>& neighbors,
-                        const arma::mat& N, double band, double power,
-                        int weighting_id, bool normalized)
-{
-  const Contributions c = radius_contributions(neighbors, band, power,
-                                              weighting_id, normalized);
-  L_m.zeros();
-  for (std::size_t k = 0; k < c.ids.size(); ++k)
-    L_m += c.weights[k] * N.row(c.ids[k]).t();
-  if (c.scale != 1.0) L_m /= (1.0 / c.scale);
-}
-
-void knn_environment(arma::vec& L_m, const std::vector<Neighbor>& neighbors,
-                     const arma::mat& N, const arma::vec& T_i,
-                     double threshold, double power, int weighting_id,
-                     bool normalized)
-{
-  const Contributions c = knn_contributions(neighbors, T_i, threshold, power,
-                                           weighting_id, normalized);
-  L_m.zeros();
-  for (std::size_t k = 0; k < c.ids.size(); ++k)
-    L_m += c.weights[k] * N.row(c.ids[k]).t();
-}
-
-void accumulate_pairwise(arma::mat& D_pair_acc,
-                         arma::mat& R_pair_acc,
-                         arma::mat& H_pair_acc,
-                         int b, int q, const GroupPair& pair,
-                         const arma::mat& N,
-                         const arma::vec& L_m, int i,
-                         const IntegerVector& measure_flags)
-{
-  if (!pair.valid)
-    return;
-
-  const double T_iab = N(i, pair.a) + N(i, pair.b);
-  const double L_ab = L_m[pair.a] + L_m[pair.b];
-  if (T_iab <= 0.0 || L_ab <= 0.0)
-    return;
-
-  const double p_a = L_m[pair.a] / L_ab;
-  const double p_b = L_m[pair.b] / L_ab;
-  const double log2 = std::log(2.0);
-
-  if (measure_flags[3] == 1) {
-    const double D_den = 2.0 * pair.T_ab * pair.I_ab;
-    D_pair_acc(b, q) += (T_iab / D_den) *
-      (std::abs(p_a - pair.P_a) + std::abs(p_b - pair.P_b));
+  double focal(int i,int g) const {
+    return counts.n_rows ? counts(i,g) : (code[i]==g ? mass[i] : 0);
   }
 
-  if (measure_flags[2] == 1) {
-    const double R_i = p_a * (1.0 - p_a) + p_b * (1.0 - p_b);
-    R_pair_acc(b, q) += T_iab * R_i;
-  }
-
-  if (measure_flags[1] == 1) {
-    double H_i = 0.0;
-    if (p_a > 0.0)
-      H_i -= p_a * std::log(p_a) / log2;
-    if (p_b > 0.0)
-      H_i -= p_b * std::log(p_b) / log2;
-    H_pair_acc(b, q) += T_iab * H_i;
-  }
-}
-
-NumericVector finalize_scalar_index(const arma::vec& acc,
-                                    double denominator)
-{
-  NumericVector out(acc.n_elem);
-  for (arma::uword i = 0; i < acc.n_elem; ++i)
-    out[i] = 1.0 - acc[i] / denominator;
-  return out;
-}
-
-List finalize_P_multigroup(const arma::cube& P_acc, int B)
-{
-  List out(B);
-  for (int b = 0; b < B; ++b)
-    out[b] = wrap(P_acc.slice(b));
-  return out;
-}
-
-List finalize_pairwise_matrix(const arma::mat& acc,
-                              const std::vector<GroupPair>& pairs, int B,
-                              int M, int measure_id)
-{
-  List out(B);
-  for (int b = 0; b < B; ++b) {
-    NumericMatrix mat(M, M);
-    std::fill(mat.begin(), mat.end(), NA_REAL);
-    for (arma::uword q = 0; q < pairs.size(); ++q) {
-      const GroupPair& pair = pairs[q];
-      double value = NA_REAL;
-      if (pair.valid) {
-        const double raw = acc(b, q);
-        if (measure_id == 1)
-          value = 1.0 - raw / (pair.T_ab * pair.E_ab);
-        else if (measure_id == 2)
-          value = 1.0 - raw / (pair.T_ab * pair.I_ab);
-        else if (measure_id == 3)
-          value = raw;
-      }
-      mat(pair.a, pair.b) = value;
-      mat(pair.b, pair.a) = value;
+  double root(const std::vector<double>& p) const {
+    double out=0;
+    for(int g:active_groups) {
+      if(p[g]<=0) return 0;
+      out+=std::log(p[g]);
     }
-    out[b] = mat;
+    return active ? std::exp(out/active) : 0;
   }
-  return out;
-}
 
-List indices_from_localenvs(const arma::mat& N,
-                            const std::vector<arma::mat>& environments,
-                            const IntegerVector& measure_flags,
-                            const IntegerVector& scope_flags)
-{
-  const int n = N.n_rows;
-  const int M = N.n_cols;
-  const int B = environments.size();
-  const bool calculate_multigroup = scope_flags[0] == 1;
-  const bool calculate_pairwise = scope_flags[1] == 1;
+  double integral_global(double x) const {
+    if(k==0 || x<=z[0]) return 0;
+    auto it=std::upper_bound(z.begin(),z.end(),x);
+    int g=int(it-z.begin())-1;
+    return prefix[g]+(x-z[g])*q[g];
+  }
 
-  arma::vec L_m(M);
-  arma::vec p_m(M);
-  arma::vec T_i = arma::sum(N, 1);
-  arma::vec T_m = arma::trans(arma::sum(N, 0));
-  const double T = arma::accu(T_i);
-  arma::vec P_m = T_m / T;
-  arma::vec D_acc(B, arma::fill::zeros);
-  arma::vec R_acc(B, arma::fill::zeros);
-  arma::vec H_acc(B, arma::fill::zeros);
-  arma::cube P_acc(M, M, B, arma::fill::zeros);
+  double integral_abs(double a,double b,double p) const {
+    if(a>=b) return 0;
+    const auto it=std::upper_bound(q.begin(),q.end(),p);
+    const double cross=it==q.end() ? 1.0 : z[int(it-q.begin())];
+    const double split=std::max(a,std::min(b,cross));
+    const double left=integral_global(split)-integral_global(a);
+    const double right=integral_global(b)-integral_global(split);
+    return std::max(0.0,p*(split-a)-left+right-p*(b-split));
+  }
 
-  const double logM = std::log(static_cast<double>(M));
-  const double E = entropy(P_m, logM);
-  const double I = interaction(P_m);
-
-  const std::vector<GroupPair> pairs = make_pairs(T_m);
-  const int Q = pairs.size();
-  arma::mat D_pair_acc(B, Q, arma::fill::zeros);
-  arma::mat R_pair_acc(B, Q, arma::fill::zeros);
-  arma::mat H_pair_acc(B, Q, arma::fill::zeros);
-
-  for (int b = 0; b < B; ++b) {
-    const arma::mat& L = environments[b];
-    for (int i = 0; i < n; ++i) {
-      L_m = L.row(i).t();
-      normalize_composition(L_m, p_m);
-
-      if (calculate_multigroup) {
-        if (measure_flags[0] == 1)
-          accumulate_P_multigroup(P_acc, b, i, N, T_m, p_m);
-
-        if (measure_flags[1] == 1)
-          accumulate_H_multigroup(H_acc, b, T_i[i], p_m, logM);
-
-        if (measure_flags[2] == 1)
-          accumulate_R_multigroup(R_acc, b, T_i[i], p_m);
-
-        if (measure_flags[3] == 1)
-          accumulate_D_multigroup(D_acc, b, T_i[i], p_m, P_m, 2.0 * T * I);
+  void update(int i,int band,const Contributions& c) {
+    if(c.knn && mass[i]>0) {
+      has_knn=true;
+      knn_target[band]=c.target;
+      knn_min[band]=std::min(knn_min[band],c.population);
+      knn_max[band]=std::max(knn_max[band],c.population);
+      radius_min[band]=std::min(radius_min[band],c.radius);
+      radius_max[band]=std::max(radius_max[band],c.radius);
+    }
+    std::vector<double> p;
+    std::vector<std::pair<int,double>> sparse;
+    double local=0;
+    if(type==3 && counts.n_rows==0) {
+      sparse.reserve(c.ids.size());
+      for(std::size_t a=0;a<c.ids.size();++a) {
+        int id=c.ids[a], g=code[id];
+        double w=c.weights[a]*mass[id];
+        if(g>=0 && w>0) {sparse.push_back({g,w});local+=w;}
       }
-
-      if (calculate_pairwise) {
-        for (int q = 0; q < Q; ++q) {
-          accumulate_pairwise(D_pair_acc, R_pair_acc, H_pair_acc, b, q,
-                              pairs[q], N, L_m, i, measure_flags);
+      std::sort(sparse.begin(),sparse.end(),[](const std::pair<int,double>& a,
+                 const std::pair<int,double>& b){return a.first<b.first;});
+      std::size_t end=0;
+      for(const auto& item:sparse) {
+        if(end>0 && sparse[end-1].first==item.first) sparse[end-1].second+=item.second;
+        else sparse[end++]=item;
+      }
+      sparse.resize(end);
+      if(local>0) for(auto& item:sparse) item.second/=local;
+    } else {
+      p.assign(k,0);
+      for(std::size_t a=0;a<c.ids.size();++a) {
+        int id=c.ids[a]; double w=c.weights[a];
+        if(counts.n_rows) {
+          for(int g=0;g<k;++g) p[g]+=w*counts(id,g);
+        } else if(code[id]>=0) p[code[id]]+=w*mass[id];
+      }
+      local=std::accumulate(p.begin(),p.end(),0.0);
+      if(local>0) for(double& v:p) v/=local;
+      if(type==3) for(int g=0;g<k;++g) if(p[g]>0) sparse.push_back({g,p[g]});
+    }
+    if(keep_env) {
+      if(type==3) {
+        NumericVector rank(sparse.size()), value(sparse.size()), share(sparse.size());
+        for(std::size_t a=0;a<sparse.size();++a) {
+          rank[a]=z[sparse[a].first]; value[a]=scores[sparse[a].first]; share[a]=sparse[a].second;
+        }
+        List env=environments[band];
+        env[i]=List::create(_["value"]=value,_["rank"]=rank,_["share"]=share);
+      } else {
+        NumericMatrix env=environments[band];
+        for(int g=0;g<k;++g) env(i,g)=local>0 ? p[g] : NA_REAL;
+      }
+    }
+    if(!indices || mass[i]<=0) return;
+    if(local<=0) {empty[band]=true;return;}
+    if(multigroup) {
+      if(type==0) {
+        for(int g=0;g<k;++g) {
+          if(flags[1] && p[g]>0) accum(band,1)-=mass[i]*p[g]*std::log(p[g]);
+          if(flags[2]) accum(band,2)+=mass[i]*p[g]*(1-p[g]);
+          if(flags[3]) accum(band,3)+=mass[i]*std::abs(p[g]-shares[g]);
+        }
+        if(flags[4]) accum(band,4)+=mass[i]*root(p);
+      } else if(type==3) {
+        double cumulative=0,previous=0;
+        for(std::size_t a=0;a<sparse.size();++a) {
+          double next=z[sparse[a].first];
+          if(flags[3]) accum(band,3)+=mass[i]*integral_abs(previous,next,cumulative);
+          for(int f:{1,2,4}) if(flags[f])
+            accum(band,f)+=mass[i]*(next-previous)*variation(cumulative,f);
+          cumulative=std::min(1.0,cumulative+sparse[a].second);
+          previous=next;
+        }
+        if(flags[3]) accum(band,3)+=mass[i]*integral_abs(previous,1.0,1.0);
+      } else {
+        double cumulative=0,previous=0,global_previous=0;
+        for(int g=0;g<k;++g) {
+          cumulative=std::min(1.0,cumulative+p[g]);
+          if(type==1 && g<k-1) {
+            for(int f:{1,2,4}) if(flags[f]) accum(band,f)+=mass[i]*variation(cumulative,f);
+            if(flags[3]) accum(band,3)+=mass[i]*std::abs(cumulative-q[g]);
+          } else if(type==2) {
+            const double width=q[g]-global_previous;
+            for(int f:{1,2,4}) if(flags[f] && width>0)
+              accum(band,f)+=mass[i]*width*segment_mean(previous,cumulative,f);
+            if(flags[3]) accum(band,3)+=mass[i]*width*
+              abs_segment(previous-global_previous,cumulative-q[g]);
+            previous=cumulative; global_previous=q[g];
+          }
         }
       }
     }
+    if(flags[0]) {
+      std::vector<double> local_group(groups,0), focal_group(groups,0);
+      // Observed continuous rows stay sparse; count input already has K columns.
+      if(type==3) {
+        for(const auto& item:sparse) {
+          int g=exposure_map[item.first]; if(g>=0) local_group[g]+=item.second;
+        }
+      } else for(int g=0;g<k;++g) local_group[exposure_map[g]]+=p[g];
+      if(counts.n_rows) {
+        for(int g=0;g<k;++g) if(exposure_map[g]>=0)
+          focal_group[exposure_map[g]]+=counts(i,g);
+      } else if(code[i]>=0 && exposure_map[code[i]]>=0)
+        focal_group[exposure_map[code[i]]]=mass[i];
+      // Group totals are precomputed in finish(); accumulate population counts here.
+      for(int a=0;a<groups;++a) if(focal_group[a]>0)
+        for(int b=0;b<groups;++b) exposure_acc(a,b,band)+=focal_group[a]*local_group[b];
+    }
+    if(pairwise) for(std::size_t index=0;index<pairs.size();++index) {
+      int a=pairs[index].first,b=pairs[index].second;
+      double weight=focal(i,a)+focal(i,b), local_pair=p[a]+p[b];
+      if(weight<=0 || local_pair<=0) continue;
+      double v=p[a]/local_pair;
+      for(int f:{1,2,4}) if(flags[f]) pair_acc(index,f,band)+=weight*variation(v,f);
+      double q0=shares[a]/(shares[a]+shares[b]);
+      if(flags[3]) pair_acc(index,3,band)+=weight*std::abs(v-q0);
+    }
   }
 
-  NumericVector D_out;
-  NumericVector R_out;
-  NumericVector H_out;
-  List P_out;
-
-  if (calculate_multigroup && measure_flags[3] == 1) {
-    D_out = NumericVector(B);
-    for (int b = 0; b < B; ++b)
-      D_out[b] = D_acc[b];
+  List finish() {
+    List multigroup, pairwise_out;
+    const char* names[5]={"p","h","r","d","s"};
+    CharacterVector status(bands);
+    const bool constant=type==2 ? false : active<2;
+    for(int b=0;b<bands;++b) status[b]=empty[b] ? "empty_environment" :
+      (constant ? "constant" : "ok");
+    if(indices && multigroup) for(int f:{3,2,1,4}) if(flags[f]) {
+      NumericVector out(bands,NA_REAL);
+      for(int b=0;b<bands;++b) if(!empty[b] && !constant && reference[f]>0) {
+        const double value=accum(b,f)/(total*reference[f]);
+        out[b]=f==3 ? value : 1-value;
+      }
+      multigroup[names[f]]=out;
+    }
+    if(indices && flags[0]) {
+      List matrices(bands);
+      std::vector<double> totals(groups,0);
+      for(int g=0;g<k;++g) if(exposure_map[g]>=0)
+        totals[exposure_map[g]]+=shares[g]*total;
+      for(int b=0;b<bands;++b) {
+        NumericMatrix out(groups,groups);
+        for(int a=0;a<groups;++a) for(int c=0;c<groups;++c)
+          out(a,c)=!empty[b] && totals[a]>0 ? exposure_acc(a,c,b)/totals[a] : NA_REAL;
+        out.attr("dimnames")=List::create(labels,labels); matrices[b]=out;
+      }
+      multigroup["p"]=matrices;
+    }
+    if(indices && pairwise) for(int f:{3,2,1,4}) if(flags[f]) {
+      List matrices(bands);
+      for(int b=0;b<bands;++b) {
+        NumericMatrix out(k,k); std::fill(out.begin(),out.end(),NA_REAL);
+        for(std::size_t index=0;index<pairs.size();++index) {
+          int a=pairs[index].first,c=pairs[index].second;
+          if(shares[a]<=0 || shares[c]<=0 || empty[b]) continue;
+          const double t=total*(shares[a]+shares[c]);
+          const double q0=shares[a]/(shares[a]+shares[c]);
+          const double denominator=f==3 ? 2*variation(q0,2) : variation(q0,f);
+          const double v=pair_acc(index,f,b)/(t*denominator);
+          out(a,c)=out(c,a)=f==3 ? v : 1-v;
+        }
+        matrices[b]=out;
+      }
+      pairwise_out[names[f]]=matrices;
+    }
+    List refs=List::create(_["information"]=reference[1],_["diversity"]=reference[2],
+                          _["dissimilarity"]=reference[3],_["square_root"]=reference[4]);
+    List knn_summary;
+    if(has_knn) knn_summary=List::create(_["requested"]=knn_target,
+      _["min_population"]=knn_min,_["max_population"]=knn_max,
+      _["min_radius"]=radius_min,_["max_radius"]=radius_max);
+    return List::create(_["indices"]=List::create(_["multigroup"]=multigroup,
+                        _["pairwise"]=pairwise_out),
+                        _["env"]=keep_env ? static_cast<SEXP>(environments) : R_NilValue,
+                        _["status"]=status,_["normalizers"]=refs,
+                        _["knn"]=has_knn ? static_cast<SEXP>(knn_summary) : R_NilValue);
   }
-
-  if (calculate_multigroup && measure_flags[2] == 1)
-    R_out = finalize_scalar_index(R_acc, T * I);
-
-  if (calculate_multigroup && measure_flags[1] == 1)
-    H_out = finalize_scalar_index(H_acc, T * E);
-
-  if (calculate_multigroup && measure_flags[0] == 1)
-    P_out = finalize_P_multigroup(P_acc, B);
-
-  List multigroup = List::create(
-    _["d"] = D_out,
-    _["r"] = R_out,
-    _["h"] = H_out,
-    _["p"] = P_out
-  );
-
-  List pairwise = List::create(
-    _["d"] = (calculate_pairwise && measure_flags[3] == 1) ?
-      finalize_pairwise_matrix(D_pair_acc, pairs, B, M, 3) : List(),
-    _["r"] = (calculate_pairwise && measure_flags[2] == 1) ?
-      finalize_pairwise_matrix(R_pair_acc, pairs, B, M, 2) : List(),
-    _["h"] = (calculate_pairwise && measure_flags[1] == 1) ?
-      finalize_pairwise_matrix(H_pair_acc, pairs, B, M, 1) : List()
-  );
-
-  return List::create(
-    _["multigroup"] = multigroup,
-    _["pairwise"] = pairwise
-  );
-}
-
+};
 } // namespace
 
-// [[Rcpp::export]]
-List seg_engine_cpp(NumericVector x, NumericVector y, NumericMatrix data,
-                    NumericVector bands, double power, int weighting,
-                    int normalize, IntegerVector measures,
-                    IntegerVector scope, int keep_env, int keep_indices,
-                    int neighbors, int search)
+// [[Rcpp::export(rng = false)]]
+List seg_engine_cpp(NumericMatrix coords, List variables,
+    NumericVector bands, double power, int weighting, bool normalize,
+    int neighbors, int search, IntegerVector scope, bool keep_env, bool keep_indices)
 {
-  // Input coordinates and Armadillo views of them
-  const arma::vec X(x.begin(), x.size(), false);
-  const arma::vec Y(y.begin(), y.size(), false);
-  // Input counts (n by M) and Armadillo views
-  arma::mat N(data.begin(), data.nrow(), data.ncol(), false);
-  NumericVector BW(bands);             // bandwidth/search-radius values
-  IntegerVector measure_flags(measures); // exposure, information, diversity, dissimilarity
-  IntegerVector scope_flags(scope); // multigroup and pairwise switches
-
-  const int n = X.size();              // number of focal units
-  const int M = N.n_cols;              // number of groups
-  const int B = BW.size();             // number of bandwidths
-  const double weight_power = power;   // kernel power parameter
-  const int weighting_id = weighting;  // kernel identifier from R
-  const int neighbors_id = neighbors;  // 0 = radius, 1 = count-based kNN
-  const int search_id = search;        // 0 = kd-tree, 1 = brute force
-  const bool normalized = normalize == 1; // scale distances by bandwidth
-  const bool calculate_multigroup = scope_flags[0] == 1; // compute multigroup indices
-  const bool calculate_pairwise = scope_flags[1] == 1; // compute pairwise indices
-  const bool store_env = keep_env == 1; // return local environments
-  const bool store_indices = keep_indices == 1; // return segregation indices
-
-  arma::vec L_m(M);                    // local environment counts by group
-  arma::vec p_m(M);                    // local environment proportions by group
-  arma::vec T_i = arma::sum(N, 1);     // total observed population by unit
-  arma::vec T_m = arma::trans(arma::sum(N, 0)); // total observed population by group
-  const double T = arma::accu(T_i);    // total observed population
-  arma::vec P_m = T_m / T;             // regional group proportions
-  arma::vec D_acc(B, arma::fill::zeros); // dissimilarity accumulator by band
-  arma::vec R_acc(B, arma::fill::zeros); // relative diversity accumulator by band
-  arma::vec H_acc(B, arma::fill::zeros); // information theory accumulator by band
-  arma::cube P_acc(M, M, B, arma::fill::zeros); // exposure/isolation accumulator by band
-
-  double max_bw = BW[0];
-  for (int b = 1; b < B; ++b)
-    max_bw = std::max(max_bw, BW[b]);
-
-  PointCloud cloud{X, Y};
-  std::unique_ptr<KDTree> tree;
-  if (search_id == 0)
-    tree.reset(new KDTree(
-      2, cloud, nanoflann::KDTreeSingleIndexAdaptorParams(10)
-    ));
-
-  const double logM = std::log(static_cast<double>(M));
-  const double E = entropy(P_m, logM);
-  const double I = interaction(P_m);
-
-  const std::vector<GroupPair> pairs = make_pairs(T_m);
-  const int Q = pairs.size();
-  arma::mat D_pair_acc(B, Q, arma::fill::zeros);
-  arma::mat R_pair_acc(B, Q, arma::fill::zeros);
-  arma::mat H_pair_acc(B, Q, arma::fill::zeros);
-
-  List env_list;
-  if (store_env) {
-    env_list = List(B);
-    for (int b = 0; b < B; ++b)
-      env_list[b] = NumericMatrix(n, M);
+  const int n=coords.nrow(), B=bands.size();
+  arma::vec X(coords.begin(),n,false), Y(coords.begin()+n,n,false);
+  const double largest=*std::max_element(bands.begin(),bands.end());
+  PointCloud cloud{X,Y}; std::unique_ptr<KDTree> tree;
+  if(search==0) tree.reset(new KDTree(2,cloud,nanoflann::KDTreeSingleIndexAdaptorParams(10)));
+  std::vector<std::unique_ptr<Model>> models;
+  for(int v=0;v<variables.size();++v)
+    models.emplace_back(new Model(as<List>(variables[v]),n,B,keep_env,keep_indices,scope[0],scope[1]));
+  const bool knn = neighbors==1;
+  // Identical eligible populations share both the stopping rule and kernels.
+  // Views refer to Model-owned R vectors; no n-by-variable copy is needed.
+  std::vector<const double*> eligible;
+  std::vector<std::vector<int>> members;
+  if(knn) for(int v=0;v<int(models.size());++v) {
+    const double* p=models[v]->mass.begin();
+    std::size_t group=0;
+    while(group<eligible.size() && !std::equal(p,p+n,eligible[group])) ++group;
+    if(group==eligible.size()) { eligible.push_back(p); members.emplace_back(); }
+    members[group].push_back(v);
   }
-
-  for (int i = 0; i < n; ++i) {
-    const std::vector<Neighbor> neighbors_i = discover_neighbors(
-      tree.get(), i, X, Y, T_i, max_bw, neighbors_id == 1);
-
-    for (int b = 0; b < B; ++b) {
-      if (neighbors_id == 1) {
-        knn_environment(L_m, neighbors_i, N, T_i, BW[b], weight_power,
-                        weighting_id, normalized);
-      } else {
-        radius_environment(L_m, neighbors_i, N, BW[b], weight_power,
-                           weighting_id, normalized);
-      }
-
-      if (store_env) {
-        NumericMatrix env_matrix = env_list[b];
-        for (int m = 0; m < M; ++m)
-          env_matrix(i, m) = L_m[m];
-      }
-
-      if (!store_indices)
-        continue;
-
-      normalize_composition(L_m, p_m);
-
-      if (calculate_multigroup) {
-        if (measure_flags[0] == 1)
-          accumulate_P_multigroup(P_acc, b, i, N, T_m, p_m);
-
-        if (measure_flags[1] == 1)
-          accumulate_H_multigroup(H_acc, b, T_i[i], p_m, logM);
-
-        if (measure_flags[2] == 1)
-          accumulate_R_multigroup(R_acc, b, T_i[i], p_m);
-
-        if (measure_flags[3] == 1)
-          accumulate_D_multigroup(D_acc, b, T_i[i], p_m, P_m, 2.0 * T * I);
-      }
-
-      if (calculate_pairwise) {
-        for (int q = 0; q < Q; ++q) {
-          accumulate_pairwise(D_pair_acc, R_pair_acc, H_pair_acc, b, q,
-                              pairs[q], N, L_m, i, measure_flags);
+  int focal_searches=0;
+  for(int i=0;i<n;++i) {
+    if(i%256==0) checkUserInterrupt();
+    const auto candidates=knn ?
+      variable_knn_neighbors(tree.get(),i,X,Y,eligible,largest) :
+      (tree ? radius_neighbors(*tree,i,X,Y,largest) : all_neighbors(i,X,Y));
+    ++focal_searches;
+    for(int b=0;b<B;++b) {
+      if(knn) {
+        for(std::size_t g=0;g<eligible.size();++g) {
+          arma::vec mass(const_cast<double*>(eligible[g]),n,false);
+          const Contributions c=knn_contributions(candidates,mass,bands[b],power,
+                                                  weighting,normalize);
+          if(std::abs(c.population-bands[b]) >
+             64*std::numeric_limits<double>::epsilon()*bands[b])
+            stop("Could not reach the requested eligible population at focal row %d",i+1);
+          for(int v:members[g]) models[v]->update(i,b,c);
         }
+        continue;
       }
+      const Contributions c=radius_contributions(candidates,bands[b],power,weighting,normalize);
+      for(auto& model:models) model->update(i,b,c);
     }
   }
-
-  NumericVector D_out;
-  NumericVector R_out;
-  NumericVector H_out;
-  List P_out;
-
-  if (store_indices && calculate_multigroup && measure_flags[3] == 1) {
-    D_out = NumericVector(B);
-    for (int b = 0; b < B; ++b)
-      D_out[b] = D_acc[b];
-  }
-
-  if (store_indices && calculate_multigroup && measure_flags[2] == 1)
-    R_out = finalize_scalar_index(R_acc, T * I);
-
-  if (store_indices && calculate_multigroup && measure_flags[1] == 1)
-    H_out = finalize_scalar_index(H_acc, T * E);
-
-  if (store_indices && calculate_multigroup && measure_flags[0] == 1)
-    P_out = finalize_P_multigroup(P_acc, B);
-
-  List multigroup = List::create(
-    _["d"] = D_out,
-    _["r"] = R_out,
-    _["h"] = H_out,
-    _["p"] = P_out
-  );
-
-  List pairwise = List::create(
-    _["d"] = (store_indices && calculate_pairwise && measure_flags[3] == 1) ?
-      finalize_pairwise_matrix(D_pair_acc, pairs, B, M, 3) : List(),
-    _["r"] = (store_indices && calculate_pairwise && measure_flags[2] == 1) ?
-      finalize_pairwise_matrix(R_pair_acc, pairs, B, M, 2) : List(),
-    _["h"] = (store_indices && calculate_pairwise && measure_flags[1] == 1) ?
-      finalize_pairwise_matrix(H_pair_acc, pairs, B, M, 1) : List()
-  );
-
-  List indices = List::create(
-    _["multigroup"] = multigroup,
-    _["pairwise"] = pairwise
-  );
-
-  SEXP env_out = store_env ? static_cast<SEXP>(env_list) : R_NilValue;
-
-  return List::create(
-    _["env"] = env_out,
-    _["indices"] = indices
-  );
-}
-
-// [[Rcpp::export]]
-List seg_indices_env_cpp(NumericMatrix data, NumericMatrix env,
-                         IntegerVector measures, IntegerVector scope)
-{
-  arma::mat N(data.begin(), data.nrow(), data.ncol(), false);
-  arma::mat L(env.begin(), env.nrow(), env.ncol(), false);
-  std::vector<arma::mat> environments;
-  environments.push_back(L);
-
-  return indices_from_localenvs(N, environments, measures, scope);
+  List out(variables.size());
+  for(int v=0;v<variables.size();++v) out[v]=models[v]->finish();
+  out.attr("names")=variables.attr("names");
+  return List::create(_["analyses"]=out,
+    _["diagnostics"]=List::create(_["focal_searches"]=focal_searches,
+                                   _["variables"]=variables.size()));
 }

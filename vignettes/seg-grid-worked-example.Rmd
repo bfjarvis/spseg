@@ -282,13 +282,14 @@ spseg_to_table <- function(result, scenario) {
     tidyr::pivot_wider(names_from = measure, values_from = value) |>
     transmute(
       scenario = scenario,
-      information = h,
-      dissimilarity = d
+      information = information,
+      dissimilarity = dissimilarity
     )
 }
 
 spseg_raw <- spseg(
   coords,
+  variables = list(groups = seg_categorical(counts = c("A", "B"))),
   data = counts,
   bands = 0,
   weighting = "unweighted",
@@ -298,6 +299,7 @@ spseg_raw <- spseg(
 
 spseg_unweighted <- spseg(
   coords,
+  variables = list(groups = seg_categorical(counts = c("A", "B"))),
   data = counts,
   bands = 1,
   weighting = "unweighted",
@@ -308,6 +310,7 @@ spseg_unweighted <- spseg(
 
 spseg_weighted <- spseg(
   coords,
+  variables = list(groups = seg_categorical(counts = c("A", "B"))),
   data = counts,
   bands = 1,
   weighting = "exponential",
@@ -333,7 +336,7 @@ spseg_indices <- bind_rows(
 
 The next two figures compare the local environments produced by the manual
 `dplyr` calculations with the local environments returned by `spseg()`. The
-labels report the local environment counts, not the raw cell counts.
+labels report local population shares.
 
 ```{r local-env-plot-helper}
 index_labels <- bind_rows(manual_indices, spseg_indices) |>
@@ -349,14 +352,14 @@ index_labels <- bind_rows(manual_indices, spseg_indices) |>
   select(scenario, source, facet_label)
 
 local_env_plot_data <- function(manual_env, spseg_result, scenario) {
-  spseg_env <- as.data.frame(spseg_result$env[[1]])
+  spseg_env <- as.data.frame(spseg_result$analyses$groups$env[[1]])
   scenario_labels <- index_labels |>
     filter(.data$scenario == .env$scenario)
 
   bind_rows(
     grid |>
       select(id, x, y) |>
-      left_join(manual_env |> select(id, A, B), by = "id") |>
+      left_join(manual_env |> mutate(.total=A+B, across(c(A,B), ~.x/.total)) |> select(id, A, B), by = "id") |>
       mutate(source = "dplyr"),
     grid |>
       select(id, x, y) |>

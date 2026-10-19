@@ -166,6 +166,7 @@ providence_seg <-
   providence |>
   select(all_of(group_cols)) |>
   spseg(
+    variables = list(race = seg_categorical(counts = group_cols)),
     bands = bands,
     weighting = "biweight",
     power = 2,
@@ -178,17 +179,14 @@ providence_seg <-
   )
 ```
 
-Convert local environment counts to local Hispanic shares for mapping.
+Extract local Hispanic shares with their geometry for mapping.
 
 ```{r local-share-data}
-local_maps <- st_as_sf(providence_seg, shape = "long") |>
+local_maps <- st_as_sf(providence_seg) |>
+  filter(category == "Hispanic") |>
   st_join(select(providence, PLACEA, Raw = Total), join = st_equals) |>
-  mutate(Total = White + Black + Asian + Hispanic) |>
-  mutate(across(
-    c(White, Black, Asian, Hispanic),
-    ~ .x / Total,
-    .names = "{.col}_Share"
-  ))
+  mutate(Hispanic_Share = share)
+
 ```
 
 ```{r local-share-map}
@@ -217,7 +215,7 @@ bind_rows(
     filter(group_a == 'White'),
   as.data.frame(providence_seg, what = 'indices')
 ) |>
-  filter(measure == 'h', band %in% c(500, 4000)) |>
+  filter(measure == 'information', band %in% c(500, 4000)) |>
   arrange(group_a, group_b, band) |>
   group_by(group_b) |>
   mutate(ratio = value / lag(value))

@@ -12,49 +12,11 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // seg_engine_cpp
-List seg_engine_cpp(NumericVector x, NumericVector y, NumericMatrix data, NumericVector bands, double power, int weighting, int normalize, IntegerVector measures, IntegerVector scope, int keep_env, int keep_indices, int neighbors, int search);
-RcppExport SEXP _seg_seg_engine_cpp(SEXP xSEXP, SEXP ySEXP, SEXP dataSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP measuresSEXP, SEXP scopeSEXP, SEXP keep_envSEXP, SEXP keep_indicesSEXP, SEXP neighborsSEXP, SEXP searchSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type x(xSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type y(ySEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type bands(bandsSEXP);
-    Rcpp::traits::input_parameter< double >::type power(powerSEXP);
-    Rcpp::traits::input_parameter< int >::type weighting(weightingSEXP);
-    Rcpp::traits::input_parameter< int >::type normalize(normalizeSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type measures(measuresSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type scope(scopeSEXP);
-    Rcpp::traits::input_parameter< int >::type keep_env(keep_envSEXP);
-    Rcpp::traits::input_parameter< int >::type keep_indices(keep_indicesSEXP);
-    Rcpp::traits::input_parameter< int >::type neighbors(neighborsSEXP);
-    Rcpp::traits::input_parameter< int >::type search(searchSEXP);
-    rcpp_result_gen = Rcpp::wrap(seg_engine_cpp(x, y, data, bands, power, weighting, normalize, measures, scope, keep_env, keep_indices, neighbors, search));
-    return rcpp_result_gen;
-END_RCPP
-}
-// seg_indices_env_cpp
-List seg_indices_env_cpp(NumericMatrix data, NumericMatrix env, IntegerVector measures, IntegerVector scope);
-RcppExport SEXP _seg_seg_indices_env_cpp(SEXP dataSEXP, SEXP envSEXP, SEXP measuresSEXP, SEXP scopeSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericMatrix >::type data(dataSEXP);
-    Rcpp::traits::input_parameter< NumericMatrix >::type env(envSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type measures(measuresSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type scope(scopeSEXP);
-    rcpp_result_gen = Rcpp::wrap(seg_indices_env_cpp(data, env, measures, scope));
-    return rcpp_result_gen;
-END_RCPP
-}
-// seg_multi_cpp
-List seg_multi_cpp(NumericMatrix coords, NumericVector population, List variables, NumericVector bands, double power, int weighting, bool normalize, int neighbors, int search, IntegerVector scope, bool keep_env, bool keep_indices);
-RcppExport SEXP _seg_seg_multi_cpp(SEXP coordsSEXP, SEXP populationSEXP, SEXP variablesSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP neighborsSEXP, SEXP searchSEXP, SEXP scopeSEXP, SEXP keep_envSEXP, SEXP keep_indicesSEXP) {
+List seg_engine_cpp(NumericMatrix coords, List variables, NumericVector bands, double power, int weighting, bool normalize, int neighbors, int search, IntegerVector scope, bool keep_env, bool keep_indices);
+RcppExport SEXP _seg_seg_engine_cpp(SEXP coordsSEXP, SEXP variablesSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP neighborsSEXP, SEXP searchSEXP, SEXP scopeSEXP, SEXP keep_envSEXP, SEXP keep_indicesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type coords(coordsSEXP);
-    Rcpp::traits::input_parameter< NumericVector >::type population(populationSEXP);
     Rcpp::traits::input_parameter< List >::type variables(variablesSEXP);
     Rcpp::traits::input_parameter< NumericVector >::type bands(bandsSEXP);
     Rcpp::traits::input_parameter< double >::type power(powerSEXP);
@@ -65,7 +27,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< IntegerVector >::type scope(scopeSEXP);
     Rcpp::traits::input_parameter< bool >::type keep_env(keep_envSEXP);
     Rcpp::traits::input_parameter< bool >::type keep_indices(keep_indicesSEXP);
-    rcpp_result_gen = Rcpp::wrap(seg_multi_cpp(coords, population, variables, bands, power, weighting, normalize, neighbors, search, scope, keep_env, keep_indices));
+    rcpp_result_gen = Rcpp::wrap(seg_engine_cpp(coords, variables, bands, power, weighting, normalize, neighbors, search, scope, keep_env, keep_indices));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -87,9 +49,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_seg_seg_engine_cpp", (DL_FUNC) &_seg_seg_engine_cpp, 13},
-    {"_seg_seg_indices_env_cpp", (DL_FUNC) &_seg_seg_indices_env_cpp, 4},
-    {"_seg_seg_multi_cpp", (DL_FUNC) &_seg_seg_multi_cpp, 12},
+    {"_seg_seg_engine_cpp", (DL_FUNC) &_seg_seg_engine_cpp, 11},
     {"_seg_seg_pycno_cpp", (DL_FUNC) &_seg_seg_pycno_cpp, 6},
     {NULL, NULL, 0}
 };

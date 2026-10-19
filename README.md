@@ -1,6 +1,8 @@
 # seg
 R package 'seg' for measuring and visualising population segregation
 
+Pre-1.0 development: the interface may change before the first stable release.
+
 The development interface measures several attributes with shared spatial
 neighborhood searches:
 
@@ -30,6 +32,5 @@ With `neighbors = "knn"`, each variable selects its own eligible population:
 when the variables cover different populations. Neighbor discovery is shared.
 
 See `vignette("seg-multiple-variables")` for definitions, sources, deterministic
-tie handling, population-count kNN neighborhoods, and exposure cuts. The
-multiple-variable interface currently supports raw spatial support; existing
-categorical grid and pycnophylactic workflows remain available.
+tie handling, population-count kNN neighborhoods, and exposure cuts. Polygon count specifications also support shared grid and pycnophylactic
+surface construction through the same interface.

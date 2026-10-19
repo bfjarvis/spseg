@@ -15,19 +15,18 @@
 #' are not stored in the result.
 #'
 #' Set `bands = 0` to compute indices without spatial weighting. In that
-#' case, each local environment is a copy of the observed population values
-#' for the focal unit.
+#' case, local environments contain the observed composition at coincident
+#' support points, or just the focal unit when coordinates are distinct.
 #'
 #' When `neighbors = "knn"`, `bands` is interpreted as population-count
-#' thresholds before distance weighting. With `variables`, each variable
+#' thresholds before distance weighting. Each variable
 #' selects the requested eligible population, including the focal or final
 #' boundary unit fractionally when needed. Neighboring units are added in
 #' order of centroid distance. An unattainable threshold raises an error.
-#' Legacy calls without `variables` retain full focal-unit inclusion even
-#' when its population exceeds the threshold.
 #'
-#' Multigroup measures are stored in `result$indices$multigroup`. Pairwise
-#' measures, when requested, are stored in `result$indices$pairwise`.
+#' Each named variable has a result in `result$analyses`. Its multigroup
+#' measures are stored in `indices$multigroup` and requested pairwise
+#' measures in `indices$pairwise`.
 #' Pairwise scalar measures are returned as one symmetric matrix per
 #' bandwidth with one row and column for each population group. Units with
 #' no population in either group for a given pair do not contribute to that
@@ -51,13 +50,13 @@
 #'   are used as the focal coordinates. With `variables`, a plain data frame
 #'   may contain both attributes and the columns selected by `coords`.
 #' @param data Optional attribute data with one row per coordinate or feature.
-#'   Legacy calls require numeric population counts in at least two columns.
-#'   With `variables`, this may instead contain category memberships, observed
+#'   This may contain category memberships, observed
 #'   numerical values, and counts selected by the specifications. If omitted,
 #'   attributes come from `x` (excluding sf geometry).
 #' @param measures A character vector naming measures to compute: "all",
 #'   "exposure", "information", "diversity", "dissimilarity", or "square_root".
-#'   See `variables` for aliases and the legacy/new meaning of `"all"`.
+#'   `"all"` includes all five families. Aliases `"relative_diversity"` and
+#'   `"variance_ratio"` select diversity.
 #' @param bands Neighborhood thresholds. With `neighbors = "radius"`, these
 #'   are distance bandwidths in the units of `x`. With `neighbors = "knn"`,
 #'   these are population-count thresholds. If omitted for radius
@@ -92,22 +91,20 @@
 #'   "full" stores both indices and local environments. "localenv"
 #'   stores local environments without calculating indices.
 #' @param verbose Logical. If `TRUE`, report progress messages.
-#' @param variables Optional uniquely named list of [seg_variables]
-#'   specifications. All variables share neighborhood searches. kNN stopping
-#'   populations and distance weights are variable-specific; identical eligible
-#'   populations reuse their contributions. The new interface supports
-#'   `surface = "raw"`. The measure
-#'   `"square_root"` and aliases `"relative_diversity"`/`"variance_ratio"` are
-#'   available. With `variables`, `"all"` includes the root family; legacy
-#'   `"all"` retains its existing four-family selection. Each specification can
-#'   override `measures`. See `vignette("seg-multiple-variables")` for formulas,
-#'   estimator conventions, sources, and properties.
-#' @param coords For the multiple-variable interface with plain data frames,
+#' @param variables Required uniquely named list of [seg_variables]
+#'   specifications, including for a single segregation dimension. A count
+#'   specification can select several columns. All variables share spatial
+#'   discovery; kNN uses each variable's eligible population and adaptive
+#'   distance weights. Each specification can override `measures`.
+#'   Grid and pycnophylactic surfaces require count specifications for all
+#'   variables and polygonal sf input; raw support also accepts observed values.
+#'   See `vignette("seg-multiple-variables")` for formulas and sources.
+#' @param coords With plain data frames,
 #'   two coordinate column names or positions. For sf input, omit this argument
 #'   to use the active geometry. Distances are Euclidean in coordinate units;
 #'   use an appropriate projected CRS for metric bandwidths.
 #' @param population Default population-weight column or numeric vector for
-#'   observed-value specifications in the multiple-variable interface.
+#'   observed-value specifications.
 #'   Descriptor `weights` override it; count specifications use their row totals.
 #'   kNN defaults to one per observed-value row and selects each variable's
 #'   own eligible population after omissions. For radius neighborhoods,
@@ -125,12 +122,10 @@
 #'   store square grid-cell geometries for mapping. By default, generated
 #'   surfaces store only centroid coordinates and population counts.
 #'
-#' @return An S3 object of class `seg_result`. It is a list with fields
-#'   including `bands`, `indices`, `env`, `coords`, `data`,
-#'   `geometry`, `neighbors`, `surface_info`, and `crs`. Some fields are
-#'   `NULL` depending on `output`. Calls with `variables` return a
-#'   [seg_multi_result] inheriting from `seg_result`, with named results under
-#'   `analyses` and shared geometry/neighborhood metadata.
+#' @return A [seg_result] with named variable results in `analyses`, plus
+#'   shared `bands`, `neighbors`, `diagnostics`, and `surface_info`. Input data,
+#'   coordinates, geometry, and environments are retained for `output = "full"`
+#'   or `"localenv"`. Surface audits are retained when requested.
 #'
 #' @note
 #' The exposure/isolation index, P, is presented in matrix form. The spatial
@@ -150,36 +145,27 @@
 #'
 #' @examples
 #' data(segdata)
+#' xy <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
+#' variables <- list(ethnicity = seg_categorical(counts = c("A1", "A2")))
+#' result <- spseg(xy, variables, data = segdata, bands = c(0, 2), output = "full")
+#' as.data.frame(result)
+#' head(as.data.frame(result, what = "env"))
+#' result$analyses$ethnicity$env[[1]]
 #'
-#' coords <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
-#' test_data <- segdata[, 1:2]
-#'
-#' # Default behavior: indices across default bands.
-#' idx <- spseg(coords, data = test_data)
-#' idx
-#' as.data.frame(idx)
-#'
-#' # Store local environments for selected distance bands.
-#' env <- spseg(coords, data = test_data, bands = c(0, 2), output = "localenv")
-#' head(as.data.frame(env, what = "env", shape = "long"))
-#'
-#' # Store indices and local environments together.
-#' full <- spseg(coords, data = test_data, bands = c(1, 2), output = "full")
-#' as.data.frame(full, what = "exposure")
-#'
-#' # sf inputs preserve geometry in local-environment outputs.
 #' geom <- sf::st_polygon(list(rbind(c(0,0), c(10,0), c(10,10),
-#'   c(0,10), c(0,0)))) |>
-#'   sf::st_make_grid(cellsize = 1)
-#' grd_sf <- sf::st_sf(test_data, geometry = geom)
-#'
-#' sf_env <- spseg(grd_sf, bands = 2, output = "localenv")
-#' sf::st_as_sf(sf_env)
+#'   c(0,10), c(0,0)))) |> sf::st_make_grid(cellsize = 1)
+#' blocks <- sf::st_sf(segdata, geometry = geom)
+#' gridded <- spseg(blocks, variables, surface = "grid", nrow = 10, ncol = 10,
+#'                  bands = 2, output = "localenv")
+#' sf::st_as_sf(gridded)
 #'
 #' @export
 spseg <- function(
   x,
+  variables,
+  coords = NULL,
   data = NULL,
+  population = NULL,
   measures = "all",
   bands = NULL,
   weighting = c("biweight", "unweighted", "inverse", "exponential"),
@@ -192,133 +178,11 @@ spseg <- function(
   scope = c("both", "multigroup", "pairwise"),
   output = c("indices", "full", "localenv"),
   verbose = FALSE,
-  variables = NULL,
-  coords = NULL,
-  population = NULL,
   ...
 ) {
-  call <- match.call()
-  if (!is.null(variables)) {
-    return(.spseg_multiple(
-      x, data, variables, coords, population, measures, bands,
-      if (missing(weighting)) "biweight" else weighting,
-      power, normalize, neighbors, search, surface, surface_audit,
-      scope, output, verbose, call, list(...)
-    ))
-  }
-  if (!is.null(coords) || !is.null(population)) {
-    stop("'coords' and 'population' require 'variables'", call. = FALSE)
-  }
-  output <- match.arg(output)
-  scope <- match.arg(scope)
-  neighbors <- match.arg(neighbors)
-  search <- match.arg(search)
-  surface <- match.arg(surface)
-  surface_audit <- isTRUE(surface_audit)
-  dots <- list(...)
-  weighting <- if (missing(weighting)) "biweight" else match.arg(weighting)
-  normalize <- isTRUE(normalize)
-
-  if (neighbors == "knn" && is.null(bands)) {
-    stop(
-      "'bands' must be supplied for count-based kNN neighborhoods",
-      call. = FALSE
-    )
-  }
-
-  if (!is.null(bands)) {
-    bands <- as.numeric(bands)
-  }
-  if (!is.null(bands) && any(!is.finite(bands))) {
-    stop("'bands' must contain finite numeric values", call. = FALSE)
-  }
-  if (!is.null(bands) && neighbors == "radius" && any(bands < 0)) {
-    stop("'bands' must be greater than or equal to 0", call. = FALSE)
-  }
-  if (!is.null(bands) && neighbors == "knn" && any(bands <= 0)) {
-    stop("'bands' must be greater than 0 for kNN neighborhoods", call. = FALSE)
-  }
-
-  checked <- if (verbose) {
-    if (is.null(data)) chksegdata(x) else chksegdata(x, data)
-  } else {
-    if (is.null(data)) {
-      suppressMessages(chksegdata(x))
-    } else {
-      suppressMessages(chksegdata(x, data))
-    }
-  }
-  pop_surface <- spseg_surface(
-    x = x,
-    coords = checked$coords,
-    data = checked$data,
-    surface = surface,
-    args = dots,
-    audit = surface_audit,
-    verbose = verbose
-  )
-  pop_surface$coords <- as.matrix(pop_surface$coords)
-  pop_surface$data <- as.matrix(pop_surface$data)
-
-  if (is.null(bands)) {
-    bands <- default_bands(pop_surface$coords, pop_surface$data)
-  }
-
-  measures_to_compute <- if (identical(output, "localenv")) {
-    character()
-  } else {
-    spseg_measures(measures)
-  }
-  engine <- if ("square_root" %in% measures_to_compute) {
-    .seg_legacy_engine(pop_surface$coords, pop_surface$data, bands, power,
-                       weighting, normalize, measures_to_compute, scope,
-                       neighbors, search, output)
-  } else seg_engine_coords(
-    coords = pop_surface$coords,
-    data = pop_surface$data,
-    bands = bands,
-    power = power,
-    weighting = weighting,
-    normalize = normalize,
-    measures = measures_to_compute,
-    scope = scope,
-    neighbors = neighbors,
-    search = search,
-    keep_env = !identical(output, "indices"),
-    keep_indices = !identical(output, "localenv")
-  )
-  indices <- if (identical(output, "localenv")) {
-    list()
-  } else {
-    spseg_indices_from_engine(engine$indices, bands)
-  }
-  result <- spseg_result(
-    coords = pop_surface$coords,
-    data = pop_surface$data,
-    env = engine$env,
-    bands = bands,
-    indices = indices,
-    measures = if (!identical(output, "localenv")) {
-      spseg_measures(measures)
-    } else {
-      character()
-    },
-    scope = scope,
-    weighting = weighting,
-    power = power,
-    normalize = normalize,
-    crs = st_crs(checked$proj4string),
-    output = output,
-    call = call,
-    geometry = if (identical(surface, "raw")) {
-      checked$geometry
-    } else {
-      pop_surface$geometry
-    },
-    neighbors = neighbors,
-    search = search,
-    surface = surface,
-    surface_info = pop_surface$surface_info
-  )
-  result
+  if (missing(variables))
+    stop("Supply a named 'variables' list of seg_variable specifications", call. = FALSE)
+  .spseg_compute(x, data, variables, coords, population, measures, bands,
+                 match.arg(weighting), power, normalize, neighbors, search,
+                 surface, surface_audit, scope, output, verbose, match.call(), list(...))
 }

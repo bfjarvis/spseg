@@ -62,27 +62,29 @@ ordered_reference <- function(counts, local, type, scores = seq_len(ncol(counts)
   out
 }
 
-test_that("multiple categorical variables retain the legacy numerical definitions", {
+test_that("categorical measures match independent formulas across spatial options", {
   set.seed(103)
   d <- data.frame(x=runif(18),y=runif(18),a=rpois(18,4),b=rpois(18,6),c=rpois(18,3))
-  d$pop <- d$a+d$b+d$c
   variables <- list(first=seg_categorical(counts=c("a","b","c")),
                     second=seg_categorical(counts=c("a","b","c")))
   for (neighborhood in c("radius","knn")) for (kernel in c("unweighted","biweight","inverse","exponential")) {
     bands <- if (neighborhood=="radius") c(0,.35,.8) else c(10,40,100)
-    multi <- spseg(d,coords=c("x","y"),population="pop",variables=variables,
-                   bands=bands,neighbors=neighborhood,weighting=kernel)
-    old <- spseg(as.matrix(d[c("x","y")]),as.matrix(d[c("a","b","c")]),
-                 bands=bands,neighbors=neighborhood,weighting=kernel)
-    for (key in c("d","h","r","p")) {
-      expect_equal(multi$analyses$first$indices$multigroup[[key]],old$indices$multigroup[[key]],
-                   tolerance=1e-12)
-      expect_equal(multi$analyses$first$indices$multigroup[[key]],
-                   multi$analyses$second$indices$multigroup[[key]])
+    result <- spseg(d, variables, coords=c("x","y"), bands=bands,
+                    neighbors=neighborhood, weighting=kernel, output="full")
+    for (band in seq_along(bands)) {
+      reference <- categorical_reference(d[c("a","b","c")],
+                                           result$analyses$first$env[[band]])
+      for (key in c("d","h","r","s")) {
+        expect_lte(abs(unname(result$analyses$first$indices$multigroup[[key]][band])-
+                         reference$multigroup[[key]]), 1e-12)
+        expect_equal(result$analyses$first$indices$pairwise[[key]][[band]],
+                     reference$pairwise[[key]][[1]], tolerance=1e-12)
+      }
+      expect_equal(result$analyses$first$indices$multigroup$p[[band]],
+                   reference$multigroup$p[[1]], tolerance=1e-12)
     }
-    for (key in c("d","h","r")) expect_equal(
-      multi$analyses$first$indices$pairwise[[key]],old$indices$pairwise[[key]],tolerance=1e-12)
-    expect_equal(multi$diagnostics$focal_searches,nrow(d))
+    expect_equal(result$analyses$first,result$analyses$second)
+    expect_equal(result$diagnostics$focal_searches,nrow(d))
   }
 })
 
@@ -136,18 +138,17 @@ test_that("categorical root is Hutchens for two groups and Atkinson for several"
                   bands=0,measures="square_root")
   expect_equal(unname(result$analyses$g$indices$multigroup$s),1)
   expect_equal(result$analyses$g$indices$pairwise$s[[1]][upper.tri(counts)],rep(.5,3))
-  binary <- spseg(as.matrix(d[c("x","y")]),counts[,1:2],bands=c(0,2),
+  binary <- spseg(as.matrix(d[c("x","y")]), variables = list(groups = seg_categorical(counts = seq_len(ncol(counts[,1:2])))), data = counts[,1:2],bands=c(0,2),
                   measures=c("square_root","information"),output="full")
   totals <- colSums(counts[,1:2])
   direct <- 1-sum(sqrt(counts[,1]/totals[1]*counts[,2]/totals[2]))
-  expect_equal(unname(binary$indices$multigroup$s[1]),direct)
-  expect_equal(binary$indices$multigroup$s[1],binary$indices$pairwise$s[[1]][1,2],ignore_attr=TRUE)
-  expect_equal(binary$env[[1]],counts[,1:2],ignore_attr=TRUE)
-  expect_true("s" %in% as.data.frame(binary)$measure)
-  recomputed <- seg:::spseg_indices_from_env(counts[,1:2],binary$env[[1]],
-                                            measures="square_root")
-  expect_equal(recomputed$multigroup$s,unname(binary$indices$multigroup$s[1]))
-  expect_equal(recomputed$pairwise$s[[1]],binary$indices$pairwise$s[[1]])
+  expect_equal(unname(binary$analyses$groups$indices$multigroup$s[1]),direct)
+  expect_equal(binary$analyses$groups$indices$multigroup$s[1],binary$analyses$groups$indices$pairwise$s[[1]][1,2],ignore_attr=TRUE)
+  expect_equal(binary$analyses$groups$env[[1]],counts[,1:2]/rowSums(counts[,1:2]),ignore_attr=TRUE)
+  expect_true("square_root" %in% as.data.frame(binary)$measure)
+  recomputed <- categorical_reference(counts[,1:2],binary$analyses$groups$env[[1]])
+  expect_equal(recomputed$multigroup$s,unname(binary$analyses$groups$indices$multigroup$s[1]))
+  expect_equal(recomputed$pairwise$s[[1]],binary$analyses$groups$indices$pairwise$s[[1]])
 })
 
 test_that("two-category ordinal measures reduce to binary categorical measures", {
@@ -247,7 +248,7 @@ test_that("populations, omissions, constants, and invalid specifications are exp
     a=seg_categorical(counts=c("a","b")),b=seg_categorical(counts=c("a","c"))),bands=2),
     "populations differ")
   expect_error(seg_continuous(values="v",counts="a"),"exactly one")
-  expect_error(spseg(d,coords=c("x","y"),variables=variables,bands=2,surface="grid"),"raw")
+  expect_error(spseg(d,coords=c("x","y"),variables=variables,bands=2,surface="grid"),"counts")
   expect_error(spseg(d,coords=c("x","y"),variables=list(v=seg_ordinal(values="a")),bands=2),"ordered")
   expect_error(spseg(d,coords=c("x","y"),variables=list(v=seg_continuous(values="a")),bands=2,
                      measures="unknown"),"Unknown")
@@ -343,11 +344,11 @@ test_that("shared candidate discovery includes distance ties across query bounda
 test_that("fractional kNN boundaries do not expand the kernel radius through rounding", {
   xy <- cbind(x=0:2,y=0)
   counts <- cbind(a=c(1,0,2),b=c(0,3,4))
-  legacy <- spseg(xy,counts,neighbors="knn",bands=3,
+  coordinate_input <- spseg(xy, variables = list(groups = seg_categorical(counts = seq_len(ncol(counts)))), data = counts,neighbors="knn",bands=3,
                    weighting="exponential",output="full")
   # Location 1 selects itself and 2/3 of location 2, with radius 1.
   expected <- c(1,2*exp(-1/(1+sqrt(.Machine$double.eps))))
-  expect_equal(unname(legacy$env[[1]][1,]),expected,tolerance=1e-12)
+  expect_equal(unname(coordinate_input$analyses$groups$env[[1]][1,]),expected/sum(expected),tolerance=1e-12)
   d <- data.frame(xy,counts)
   multi <- spseg(d,coords=c("x","y"),neighbors="knn",bands=3,
                   weighting="exponential",output="full",

@@ -499,6 +499,7 @@ internally before local environments and segregation indices are calculated.
 ```{r spseg-surface-call}
 grid_result <- spseg(
   fallback_case[, c("A", "B")],
+  variables = list(groups = seg_categorical(counts = c("A", "B"))),
   surface = "grid",
   nrow = 6,
   ncol = 6,
@@ -508,6 +509,7 @@ grid_result <- spseg(
 
 pycno_result <- spseg(
   fallback_case[, c("A", "B")],
+  variables = list(groups = seg_categorical(counts = c("A", "B"))),
   surface = "pycno",
   surface_audit = TRUE,
   nrow = 6,
