@@ -10,6 +10,8 @@
 #include <vector>
 
 using namespace Rcpp;
+#include "seg_neighbors.h"
+using namespace seg_spatial;
 
 namespace {
 
@@ -24,56 +26,6 @@ struct GroupPair {
   bool valid;
 };
 
-struct Neighbor {
-  int id;
-  double d;
-};
-
-struct PointCloud {
-  const arma::vec& X;
-  const arma::vec& Y;
-
-  inline size_t kdtree_get_point_count() const { return X.n_elem; }
-
-  inline double kdtree_get_pt(const size_t idx, const size_t dim) const
-  {
-    return dim == 0 ? X[idx] : Y[idx];
-  }
-
-  template <class BBOX>
-  bool kdtree_get_bbox(BBOX&) const { return false; }
-};
-
-using KDTree = nanoflann::KDTreeSingleIndexAdaptor<
-  nanoflann::L2_Simple_Adaptor<double, PointCloud>,
-  PointCloud, 2, size_t>;
-
-double seg_weight(double d, double bw, double power, int weighting_id)
-{
-  double w = 0.0;
-
-  switch (weighting_id) {
-  case 0:
-    w = 1.0;
-    break;
-  case 1:
-    w = std::pow(1.0 - std::pow(d / bw, power), power);
-    if (d > bw)
-      w = 0.0;
-    break;
-  case 2:
-    w = 1.0 / std::pow(d / bw, power);
-    break;
-  case 3:
-    w = std::exp(-d / bw);
-    break;
-  default:
-    w = std::exp(-d / bw);
-  }
-
-  return w < 0.0 ? 0.0 : w;
-}
-
 double entropy(const arma::vec& p_m, double log_base)
 {
   double out = 0.0;
@@ -87,97 +39,6 @@ double entropy(const arma::vec& p_m, double log_base)
 double interaction(const arma::vec& p_m)
 {
   return arma::accu(p_m % (1.0 - p_m));
-}
-
-bool neighbor_distance_less(const Neighbor& a, const Neighbor& b)
-{
-  if (a.d == b.d)
-    return a.id < b.id;
-  return a.d < b.d;
-}
-
-std::vector<Neighbor> all_neighbors(int i, const arma::vec& X,
-                                    const arma::vec& Y)
-{
-  const int n = X.n_elem;
-  std::vector<Neighbor> neighbors;
-  neighbors.reserve(n);
-  for (int j = 0; j < n; ++j) {
-    const double dx = X[i] - X[j];
-    const double dy = Y[i] - Y[j];
-    neighbors.push_back({j, std::sqrt(dx * dx + dy * dy)});
-  }
-  std::sort(neighbors.begin(), neighbors.end(), neighbor_distance_less);
-  return neighbors;
-}
-
-std::vector<Neighbor> radius_neighbors(const KDTree& tree, int i,
-                                       const arma::vec& X,
-                                       const arma::vec& Y,
-                                       double radius)
-{
-  if (radius < 0.0)
-    return all_neighbors(i, X, Y);
-
-  double query[2] = {X[i], Y[i]};
-  std::vector<nanoflann::ResultItem<size_t, double>> results;
-  const double radius2 = std::nextafter(radius * radius,
-                                        std::numeric_limits<double>::infinity());
-  tree.radiusSearch(query, radius2, results,
-                    nanoflann::SearchParameters(0.0, true));
-
-  std::vector<Neighbor> neighbors;
-  neighbors.reserve(results.size());
-  for (const auto& result : results)
-    neighbors.push_back({static_cast<int>(result.first),
-                         std::sqrt(result.second)});
-
-  std::sort(neighbors.begin(), neighbors.end(), neighbor_distance_less);
-  return neighbors;
-}
-
-std::vector<Neighbor> knn_neighbors(const KDTree& tree, int i,
-                                    const arma::vec& X,
-                                    const arma::vec& Y,
-                                    const arma::vec& T_i,
-                                    double threshold)
-{
-  const int n = X.n_elem;
-  std::vector<Neighbor> neighbors;
-
-  if (T_i[i] >= threshold) {
-    neighbors.push_back({i, 0.0});
-    return neighbors;
-  }
-
-  double query[2] = {X[i], Y[i]};
-  int k = std::min(n, 32);
-
-  while (true) {
-    std::vector<size_t> ids(k);
-    std::vector<double> d2(k);
-    const size_t found = tree.knnSearch(query, k, ids.data(), d2.data());
-
-    neighbors.clear();
-    neighbors.push_back({i, 0.0});
-    for (size_t q = 0; q < found; ++q) {
-      const int id = static_cast<int>(ids[q]);
-      if (id == i)
-        continue;
-      neighbors.push_back({id, std::sqrt(d2[q])});
-    }
-    std::sort(neighbors.begin() + 1, neighbors.end(), neighbor_distance_less);
-
-    double cumulative = T_i[i];
-    for (std::size_t q = 1; q < neighbors.size() && cumulative < threshold; ++q)
-      cumulative += T_i[neighbors[q].id];
-
-    if (cumulative >= threshold || k >= n)
-      break;
-    k = std::min(n, k * 2);
-  }
-
-  return neighbors;
 }
 
 void normalize_composition(const arma::vec& L_m, arma::vec& p_m)
@@ -255,37 +116,12 @@ void radius_environment(arma::vec& L_m, const std::vector<Neighbor>& neighbors,
                         const arma::mat& N, double band, double power,
                         int weighting_id, bool normalized)
 {
-  double bw = normalized ? band : 1.0;
-  if (bw <= 0.0)
-    bw = 1.0;
-
-  double local_tolerance = 0.0;
-  if (weighting_id == 2) {
-    for (const Neighbor& neighbor : neighbors) {
-      const double d = neighbor.d;
-      if ((band < 0.0 || d <= band) && d > 0.0 &&
-          (local_tolerance <= 0.0 || d < local_tolerance))
-        local_tolerance = d;
-    }
-    local_tolerance = local_tolerance > 0.0 ? local_tolerance / 2.0 : bw;
-  }
-
+  const Contributions c = radius_contributions(neighbors, band, power,
+                                              weighting_id, normalized);
   L_m.zeros();
-  double W = 0.0;
-  for (const Neighbor& neighbor : neighbors) {
-    double d = neighbor.d;
-    if (band >= 0.0 && d > band)
-      break;
-    if (weighting_id == 2 && d == 0.0)
-      d = local_tolerance;
-
-    const double w = seg_weight(d, bw, power, weighting_id);
-    W += w;
-    L_m += w * N.row(neighbor.id).t();
-  }
-
-  if (W > 0.0)
-    L_m /= W;
+  for (std::size_t k = 0; k < c.ids.size(); ++k)
+    L_m += c.weights[k] * N.row(c.ids[k]).t();
+  if (c.scale != 1.0) L_m /= (1.0 / c.scale);
 }
 
 void knn_environment(arma::vec& L_m, const std::vector<Neighbor>& neighbors,
@@ -293,55 +129,11 @@ void knn_environment(arma::vec& L_m, const std::vector<Neighbor>& neighbors,
                      double threshold, double power, int weighting_id,
                      bool normalized)
 {
+  const Contributions c = knn_contributions(neighbors, T_i, threshold, power,
+                                           weighting_id, normalized);
   L_m.zeros();
-  if (neighbors.empty())
-    return;
-
-  const int focal = neighbors[0].id;
-  L_m += N.row(focal).t();
-  double cumulative = T_i[focal];
-  if (cumulative >= threshold)
-    return;
-
-  double farthest = 0.0;
-  double local_tolerance = 0.0;
-  double remaining = threshold - cumulative;
-
-  for (std::size_t q = 1; q < neighbors.size() && remaining > 0.0; ++q) {
-    const int id = neighbors[q].id;
-    if (T_i[id] <= 0.0)
-      continue;
-    const double fraction = std::min(1.0, remaining / T_i[id]);
-    if (fraction <= 0.0)
-      break;
-    farthest = std::max(farthest, neighbors[q].d);
-    if (neighbors[q].d > 0.0 &&
-        (local_tolerance <= 0.0 || neighbors[q].d < local_tolerance))
-      local_tolerance = neighbors[q].d;
-    remaining -= fraction * T_i[id];
-  }
-
-  double bw = normalized && farthest > 0.0 ?
-    farthest * (1.0 + std::sqrt(std::numeric_limits<double>::epsilon())) :
-    1.0;
-  if (weighting_id == 2)
-    local_tolerance = local_tolerance > 0.0 ? local_tolerance / 2.0 : bw;
-
-  remaining = threshold - cumulative;
-  for (std::size_t q = 1; q < neighbors.size() && remaining > 0.0; ++q) {
-    const int id = neighbors[q].id;
-    if (T_i[id] <= 0.0)
-      continue;
-    const double fraction = std::min(1.0, remaining / T_i[id]);
-    if (fraction <= 0.0)
-      break;
-    double d = neighbors[q].d;
-    if (weighting_id == 2 && d == 0.0)
-      d = local_tolerance;
-    const double w = seg_weight(d, bw, power, weighting_id);
-    L_m += fraction * w * N.row(id).t();
-    remaining -= fraction * T_i[id];
-  }
+  for (std::size_t k = 0; k < c.ids.size(); ++k)
+    L_m += c.weights[k] * N.row(c.ids[k]).t();
 }
 
 void accumulate_pairwise(arma::mat& D_pair_acc,
@@ -604,11 +396,8 @@ List seg_engine_cpp(NumericVector x, NumericVector y, NumericMatrix data,
   }
 
   for (int i = 0; i < n; ++i) {
-    const std::vector<Neighbor> neighbors_i = search_id == 1 ?
-      all_neighbors(i, X, Y) :
-      (neighbors_id == 1 ?
-         knn_neighbors(*tree, i, X, Y, T_i, max_bw) :
-         radius_neighbors(*tree, i, X, Y, max_bw));
+    const std::vector<Neighbor> neighbors_i = discover_neighbors(
+      tree.get(), i, X, Y, T_i, max_bw, neighbors_id == 1);
 
     for (int b = 0; b < B; ++b) {
       if (neighbors_id == 1) {
