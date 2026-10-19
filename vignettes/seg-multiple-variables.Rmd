@@ -1,0 +1,310 @@
+---
+title: "Categorical, Ordinal, and Continuous Segregation"
+output: rmarkdown::html_vignette
+bibliography: segregation-references.bib
+vignette: >
+  %\VignetteIndexEntry{Categorical, Ordinal, and Continuous Segregation}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse=TRUE, comment="#>")
+library(seg)
+```
+
+`spseg()` can measure several attributes in one call. It discovers neighbors
+once per focal location for all requested variables and bands; adaptive kNN
+discovery can internally expand its candidate query. It remains single-threaded.
+The caller can parallelize independent cities or simulation runs.
+
+# Inputs and syntax
+
+Each row represents a geographic support point or an aggregated population.
+An `sf` object uses its active geometry column, with polygon centroids as
+support points. A plain data frame supplies `coords = c("x", "y")`.
+Distances are Euclidean in coordinate units; project geographic coordinates
+appropriately before requesting bandwidths in meters.
+
+```{r individuals}
+people <- data.frame(
+  x = 1:12, y = rep(0, 12),
+  ethnicity = rep(c("a", "b", "c"), 4),
+  education = ordered(rep(c("primary", "secondary", "tertiary"), each=4),
+                      levels=c("primary", "secondary", "tertiary")),
+  income = c(0, 0, 10, 10, 20, 30, 40, 40, 50, 60, 80, 100),
+  age = c(18, 20, 20, 25, 30, 31, 35, 40, 45, 50, 60, 70)
+)
+variables <- list(
+  ethnicity = seg_categorical(values="ethnicity"),
+  education = seg_ordinal(values="education"),
+  income = seg_continuous(values="income"),
+  age = seg_continuous(values="age")
+)
+result <- spseg(people, coords=c("x", "y"), variables=variables,
+                measures="all", bands=c(2, 4), scope="multigroup")
+as.data.frame(result)
+```
+
+`seg_ordinal(values=...)` requires an ordered factor or explicit `levels`.
+`seg_grouped(values=..., levels=...)` describes membership in intervals hiding
+an underlying continuous variable. Supplied interval labels do not determine
+numerical spacing. `values` and `counts` are mutually exclusive.
+
+```{r aggregates}
+blocks <- data.frame(x=1:4, y=0,
+                     low=c(8, 4, 2, 1), middle=c(1, 3, 5, 2), high=c(1, 3, 3, 7))
+aggregate_result <- spseg(
+  blocks, coords=c("x", "y"),
+  variables=list(
+    education=seg_ordinal(counts=c("low", "middle", "high")),
+    income=seg_grouped(counts=c("low", "middle", "high")),
+    exact_age=seg_continuous(counts=c("low", "middle", "high"), scores=c(20, 40, 60))
+  ), bands=c(0, 2), measures=c("information", "diversity", "square_root", "dissimilarity")
+)
+as.data.frame(aggregate_result)
+```
+
+The three specifications in this example make different claims about the
+*same count table*: ordered categories, unobserved continuous intervals, or
+exact values. A single area mean does not recover its residents' distribution.
+Exact-value count input is never expanded into individual records.
+
+Each specification can override `measures`. The common selectors are
+`"information"`, `"diversity"`, `"dissimilarity"`, `"square_root"`, and `"exposure"`.
+`"relative_diversity"` and `"variance_ratio"` are aliases for the diversity
+family; the nominal measure is specifically relative diversity, not the other
+multigroup indices that share its binary reduction. New-interface `"all"`
+includes all five families. Legacy `spseg(coords, counts, measures="all")`
+retains its previous selection; request `"square_root"` explicitly to add it.
+`scope` controls categorical multigroup/pairwise calculations. Ordered
+summaries are computed across cumulative thresholds, not all pairs of slices.
+
+# Population and spatial contributions
+
+Let $m_{iv}$ be the eligible population for variable $v$ at support point $i$.
+Index averaging weights are $\alpha_{iv}=m_{iv}/\sum_i m_{iv}$.
+Counts supply this mass through their row totals. Observed values use a
+specification's `weights`, otherwise the common `population`, otherwise one
+per row. Missing values fail by default. `na.action="omit"` sets only that
+variable's eligible mass to zero for affected rows (entire count rows if any
+category is missing). Missing population weights are always invalid.
+
+The common `population` separately controls population-count kNN selection
+and population-based default distance bands. It can be inferred when count
+or weight totals agree; supply it when populations differ. For example,
+education among adults and ethnicity among residents can use the same
+resident-count neighborhood while retaining different index weights. Multiple
+marginal count tables need no joint cross-tabulation for these separate
+analyses; they cannot identify joint ethnicity-by-income outcomes.
+
+```{r knn}
+spseg(people, coords=c("x", "y"), variables=variables,
+      neighbors="knn", bands=c(3, 6), measures="information")
+```
+
+Let $\lambda_{ijb}$ combine the selected kernel and the population inclusion
+fraction for band $b$. Every variable uses the same contributions. Local
+category or value masses sum $\lambda_{ijb}$ times the source mass, then
+normalize to shares. This weights people, rather than averaging unit shares
+without accounting for population.
+
+kNN includes the focal support unit fully, even if its population exceeds the
+threshold. It adds other units by distance and includes the final unit
+fractionally. Equidistant units are ordered by row index, with the focal unit
+first. This geographic convention is separate from ties in the attribute.
+Radius zero includes all coincident support points, matching the existing
+radius-search implementation; with distinct support points it uses the focal
+unit's distribution. Individual-level radius zero need not describe a
+substantively useful neighborhood.
+
+# Measure definitions and provenance
+
+The nominal baseline is @reardon2002, with the spatial environment framework
+of @reardon2004. The ordered baseline is @reardon2009 and @reardon2011.
+The formulas below specify the package's conventions, including supplements.
+
+## Categorical variables
+
+Write $p_{ig}$ for local shares, $P_g$ for regional shares, and
+$I(P)=\sum_g P_g(1-P_g)$, $E(P)=-\sum_g P_g\log P_g$.
+
+\[
+H=1-\frac{\sum_i\alpha_i E(p_i)}{E(P)},\qquad
+R=1-\frac{\sum_i\alpha_i I(p_i)}{I(P)},\qquad
+D=\frac{\sum_i\alpha_i\sum_g|p_{ig}-P_g|}{2I(P)}.
+\]
+
+These are Reardon and Firebaugh's information theory, relative diversity,
+and dissimilarity formulations. They reduce to the standard binary measures.
+Relative diversity reduces to the binary variance ratio, but is distinct from
+the other multigroup indices with that same binary reduction.
+
+The categorical root supplement is the symmetric multigroup Atkinson index
+in the normalization of @frankel2011. For nonoverlapping units,
+
+\[
+A_K=1-\sum_i\left(\prod_{g=1}^K\frac{n_{ig}}{N_g}\right)^{1/K}.
+\]
+
+For spatial environments the package explicitly uses
+$1-\sum_i\alpha_i\operatorname{GM}(p_i)/\operatorname{GM}(P)$ over globally
+nonempty groups. This equals the displayed index for nonoverlapping units.
+With two groups it is Hutchens' square-root index [@hutchens2004]; with more
+groups its root degree is the number of globally nonempty groups. It can
+equal one whenever each local environment lacks at least one group, even
+when environments contain mixtures of the remaining groups. Changing group
+definitions can change this index. It is not an average of pairwise indices.
+Globally empty categories remain visible in shares and exposure output but
+are excluded from the geometric mean; their pairwise comparisons are undefined.
+
+## Ordinal variables
+
+Write $C_{ik}$ and $Q_k$ for local and global cumulative proportions through
+category $k$. For information, diversity, and root respectively, use
+
+\[
+f_H(p)=-p\log p-(1-p)\log(1-p),\quad
+f_R(p)=p(1-p),\quad f_S(p)=2\sqrt{p(1-p)}.
+\]
+
+The measure is $1-\sum_i\alpha_i V_i/V$, where
+$V_i=\sum_{k=1}^{K-1}f(C_{ik})$ and $V=\sum_{k=1}^{K-1}f(Q_k)$.
+Multiplicative variation constants and log bases cancel. These are Reardon's
+ordinal $H^O$, $R^O$, and $S^O$ [@reardon2009]. Here "variance ratio" is the
+traditional family name; it is not a variance decomposition of arbitrary
+numerical category codes.
+
+Our **ordinal dissimilarity supplement** is
+
+\[
+D_O=\frac{\sum_i\alpha_i\sum_k|C_{ik}-Q_k|}
+           {2\sum_k Q_k(1-Q_k)}.
+\]
+
+For nonoverlapping units this is the average of ordinary binary dissimilarity
+over cumulative thresholds, weighted proportionally to $Q_k(1-Q_k)$. With
+two categories it equals ordinary binary dissimilarity. It is not Reardon's
+rejected ordinal absolute-difference index based on $1-|2p-1|$.
+
+## Continuous variables: grouped and observed
+
+In the continuous population formulation, global percentile $q$ is uniform;
+$G_i(q)$ is the local proportion at or below that global percentile. Reardon's
+rank-order $H^R,R^R,S^R$ compare integrated local variation
+$\int_0^1 f(G_i(q))\,dq$ with global variation $\int_0^1 f(q)\,dq$
+[@reardon2011]. The respective global denominators, with the functions above,
+are $1/2$, $1/6$, and $\pi/4$. All ordered root calculations remain square
+roots because their thresholds define binary comparisons.
+
+For **grouped continuous input**, regional interval totals define common
+percentile knots $(0,Q_1,\ldots,Q_K=1)$. Local cumulative shares define CDFs
+at these knots. The package interpolates local CDFs linearly *in global
+percentile space* and integrates each segment analytically (with stable
+narrow-segment limits). It does not assume uniform dollar values, require a
+finite top-coded income endpoint, or fit Reardon's polynomial segregation
+curve. It assumes no further within-interval sorting conditional on the
+reported interval. The estimator is exact under that interpolation convention,
+not necessarily identical to Reardon's estimator or a bound on latent sorting.
+Proportional subdivision preserves the interpolant; general rebinning need not.
+
+For **observed continuous input**, sort distinct exact values globally. A
+value with overall mass share $\pi_l$ receives the weighted midrank
+$z_l=\sum_{r<l}\pi_r+\pi_l/2$. Use the local and global discrete CDFs
+$F_i(z),F(z)$ of these same global scores. Set
+
+\[
+V_i=\int_0^1 f(F_i(z))\,dz,\qquad
+V=\int_0^1 f(F(z))\,dz,\qquad S_f=1-\frac{\sum_i\alpha_i V_i}{V}.
+\]
+
+This is the package's **empirical weighted-midrank extension**, for both tied
+and untied data, rather than a claim that Reardon uniquely specifies finite
+sample treatment. With equally weighted distinct observations it integrates
+empirical threshold variation using rank spacing $1/n$. Ties stay together;
+there is no jitter, random tie breaking, or RNG consumption. The denominator
+is empirical, not the continuous constant. Exact-value count input uses the
+same convention and agrees with equivalent weighted individual records.
+Rounded or censored values do not identify their unobserved within-value ranks;
+choose a grouped interpretation when that is the intended model.
+
+Our **rank-order dissimilarity supplement** is
+
+\[
+D_R=\frac{\sum_i\alpha_i\int_0^1|F_i(z)-F(z)|\,dz}
+           {2\int_0^1 F(z)(1-F(z))\,dz}.
+\]
+
+For grouped interpolation, the global CDF is $F(q)=q$, and this becomes
+$3\sum_i\alpha_i\int_0^1|G_i(q)-q|\,dq$. For empirical input, use the
+actual overall empirical CDF and denominator. In nonoverlapping continuous
+populations it is the average of threshold binary dissimilarity weighted by
+$6q(1-q)$. This is an explicitly specified supplement, not attributed to
+Reardon and not a claim of priority over other distance-based indices.
+
+The dissimilarity supplements preserve a limitation of binary dissimilarity:
+some equalizing exchanges leave the result unchanged. For example, with three
+equally populated units, changing below-threshold shares from $(.8,.6,.1)$ to
+$(.7,.7,.1)$ leaves dissimilarity at $8/15$. Integration need not remove such
+insensitivity. Do not claim Reardon's strict exchange properties for them.
+
+The algorithms integrate CDFs directly: no separate binary datasets,
+polynomial fitting, or all-pairs rank-difference matrices are constructed.
+Observed-value environments stay sparse. Empirical dissimilarity uses prefix
+integrals of the overall CDF, avoiding a full regional scan per neighborhood.
+
+# Exposure and isolation
+
+Exposure is **unnormalized**, following the local-composition interpretation
+of @reardon2004. For focal group $a$ and target group $b$,
+$P^*_{ab}=\sum_i(n_{ia}/N_a)p_{ib}$. Diagonals describe isolation;
+off-diagonals describe exposure to other groups. This is distinct from the
+normalized exposure index also denoted $P$ in @reardon2002.
+
+Categorical and ordinal variables use their supplied categories. Grouped
+continuous variables use the supplied intervals directly, without CDF
+interpolation. Observed continuous variables use global weighted deciles by
+default. Alternative `probs` must increase from zero to one; `breaks` must
+increase and cover the observed values. Cuts use right-closed intervals with
+the lowest boundary included. Quantile cut values are weighted inverse-CDF
+quantiles, with equal values kept together and empty exposure groups removed.
+Requested cuts, value boundaries, retained labels, and achieved shares are
+stored in `definition$exposure`. Group membership is reused across bands.
+
+```{r exposure}
+custom <- spseg(people, coords=c("x", "y"), bands=3,
+  variables=list(income=seg_continuous(values="income",
+    exposure=list(probs=c(0, .2, .8, 1)))), measures=c("information", "exposure"))
+custom$analyses$income$definition$exposure
+as.data.frame(custom, what="exposure")
+```
+
+These exposure cuts do not coarsen the continuous segregation indices.
+
+# Results, properties, and compatibility
+
+`result$analyses[[name]]` contains scalar and optional categorical pairwise
+indices, exposure matrices, method metadata, actual normalizers, and per-band
+status. `as.data.frame()` adds variable type and method to each result.
+`output="full"` or `"localenv"` stores category-share matrices or sparse
+continuous distributions. Use `as.data.frame(result, what="env")` or
+`sf::st_as_sf(result)` to obtain long local-distribution tables.
+
+An exact constant variable has undefined scalar indices (`NA`, status
+`"constant"`), but its exposure can be one. A single populated *interval*
+still represents unobserved within-interval variation under interpolation;
+its rank-order indices are zero rather than an observed-constant assertion.
+Positive-mass focal units with no eligible local population give
+`"empty_environment"` and undefined band results. Empty focal exposure groups
+have undefined rows. Values are not clamped: for overlapping spatial
+environments, the population-weighted mixture of local CDFs need not equal
+the regional CDF. Variation ratios can be negative, and bounds/proofs based
+on nonoverlapping partitions must not be assumed for every spatial analogue.
+
+The new interface currently supports `surface="raw"`. Legacy grid and
+pycnophylactic calls retain their existing behavior. Mixed-variable surfaces
+need coherent population surfaces across marginals and will be validated
+separately. No fixed-geometry cache, grouping argument, or internal parallelism
+is introduced.
+
+# References

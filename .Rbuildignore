@@ -4,3 +4,4 @@
 ^\.claude$
 ^[.]?air[.]toml$
 ^\.vscode$
+^references$
