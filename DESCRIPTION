@@ -27,6 +27,6 @@ Description: Measuring spatial segregation for categorical, ordinal,
         <doi:10.1111/j.0081-1750.2004.00150.x>, and Reardon (2009)
         <doi:10.1108/S1049-2585(2009)0000017011>.
 License: GPL (>= 3)
-URL: https://github.com/bfjarvis/seg
+URL: https://github.com/bfjarvis/spseg
 NeedsCompilation: yes
 Config/roxygen2/version: 8.0.0
