@@ -11,9 +11,10 @@
 #'   levels or sorted distinct values are used when this is omitted.
 #' @param measures Optional measure selection overriding [spseg()].
 #' @param weights Population-weight column or numeric vector for `values`.
-#'   Defaults to the common `population` supplied to [spseg()], or one per row.
+#'   Defaults to the `population` supplied to [spseg()], or its inferred default.
 #' @param na.action Missing-value policy: `"fail"` or `"omit"`. Omission applies
-#'   only to this variable, leaving the common neighborhood population intact.
+#'   only to this variable, including its kNN stopping population. Other
+#'   variables and radius bandwidths are unaffected.
 #' @param interpolation Grouped continuous CDF interpolation, currently `"linear"`
 #'   in overall percentile space, not in the original measurement units.
 #' @param scores Exact numerical values corresponding to continuous count
@@ -272,6 +273,7 @@ seg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
        flags = as.integer(c("exposure", "information", "diversity", "dissimilarity",
                             "square_root") %in% selected),
        metadata = list(type = spec$type, method = method, measures = selected,
+                       eligible_population = total,
                        labels = labels, shares = shares, scores = scores,
                        ties = if (type == 3L) "weighted_midrank" else NULL,
                        na.action = spec$na.action,

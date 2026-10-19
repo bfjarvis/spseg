@@ -7,6 +7,10 @@
 #' continuous environments are sparse lists of exact values, global midranks,
 #' and local population shares. Inputs and environments are omitted in the
 #' default `output = "indices"` mode.
+#' Each definition records its `eligible_population`. For kNN, each analysis
+#' also contains a `knn` table: requested population, minimum/maximum selected
+#' population before distance weighting, and minimum/maximum neighborhood
+#' radius, by band across focal rows with positive eligible population.
 #'
 #' @param x A `seg_multi_result`.
 #' @param variables Optional names of analyses to extract.

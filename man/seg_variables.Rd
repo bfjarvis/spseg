@@ -58,10 +58,11 @@ levels or sorted distinct values are used when this is omitted.}
 \item{measures}{Optional measure selection overriding [spseg()].}
 
 \item{weights}{Population-weight column or numeric vector for `values`.
-Defaults to the common `population` supplied to [spseg()], or one per row.}
+Defaults to the `population` supplied to [spseg()], or its inferred default.}
 
 \item{na.action}{Missing-value policy: `"fail"` or `"omit"`. Omission applies
-only to this variable, leaving the common neighborhood population intact.}
+only to this variable, including its kNN stopping population. Other
+variables and radius bandwidths are unaffected.}
 
 \item{interpolation}{Grouped continuous CDF interpolation, currently `"linear"`
 in overall percentile space, not in the original measurement units.}

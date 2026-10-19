@@ -91,6 +91,8 @@ struct Model {
   List environments;
   bool keep_env, indices, multigroup, pairwise, legacy_env;
   std::vector<bool> empty;
+  NumericVector knn_target, knn_min, knn_max, radius_min, radius_max;
+  bool has_knn = false;
 
   Model(List config, int n, int b, bool store, bool calculate, bool multi, bool pair)
     : type(as<int>(config["type"])), bands(b),
@@ -102,7 +104,9 @@ struct Model {
       accum(b,5,arma::fill::zeros), environments(store ? b : 0),
       keep_env(store), indices(calculate), multigroup(multi || type!=0),
       pairwise(pair && type==0), legacy_env(config.containsElementNamed("legacy_env") &&
-        as<bool>(config["legacy_env"])), empty(b,false)
+        as<bool>(config["legacy_env"])), empty(b,false),
+      knn_target(b), knn_min(b,R_PosInf), knn_max(b,0.0),
+      radius_min(b,R_PosInf), radius_max(b,0.0)
   {
     k=shares.size(); groups=labels.size();
     total=std::accumulate(mass.begin(),mass.end(),0.0);
@@ -174,6 +178,14 @@ struct Model {
   }
 
   void update(int i,int band,const Contributions& c) {
+    if(c.knn && mass[i]>0) {
+      has_knn=true;
+      knn_target[band]=c.target;
+      knn_min[band]=std::min(knn_min[band],c.population);
+      knn_max[band]=std::max(knn_max[band],c.population);
+      radius_min[band]=std::min(radius_min[band],c.radius);
+      radius_max[band]=std::max(radius_max[band],c.radius);
+    }
     std::vector<double> p;
     std::vector<std::pair<int,double>> sparse;
     double local=0;
@@ -333,10 +345,15 @@ struct Model {
     }
     List refs=List::create(_["information"]=reference[1],_["diversity"]=reference[2],
                           _["dissimilarity"]=reference[3],_["square_root"]=reference[4]);
+    List knn_summary;
+    if(has_knn) knn_summary=List::create(_["requested"]=knn_target,
+      _["min_population"]=knn_min,_["max_population"]=knn_max,
+      _["min_radius"]=radius_min,_["max_radius"]=radius_max);
     return List::create(_["indices"]=List::create(_["multigroup"]=multigroup,
                         _["pairwise"]=pairwise_out),
                         _["env"]=keep_env ? static_cast<SEXP>(environments) : R_NilValue,
-                        _["status"]=status,_["normalizers"]=refs);
+                        _["status"]=status,_["normalizers"]=refs,
+                        _["knn"]=has_knn ? static_cast<SEXP>(knn_summary) : R_NilValue);
   }
 };
 } // namespace
@@ -355,12 +372,38 @@ List seg_multi_cpp(NumericMatrix coords, NumericVector population, List variable
   std::vector<std::unique_ptr<Model>> models;
   for(int v=0;v<variables.size();++v)
     models.emplace_back(new Model(as<List>(variables[v]),n,B,keep_env,keep_indices,scope[0],scope[1]));
+  const bool variable_knn = neighbors==1 && !models[0]->legacy_env;
+  // Identical eligible populations share both the stopping rule and kernels.
+  // Views refer to Model-owned R vectors; no n-by-variable copy is needed.
+  std::vector<const double*> eligible;
+  std::vector<std::vector<int>> members;
+  if(variable_knn) for(int v=0;v<int(models.size());++v) {
+    const double* p=models[v]->mass.begin();
+    std::size_t group=0;
+    while(group<eligible.size() && !std::equal(p,p+n,eligible[group])) ++group;
+    if(group==eligible.size()) { eligible.push_back(p); members.emplace_back(); }
+    members[group].push_back(v);
+  }
   int focal_searches=0;
   for(int i=0;i<n;++i) {
     if(i%256==0) checkUserInterrupt();
-    const auto candidates=discover_neighbors(tree.get(),i,X,Y,pop,largest,neighbors==1);
+    const auto candidates=variable_knn ?
+      variable_knn_neighbors(tree.get(),i,X,Y,eligible,largest) :
+      discover_neighbors(tree.get(),i,X,Y,pop,largest,neighbors==1);
     ++focal_searches;
     for(int b=0;b<B;++b) {
+      if(variable_knn) {
+        for(std::size_t g=0;g<eligible.size();++g) {
+          arma::vec mass(const_cast<double*>(eligible[g]),n,false);
+          const Contributions c=knn_contributions(candidates,mass,bands[b],power,
+                                                  weighting,normalize,true);
+          if(std::abs(c.population-bands[b]) >
+             64*std::numeric_limits<double>::epsilon()*bands[b])
+            stop("Could not reach the requested eligible population at focal row %d",i+1);
+          for(int v:members[g]) models[v]->update(i,b,c);
+        }
+        continue;
+      }
       const Contributions c=neighbors==1 ? knn_contributions(candidates,pop,bands[b],power,
           weighting,normalize) : radius_contributions(candidates,bands[b],power,weighting,normalize);
       for(auto& model:models) model->update(i,b,c);

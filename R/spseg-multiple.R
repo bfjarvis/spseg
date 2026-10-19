@@ -69,6 +69,7 @@
     metadata$labels <- metadata$scores <- metadata$shares <- NULL
   }
   result$definition <- metadata
+  if (!is.null(result$knn)) result$knn <- data.frame(band = bands, result$knn)
   names(result$status) <- as.character(bands)
   result
 }
@@ -97,8 +98,10 @@
   if (!is.logical(normalize) || length(normalize) != 1L || is.na(normalize))
     stop("'normalize' must be TRUE or FALSE", call. = FALSE)
   checked <- .seg_geometry(x, data, coords)
-  population <- .seg_population(population, variables, checked$data)
-  if (!is.finite(sum(population)) || sum(population) <= 0)
+  population <- if (neighbors == "knn") {
+    .seg_mass(population, checked$data, nrow(checked$data))
+  } else .seg_population(population, variables, checked$data)
+  if (neighbors == "radius" && (!is.finite(sum(population)) || sum(population) <= 0))
     stop("The common population total must be positive and finite", call. = FALSE)
   compiled <- lapply(variables, .seg_compile, data = checked$data,
                      population = population, measures = measures)
@@ -110,6 +113,18 @@
       any(bands < 0) || (neighbors == "knn" && any(bands <= 0)))
     stop("Supply finite nonnegative radius bands or positive population-count kNN bands",
          call. = FALSE)
+  if (neighbors == "knn") {
+    for (name in names(compiled)) {
+      available <- sum(compiled[[name]]$mass)
+      # Allow accumulated rounding of fractional weights in R's sum; the
+      # native selector separately verifies the population actually selected.
+      tolerance <- (length(compiled[[name]]$mass) + 16) *
+        .Machine$double.eps * max(bands)
+      if (max(bands) > available + tolerance)
+        stop("Variable '", name, "' has eligible population ", format(available),
+             ", below the requested kNN threshold ", format(max(bands)), call. = FALSE)
+    }
+  }
   if (verbose) message("Calculating ", length(compiled), " variables with shared neighborhood searches")
   engine <- seg_multi_cpp(checked$coords, population, compiled, as.numeric(bands),
                          power, spseg_weighting_id(weighting), normalize,
@@ -128,6 +143,7 @@
                  normalize = normalize, surface = surface, output = output,
                  neighbors = list(type = neighbors, values = bands,
                                   units = if (neighbors == "knn") "population" else "distance",
+                                  population = if (neighbors == "knn") "variable" else NULL,
                                   engine = search, scope = scope),
                  diagnostics = engine$diagnostics, call = call)
   class(result) <- c("seg_multi_result", "seg_result")

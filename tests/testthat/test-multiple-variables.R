@@ -254,3 +254,123 @@ test_that("populations, omissions, constants, and invalid specifications are exp
   env <- spseg(d,coords=c("x","y"),population="pop",variables=variables,bands=2,output="localenv")
   expect_error(as.data.frame(env),"not calculated")
 })
+
+test_that("kNN reaches 100 eligible people rather than stopping at 100 residents", {
+  d <- data.frame(x=seq_len(140), y=0, race=rep(c("a","b"),70),
+                  income=as.numeric(seq_len(140)))
+  d$income[89:100] <- NA_real_
+  variables <- list(race=seg_categorical(values="race"),
+                    income=seg_continuous(values="income",na.action="omit"))
+  r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
+             bands=100,weighting="unweighted",scope="multigroup",output="full")
+  expected <- c(1:88,101:112)
+  expect_equal(r$analyses$income$env[[1]][[1]]$value,expected)
+  expect_equal(r$analyses$income$env[[1]][[1]]$share,rep(.01,100))
+  for (name in names(variables)) {
+    expect_equal(r$analyses[[name]]$knn$min_population,100)
+    expect_equal(r$analyses[[name]]$knn$max_population,100)
+  }
+  adults <- d[!is.na(d$income),]
+  income_only <- spseg(adults,coords=c("x","y"),neighbors="knn",bands=100,
+                       variables=list(income=seg_continuous(values="income")),
+                       weighting="unweighted",scope="multigroup")
+  expect_equal(r$analyses$income$indices,income_only$analyses$income$indices,
+               tolerance=1e-12)
+  expect_equal(r$diagnostics$focal_searches,nrow(d))
+  expect_identical(r$neighbors$population,"variable")
+})
+
+test_that("aggregate kNN populations and boundary fractions are variable-specific", {
+  d <- data.frame(x=c(0,1,3,5,9),y=0,
+                  race_a=c(4,10,9,12,15),race_b=c(6,10,31,8,25),
+                  income_low=c(0,4,2,8,6),income_high=c(0,6,2,16,4))
+  vars <- list(race=seg_categorical(counts=c("race_a","race_b")),
+                income=seg_grouped(counts=c("income_low","income_high")))
+  for (kernel in c("unweighted","biweight","inverse","exponential")) {
+    r <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=c(7,20),
+               weighting=kernel,output="full")
+    for (name in names(vars)) {
+      alone <- spseg(d,coords=c("x","y"),variables=vars[name],neighbors="knn",
+                     bands=c(7,20),weighting=kernel,output="full")
+      expect_equal(r$analyses[[name]],alone$analyses[[name]],tolerance=1e-12)
+      expect_equal(r$analyses[[name]]$knn$min_population,c(7,20),tolerance=1e-12)
+      expect_equal(r$analyses[[name]]$knn$max_population,c(7,20),tolerance=1e-12)
+    }
+    brute <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=c(7,20),
+                   weighting=kernel,output="full",search="brute")
+    expect_equal(r$analyses,brute$analyses,tolerance=1e-12)
+    if (kernel=="unweighted") {
+      # At location 1, race selects its 10 residents plus half of location 2;
+      # income skips location 1 and selects 10 + 4 + 6 eligible people.
+      expect_equal(unname(r$analyses$race$env[[2]][1,]),c(9,11)/20)
+      expect_equal(unname(r$analyses$income$env[[2]][1,]),c(8,12)/20)
+    }
+    expect_equal(r$diagnostics$focal_searches,nrow(d))
+  }
+})
+
+test_that("kNN reports unattainable eligible thresholds and audits exact focal truncation", {
+  d <- data.frame(x=1:3,y=0,race_a=c(40,20,30),race_b=c(60,30,20),
+                  income=c(1,NA,2))
+  expect_error(spseg(d,coords=c("x","y"),neighbors="knn",bands=100,
+    variables=list(race=seg_categorical(counts=c("race_a","race_b")),
+                   income=seg_continuous(values="income",na.action="omit"))),
+    "Variable 'income'.*population 2.*threshold 100")
+  r <- spseg(d,coords=c("x","y"),neighbors="knn",bands=10,output="full",
+    variables=list(race=seg_categorical(counts=c("race_a","race_b"))))
+  expect_equal(r$analyses$race$knn$min_population,10)
+  expect_equal(r$analyses$race$knn$max_population,10)
+  expect_equal(r$analyses$race$knn$max_radius,0)
+  expect_equal(unname(r$analyses$race$env[[1]][1,]),c(.4,.6))
+  fractional <- data.frame(x=1:2000,y=0,a=.04,b=.06)
+  r <- spseg(fractional,coords=c("x","y"),neighbors="knn",bands=200,
+              variables=list(g=seg_categorical(counts=c("a","b"))))
+  expect_equal(r$analyses$g$knn$min_population,200,tolerance=1e-12)
+  expect_equal(r$analyses$g$knn$max_population,200,tolerance=1e-12)
+})
+
+test_that("shared candidate discovery includes distance ties across query boundaries", {
+  d <- data.frame(x=rep(0,80),y=0,race=rep(c("a","b"),40),income=as.numeric(1:80))
+  d$income[seq(3,80,3)] <- NA_real_
+  vars <- list(race=seg_categorical(values="race"),
+                income=seg_continuous(values="income",na.action="omit"))
+  kd <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=5,output="full")
+  brute <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=5,
+                 output="full",search="brute")
+  expect_equal(kd$analyses,brute$analyses,tolerance=1e-12)
+})
+
+test_that("fractional kNN boundaries do not expand the kernel radius through rounding", {
+  xy <- cbind(x=0:2,y=0)
+  counts <- cbind(a=c(1,0,2),b=c(0,3,4))
+  legacy <- spseg(xy,counts,neighbors="knn",bands=3,
+                   weighting="exponential",output="full")
+  # Location 1 selects itself and 2/3 of location 2, with radius 1.
+  expected <- c(1,2*exp(-1/(1+sqrt(.Machine$double.eps))))
+  expect_equal(unname(legacy$env[[1]][1,]),expected,tolerance=1e-12)
+  d <- data.frame(xy,counts)
+  multi <- spseg(d,coords=c("x","y"),neighbors="knn",bands=3,
+                  weighting="exponential",output="full",
+                  variables=list(g=seg_categorical(counts=c("a","b"))))
+  expect_equal(unname(multi$analyses$g$env[[1]][1,]),expected/sum(expected),
+               tolerance=1e-12)
+})
+
+test_that("shared kNN radius expansion retains nonzero-distance boundary candidates", {
+  set.seed(707)
+  n <- 1000L
+  d <- data.frame(x=runif(n),y=runif(n),race=sample(letters[1:3],n,TRUE),
+                  income=rnorm(n))
+  d$income[seq(1,n,4)] <- NA_real_
+  variables <- list(race=seg_categorical(values="race"),
+                    income=seg_continuous(values="income",na.action="omit"))
+  r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
+             bands=100,measures="information",scope="multigroup")
+  brute <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
+                 bands=100,measures="information",scope="multigroup",search="brute")
+  expect_equal(r$analyses,brute$analyses,tolerance=1e-12)
+  for (analysis in r$analyses) {
+    expect_equal(analysis$knn$min_population,100)
+    expect_equal(analysis$knn$max_population,100)
+  }
+})

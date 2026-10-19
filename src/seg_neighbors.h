@@ -149,6 +149,22 @@ struct Contributions {
   std::vector<int> ids;
   std::vector<double> weights;
   double scale = 1.0;
+  bool knn = false;
+  double target = 0.0;
+  double population = 0.0;
+  double radius = 0.0;
+};
+
+// Compensate accumulation even on platforms where long double is double.
+// Fractional population weights must not create spurious kNN shortfalls.
+struct PopulationSum {
+  long double sum = 0.0L, correction = 0.0L;
+  void add(long double value) {
+    const long double adjusted = value - correction;
+    const long double next = sum + adjusted;
+    correction = (next - sum) - adjusted;
+    sum = next;
+  }
 };
 
 // Scale preserves legacy radius-environment counts; it cancels from shares.
@@ -182,38 +198,121 @@ inline Contributions radius_contributions(const std::vector<Neighbor>& neighbors
 
 inline Contributions knn_contributions(const std::vector<Neighbor>& neighbors,
     const arma::vec& population, double threshold, double power,
-    int weighting, bool normalized)
+    int weighting, bool normalized, bool exact_focal = false)
 {
   Contributions out;
+  out.knn = true;
+  out.target = threshold;
   if (neighbors.empty()) return out;
   const int focal = neighbors[0].id;
+  const double focal_fraction = exact_focal ?
+    (population[focal] > 0.0 ? std::min(1.0, threshold / population[focal]) : 0.0) : 1.0;
   out.ids.push_back(focal);
-  out.weights.push_back(1.0);
-  double remaining = threshold - population[focal];
-  if (remaining <= 0.0) return out;
-  double farthest = 0.0, tolerance = 0.0;
-  for (std::size_t q = 1; q < neighbors.size() && remaining > 0.0; ++q) {
+  out.weights.push_back(focal_fraction);
+  out.population = focal_fraction * population[focal];
+  double remaining = threshold - out.population;
+  PopulationSum selected;
+  selected.add(static_cast<long double>(focal_fraction) * population[focal]);
+  long double exact_remaining = static_cast<long double>(threshold) - selected.sum;
+  const double tolerance = exact_focal ?
+    16 * std::numeric_limits<double>::epsilon() * threshold : 0.0;
+  if ((exact_focal ? exact_remaining : remaining) <= tolerance) return out;
+  double farthest = 0.0;
+  double local_tolerance = 0.0;
+  for (std::size_t q = 1; q < neighbors.size() &&
+       (exact_focal ? exact_remaining : remaining) > tolerance; ++q) {
     const Neighbor& nb = neighbors[q];
     if (population[nb.id] <= 0.0) continue;
-    const double fraction = std::min(1.0, remaining / population[nb.id]);
+    const bool boundary = population[nb.id] >=
+      (exact_focal ? exact_remaining : remaining);
+    const double fraction = exact_focal ?
+      static_cast<double>(std::min(1.0L, exact_remaining / population[nb.id])) :
+      std::min(1.0, remaining / population[nb.id]);
     farthest = std::max(farthest, nb.d);
-    if (nb.d > 0.0 && (tolerance <= 0.0 || nb.d < tolerance)) tolerance = nb.d;
+    if (nb.d > 0.0 && (local_tolerance <= 0.0 || nb.d < local_tolerance))
+      local_tolerance = nb.d;
     out.ids.push_back(nb.id);
     out.weights.push_back(fraction);
-    remaining -= fraction * population[nb.id];
+    out.population += fraction * population[nb.id];
+    // A fused multiply/subtract may leave a tiny positive remainder after a
+    // fractional boundary. Stop explicitly rather than expanding the radius.
+    remaining = boundary ? 0.0 : remaining - fraction * population[nb.id];
+    if (exact_focal) {
+      selected.add(static_cast<long double>(fraction) * population[nb.id]);
+      exact_remaining = static_cast<long double>(threshold) - selected.sum;
+    }
   }
+  if (exact_focal) out.population = static_cast<double>(threshold - exact_remaining);
+  out.radius = farthest;
   const double bw = normalized && farthest > 0.0 ?
     farthest * (1.0 + std::sqrt(std::numeric_limits<double>::epsilon())) : 1.0;
-  tolerance = tolerance > 0.0 ? tolerance / 2.0 : bw;
+  local_tolerance = local_tolerance > 0.0 ? local_tolerance / 2.0 : bw;
   // IDs are retained in the distance order, including skipped zero-mass units.
   std::size_t q = 1;
   for (std::size_t k = 1; k < out.ids.size(); ++k) {
     while (neighbors[q].id != out.ids[k]) ++q;
     double d = neighbors[q].d;
-    if (weighting == 2 && d == 0.0) d = tolerance;
+    if (weighting == 2 && d == 0.0) d = local_tolerance;
     out.weights[k] *= seg_weight(d, bw, power, weighting);
   }
   return out;
+}
+
+// One expanding candidate query serves every distinct eligible-population
+// vector. Include all ties at the stopping distance so row-ID ordering agrees
+// with brute force even when a tie straddles the tree's candidate boundary.
+inline std::vector<Neighbor> variable_knn_neighbors(const KDTree* tree, int i,
+    const arma::vec& x, const arma::vec& y,
+    const std::vector<const double*>& populations, double threshold)
+{
+  if (!tree) {
+    auto out = all_neighbors(i, x, y);
+    const auto focal = std::find_if(out.begin(), out.end(),
+      [i](const Neighbor& nb) { return nb.id == i; });
+    std::rotate(out.begin(), focal, focal + 1);
+    return out;
+  }
+  bool focal_sufficient = true;
+  for (const double* p : populations) if (p[i] < threshold) focal_sufficient = false;
+  if (focal_sufficient) return {{i, 0.0}};
+  const int n = x.n_elem;
+  const double query[2] = {x[i], y[i]};
+  int k = std::min(n, 32);
+  while (true) {
+    std::vector<size_t> ids(k);
+    std::vector<double> distances(k);
+    const size_t found = tree->knnSearch(query, k, ids.data(), distances.data());
+    std::vector<Neighbor> out = {{i, 0.0}};
+    for (size_t j = 0; j < found; ++j)
+      if (int(ids[j]) != i) out.push_back({int(ids[j]), std::sqrt(distances[j])});
+    std::sort(out.begin() + 1, out.end(), neighbor_distance_less);
+    std::vector<PopulationSum> cumulative(populations.size());
+    bool sufficient = false;
+    double stopping_distance = 0.0;
+    const double tolerance = 16 * std::numeric_limits<double>::epsilon() * threshold;
+    for (const Neighbor& nb : out) {
+      sufficient = true;
+      for (std::size_t g = 0; g < populations.size(); ++g) {
+        cumulative[g].add(populations[g][nb.id]);
+        if (cumulative[g].sum + tolerance < threshold) sufficient = false;
+      }
+      if (sufficient) { stopping_distance = nb.d; break; }
+    }
+    if (sufficient || k >= n) {
+      if (sufficient && k < n && out.back().d == stopping_distance) {
+        // radiusSearch uses a strict squared-distance bound. Inflate the
+        // distance before squaring too, so sqrt/square rounding cannot omit
+        // the boundary candidate already found by knnSearch.
+        out = radius_neighbors(*tree, i, x, y,
+          std::nextafter(stopping_distance, std::numeric_limits<double>::infinity()));
+        const auto focal = std::find_if(out.begin(), out.end(),
+          [i](const Neighbor& nb) { return nb.id == i; });
+        std::rotate(out.begin(), focal, focal + 1);
+      }
+      return out;
+    }
+    k = std::min(n, k * 2);
+  }
 }
 
 inline std::vector<Neighbor> discover_neighbors(const KDTree* tree, int i,

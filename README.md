@@ -25,6 +25,9 @@ spseg(
 For a plain data frame, add `coords = c("x", "y")`. For aggregate tables, use
 `counts` selectors; `seg_grouped()` describes continuous intervals, while
 `seg_continuous(counts = ..., scores = ...)` describes exact observed values.
+With `neighbors = "knn"`, each variable selects its own eligible population:
+`bands = 100` includes 100 eligible people before distance weighting, even
+when the variables cover different populations. Neighbor discovery is shared.
 
 See `vignette("seg-multiple-variables")` for definitions, sources, deterministic
 tie handling, population-count kNN neighborhoods, and exposure cuts. The

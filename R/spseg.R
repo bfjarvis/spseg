@@ -19,11 +19,12 @@
 #' for the focal unit.
 #'
 #' When `neighbors = "knn"`, `bands` is interpreted as population-count
-#' thresholds. The focal unit is included fully. If the focal unit's
-#' population exceeds a threshold, its observed composition is used for that
-#' threshold. Otherwise, neighboring units are added in order of centroid
-#' distance until the threshold is reached, with the final boundary unit
-#' included fractionally when needed.
+#' thresholds before distance weighting. With `variables`, each variable
+#' selects the requested eligible population, including the focal or final
+#' boundary unit fractionally when needed. Neighboring units are added in
+#' order of centroid distance. An unattainable threshold raises an error.
+#' Legacy calls without `variables` retain full focal-unit inclusion even
+#' when its population exceeds the threshold.
 #'
 #' Multigroup measures are stored in `result$indices$multigroup`. Pairwise
 #' measures, when requested, are stored in `result$indices$pairwise`.
@@ -92,8 +93,10 @@
 #'   stores local environments without calculating indices.
 #' @param verbose Logical. If `TRUE`, report progress messages.
 #' @param variables Optional uniquely named list of [seg_variables]
-#'   specifications. All variables share neighborhood searches and spatial
-#'   weights. The new interface supports `surface = "raw"`. The measure
+#'   specifications. All variables share neighborhood searches. kNN stopping
+#'   populations and distance weights are variable-specific; identical eligible
+#'   populations reuse their contributions. The new interface supports
+#'   `surface = "raw"`. The measure
 #'   `"square_root"` and aliases `"relative_diversity"`/`"variance_ratio"` are
 #'   available. With `variables`, `"all"` includes the root family; legacy
 #'   `"all"` retains its existing four-family selection. Each specification can
@@ -103,12 +106,14 @@
 #'   two coordinate column names or positions. For sf input, omit this argument
 #'   to use the active geometry. Distances are Euclidean in coordinate units;
 #'   use an appropriate projected CRS for metric bandwidths.
-#' @param population Common neighborhood population column or numeric vector
-#'   for the multiple-variable interface. Defaults to one per individual row,
-#'   or consistent count/weight totals. Supply it explicitly when variable
-#'   populations differ. Each variable retains its own eligible population for
-#'   index averaging and its reference distribution. kNN thresholds use this
-#'   common population, not a sum across variable specifications.
+#' @param population Default population-weight column or numeric vector for
+#'   observed-value specifications in the multiple-variable interface.
+#'   Descriptor `weights` override it; count specifications use their row totals.
+#'   kNN defaults to one per observed-value row and selects each variable's
+#'   own eligible population after omissions. For radius neighborhoods,
+#'   consistent count/weight totals can supply the default; specify this
+#'   reference population explicitly when those totals differ. It also controls
+#'   population-based default distance bands for radius neighborhoods.
 #' @param ... Additional population-surface options, such as `cellsize`,
 #'   `celldim`, `nrow`, `ncol`, `max_iter`, `converge`,
 #'   `surface_geometry`. Grid and pycnophylactic surfaces use

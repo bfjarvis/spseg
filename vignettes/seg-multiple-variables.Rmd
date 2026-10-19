@@ -90,29 +90,51 @@ per row. Missing values fail by default. `na.action="omit"` sets only that
 variable's eligible mass to zero for affected rows (entire count rows if any
 category is missing). Missing population weights are always invalid.
 
-The common `population` separately controls population-count kNN selection
-and population-based default distance bands. It can be inferred when count
-or weight totals agree; supply it when populations differ. For example,
-education among adults and ethnicity among residents can use the same
-resident-count neighborhood while retaining different index weights. Multiple
-marginal count tables need no joint cross-tabulation for these separate
-analyses; they cannot identify joint ethnicity-by-income outcomes.
+For kNN, each variable uses its own eligible population for neighbor selection.
+An ethnicity neighborhood of 100 residents and an income neighborhood of 100
+adults can therefore have different radii. `population` supplies default
+weights for observed values; descriptor `weights` override it, and count
+specifications always use their own row totals. With no supplied weights,
+kNN observed-value rows each represent one person. For radius neighborhoods,
+the reference `population` also controls population-based default distance
+bands. It can be inferred when count or weight totals agree; supply it when
+those totals differ. Multiple marginal count tables need no joint
+cross-tabulation for these separate analyses; they cannot identify joint
+ethnicity-by-income outcomes.
 
 ```{r knn}
 spseg(people, coords=c("x", "y"), variables=variables,
       neighbors="knn", bands=c(3, 6), measures="information")
 ```
 
-Let $\lambda_{ijb}$ combine the selected kernel and the population inclusion
-fraction for band $b$. Every variable uses the same contributions. Local
-category or value masses sum $\lambda_{ijb}$ times the source mass, then
+Let $\lambda_{ijbv}$ combine the selected kernel and the population inclusion
+fraction for band $b$ and variable $v$. Radius contributions are shared across
+variables; kNN contributions are shared when eligible populations coincide.
+Local category or value masses sum $\lambda_{ijbv}$ times the source mass, then
 normalize to shares. This weights people, rather than averaging unit shares
 without accounting for population.
 
-kNN includes the focal support unit fully, even if its population exceeds the
-threshold. It adds other units by distance and includes the final unit
-fractionally. Equidistant units are ordered by row index, with the focal unit
-first. This geographic convention is separate from ties in the attribute.
+kNN selects exactly the requested eligible population **before distance
+weighting**, to numerical precision. It includes the focal support unit first,
+fractionally if its population exceeds the threshold, then adds other units
+by distance and includes the final unit fractionally. Kernel weighting can
+reduce the resulting effective population; normalized kernel distances use
+each variable's selected radius. An error identifies any variable whose
+total eligible population is below the requested threshold. The shared
+candidate search expands until all variable populations can reach the largest
+threshold; variables with identical populations also reuse contributions.
+Legacy calls without `variables` retain full focal-unit inclusion.
+
+Each analysis's `knn` table records the requested population and the minimum
+and maximum selected population and radius across eligible focal rows. For
+example, `result$analyses$income$knn` audits the income neighborhoods after a
+kNN call. Categorical `scope="pairwise"` compares groups within the variable's
+selected neighborhoods; it does not select a new neighborhood for every pair.
+To select 100 members of a particular pair, supply a separate categorical
+specification with only those two count columns.
+
+Equidistant units are ordered by row index, with the focal unit first. This
+geographic convention is separate from ties in the attribute.
 Radius zero includes all coincident support points, matching the existing
 radius-search implementation; with distinct support points it uses the focal
 unit's distribution. Individual-level radius zero need not describe a
