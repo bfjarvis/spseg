@@ -12,8 +12,8 @@
     source <- if (is.null(data)) as.data.frame(x) else as.data.frame(data)
     if (is.null(coords)) {
       xy <- as.matrix(x)
-      if (is.null(data) || ncol(xy) != 2L)
-        stop("Data-frame input requires named 'coords', or separate two-column coordinates and 'data'",
+      if (ncol(xy) != 2L)
+        stop("Supply two coordinate columns, or select them using 'coords'",
              call. = FALSE)
     } else xy <- as.matrix(.seg_select(as.data.frame(x), coords))
   }
@@ -125,7 +125,7 @@
   }
   if (is.null(bands)) {
     if (neighbors == "knn") stop("Supply population-count 'bands' for kNN", call. = FALSE)
-    bands <- default_bands(checked$coords, cbind(population, 0))
+    bands <- default_bands(checked$coords, population = population)
   }
   if (!is.numeric(bands) || !length(bands) || any(!is.finite(bands)) ||
       any(bands < 0) || (neighbors == "knn" && any(bands <= 0)))

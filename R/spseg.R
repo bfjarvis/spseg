@@ -9,8 +9,8 @@
 #' and radius neighborhoods.
 #'
 #' By default, `spseg()` returns indices over default distance bands. These
-#' default bands are the first through fifth deciles of distances among a
-#' reproducible population-weighted sample of points; see [default_bands()].
+#' default bands are distance quantiles from a reproducible population-weighted
+#' sample of support points; see [default_bands()] for the quantile defaults.
 #' If `output = "indices"`, coordinates, input data, and local environments
 #' are not stored in the result.
 #'

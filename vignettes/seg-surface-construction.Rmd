@@ -82,11 +82,11 @@ make_irregular_case <- function(edge_width) {
 }
 
 surface_from_polygons <- function(x, nrow, ncol, surface = "grid") {
-  checked <- suppressMessages(seg:::chksegdata(x[, c("A", "B")]))
+  checked <- seg:::.seg_geometry(x[, c("A", "B")], NULL, NULL)
   seg:::spseg_surface(
     x = x[, c("A", "B")],
     coords = checked$coords,
-    data = checked$data,
+    data = as.matrix(checked$data),
     surface = surface,
     args = list(
       nrow = nrow,

@@ -18,10 +18,10 @@ knitr::opts_chunk$set(
 
 # Introduction
 
-The `seg` package implements segregation measures from the geographical and
-sociological literature. These include Duncan and Duncan's index of
-dissimilarity, White's index of spatial proximity, and Reardon and O'Sullivan's
-spatial segregation measures.
+The `seg` package measures segregation across categorical, ordinal, grouped
+continuous, and observed continuous variables using a shared spatial engine.
+Information theory, dissimilarity, relative diversity, root-family, and
+exposure/isolation measures are available through `spseg()`.
 
 This vignette demonstrates the current package interface using the bundled
 `segdata` example data.
@@ -53,43 +53,26 @@ head(coords)
 head(pattern_a)
 ```
 
-# Index of Dissimilarity
+# Dissimilarity Without Spatial Smoothing
 
-Duncan and Duncan's index of dissimilarity, D, is computed with `dissim()`.
-The function returns a list because spatially adjusted variants may also be
-available.
+For distinct support points, `bands=0` uses the original unit composition.
+With two categories, its dissimilarity index reduces to the familiar binary
+formulation. The first hypothetical pattern is completely segregated.
 
 ```{r dissimilarity}
-d_a <- dissim(data = pattern_a)
-d_a
-
-d_a$d
+d_a <- spseg(coords, variables, data=pattern_a, bands=0, measures="dissimilarity")
+as.data.frame(d_a)
 ```
 
-The first hypothetical pattern is completely segregated, so its traditional D
-value is 1.
+All eight patterns can be compared in one call. Their neighborhood searches
+are shared even though each uses a separate pair of count columns.
 
 ```{r all-dissimilarity}
-vapply(seq_len(8), function(i) {
-  idx <- 2 * i
-  dissim(data = segdata[, (idx - 1):idx])$d
-}, numeric(1))
-```
-
-# Spatial Proximity
-
-White's index of spatial proximity is computed with `isp()`. If a distance
-matrix is not supplied, distances are computed from the coordinates.
-
-```{r spatial-proximity}
-isp(coords, data = pattern_a)
-```
-
-The optional `fun` argument controls how distances are converted to proximity.
-By default, `isp()` uses a negative exponential function.
-
-```{r spatial-proximity-custom}
-isp(coords, data = pattern_a, fun = function(d) 1 / (1 + d))
+patterns <- setNames(lapply(seq_len(8), function(i) {
+  seg_categorical(counts=names(segdata)[c(2*i-1,2*i)])
+}), LETTERS[1:8])
+as.data.frame(spseg(coords, patterns, data=segdata, bands=0,
+                    measures="dissimilarity", scope="multigroup"))
 ```
 
 # Local Environments
@@ -153,7 +136,7 @@ as.data.frame(selected)
 
 # Working with sf Objects
 
-Several functions also accept `sf` objects. The next example builds a 10 by 10
+`spseg()` also accepts `sf` objects. The next example builds a 10 by 10
 polygon grid and attaches `segdata` to it.
 
 ```{r sf-grid}
@@ -172,8 +155,6 @@ If `data` is omitted, `seg` uses the non-geometry columns attached to the `sf`
 object.
 
 ```{r sf-input}
-isp(grid_sf[, c("A1", "A2")])
-
 env_sf <- spseg(grid_sf[, c("A1", "A2")], variables = variables, bands = 2, output = "localenv")
 head(env_sf$analyses$groups$env[[1]])
 ```
@@ -200,23 +181,3 @@ spseg(
 `surface = "pycno"` applies groupwise pycnophylactic interpolation over the
 grid. Each group is smoothed separately, then rescaled within each source
 polygon after every iteration so the known group totals are preserved.
-
-# Optional Spatial Adjustments
-
-The `dissim()` function can calculate spatial adjustments to D when optional
-packages are available. Morrill's adjustment uses `spdep`; Wong's shared
-boundary adjustments use `terra`.
-
-```{r optional-adjustments}
-adjusted <- dissim(
-  grid_sf,
-  data = pattern_a,
-  adjust = TRUE,
-  use_queen = FALSE
-)
-
-adjusted
-```
-
-If the optional packages are not installed, unavailable adjusted measures are
-returned as `NA`.

@@ -14,7 +14,7 @@ test_that("spseg returns S3 index results by default", {
   expect_null(result$coords)
   expect_null(result$data)
   expect_null(result$analyses$groups$env)
-  expect_equal(result$bands, default_bands(toy$coords, toy$values))
+  expect_equal(result$bands, default_bands(toy$coords, population = rowSums(toy$values)))
   expect_length(result$analyses$groups$indices$multigroup$d, length(result$bands))
 })
 
@@ -204,11 +204,11 @@ test_that("grid population surfaces preserve source polygon totals", {
     sf::st_make_grid(cellsize = 1)
   grid_sf <- sf::st_sf(geometry = geom)
 
-  checked <- suppressMessages(seg:::chksegdata(grid_sf, segdata[, 1:2]))
+  checked <- seg:::.seg_geometry(grid_sf, segdata[, 1:2], NULL)
   surface <- seg:::spseg_surface(
     x = grid_sf,
     coords = checked$coords,
-    data = checked$data,
+    data = as.matrix(checked$data),
     surface = "grid",
     args = list(nrow = 10, ncol = 10),
     verbose = FALSE
@@ -267,12 +267,12 @@ test_that("raw, grid, and pycno surfaces preserve overall group totals", {
                    ncol = 2, byrow = TRUE,
                    dimnames = list(NULL, c("a", "b")))
   x <- sf::st_sf(a = values[, 1], b = values[, 2], geometry = geom)
-  checked <- suppressMessages(seg:::chksegdata(x[, c("a", "b")]))
+  checked <- seg:::.seg_geometry(x[, c("a", "b")], NULL, NULL)
 
   raw <- seg:::spseg_surface(
     x = x[, c("a", "b")],
     coords = checked$coords,
-    data = checked$data,
+    data = as.matrix(checked$data),
     surface = "raw",
     args = list(),
     verbose = FALSE
@@ -280,7 +280,7 @@ test_that("raw, grid, and pycno surfaces preserve overall group totals", {
   grid <- seg:::spseg_surface(
     x = x[, c("a", "b")],
     coords = checked$coords,
-    data = checked$data,
+    data = as.matrix(checked$data),
     surface = "grid",
     args = list(celldim = 0.5),
     verbose = FALSE
@@ -288,7 +288,7 @@ test_that("raw, grid, and pycno surfaces preserve overall group totals", {
   pycno <- seg:::spseg_surface(
     x = x[, c("a", "b")],
     coords = checked$coords,
-    data = checked$data,
+    data = as.matrix(checked$data),
     surface = "pycno",
     args = list(celldim = 0.5, converge = 1),
     verbose = FALSE
@@ -362,13 +362,13 @@ test_that("grid surfaces assign missing non-empty polygons to fallback cells", {
     b = c(0, 5),
     geometry = sf::st_sfc(tiny, large)
   )
-  checked <- suppressMessages(seg:::chksegdata(x[, c("a", "b")]))
+  checked <- seg:::.seg_geometry(x[, c("a", "b")], NULL, NULL)
 
   expect_warning(
     result <- seg:::spseg_surface(
       x = x[, c("a", "b")],
       coords = checked$coords,
-      data = checked$data,
+      data = as.matrix(checked$data),
       surface = "grid",
       args = list(nrow = 2, ncol = 2),
       audit = TRUE,
@@ -402,7 +402,7 @@ test_that("grid surfaces assign missing non-empty polygons to fallback cells", {
     pycno <- seg:::spseg_surface(
       x = x[, c("a", "b")],
       coords = checked$coords,
-      data = checked$data,
+      data = as.matrix(checked$data),
       surface = "pycno",
       args = list(nrow = 2, ncol = 2, converge = 1),
       verbose = FALSE
@@ -430,13 +430,13 @@ test_that("grid fallback preserves the locations of missing polygon counts", {
     b = c(0, 6, 4, 30),
     geometry = sf::st_sfc(tiny_1, tiny_2, large_1, large_2)
   )
-  checked <- suppressMessages(seg:::chksegdata(x[, c("a", "b")]))
+  checked <- seg:::.seg_geometry(x[, c("a", "b")], NULL, NULL)
 
   expect_warning(
     result <- seg:::spseg_surface(
       x = x[, c("a", "b")],
       coords = checked$coords,
-      data = checked$data,
+      data = as.matrix(checked$data),
       surface = "grid",
       args = list(nrow = 2, ncol = 4),
       verbose = FALSE
@@ -478,7 +478,7 @@ test_that("grid fallback preserves the locations of missing polygon counts", {
     pycno <- seg:::spseg_surface(
       x = x[, c("a", "b")],
       coords = checked$coords,
-      data = checked$data,
+      data = as.matrix(checked$data),
       surface = "pycno",
       args = list(nrow = 2, ncol = 4, converge = 1),
       verbose = FALSE
@@ -505,11 +505,11 @@ test_that("pycnophylactic surfaces preserve source polygon totals", {
                    dimnames = list(NULL, c("a", "b")))
   x <- sf::st_sf(a = values[, 1], b = values[, 2], geometry = geom)
 
-  checked <- suppressMessages(seg:::chksegdata(x[, c("a", "b")]))
+  checked <- seg:::.seg_geometry(x[, c("a", "b")], NULL, NULL)
   surface <- seg:::spseg_surface(
     x = x[, c("a", "b")],
     coords = checked$coords,
-    data = checked$data,
+    data = as.matrix(checked$data),
     surface = "pycno",
     args = list(celldim = 0.5, converge = 1),
     verbose = FALSE

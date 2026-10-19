@@ -19,6 +19,10 @@
 * Removed the previous calling convention, duplicate result methods, and
   categorical calculation engine. Every call uses variable specifications,
   one calculation engine, and named analyses in a `seg_result`.
+* Removed the pre-fork concentration-profile, standalone dissimilarity, and
+  spatial-proximity functions, their adjustment helpers, the old data validator,
+  and unused test fixtures. Default bands use the current coordinate/population
+  interface; obsolete graphics imports and the `spdep` suggestion were removed.
 * Stop explicitly at fractional kNN boundaries so floating-point residuals
   cannot add another unit and enlarge the kernel radius in optimized builds.
 * Excluded local reference PDFs from package builds and made execution of the

@@ -6,39 +6,40 @@
 \usage{
 default_bands(
   x,
-  data = NULL,
+  coords = NULL,
+  population = NULL,
   n = 500,
-  probs = c(0.01, 0.05, seq(0.1, 0.7, 0.1)),
-  weighted = TRUE
+  probs = c(0.01, 0.05, seq(0.1, 0.7, 0.1))
 )
 }
 \arguments{
-\item{x}{A numeric coordinate matrix, data frame of coordinates, or
-[sf::sf] object accepted by [spseg()].}
+\item{x}{A numeric two-column coordinate matrix, a data frame with columns
+selected by `coords`, or an [sf::sf] object. Polygon inputs use centroids.}
 
-\item{data}{Optional population data. If omitted and `x` contains attached
-data, those data are used.}
+\item{coords}{Two coordinate column names or positions for a data frame.
+Omit for sf input or a two-column coordinate matrix.}
 
-\item{n}{Maximum number of points to sample.}
+\item{population}{Optional population-weight column name or numeric vector.
+Defaults to one per support point. For aggregated variables, supply the
+relevant count totals. At least one weight must be positive.}
 
-\item{probs}{Probabilities passed to [stats::quantile()]. The default
-returns the first through fifth deciles.}
+\item{n}{Maximum number of support points to sample; an integer of at least 2.}
 
-\item{weighted}{Logical. If TRUE, sample points using row sums of `data`
-as population weights.}
+\item{probs}{Requested distance quantiles, in [0, 1]. The defaults are 0.01,
+0.05, and 0.1 through 0.7 in increments of 0.1.}
 }
 \value{
-A numeric vector of distance bands.
+A numeric vector of distance bands, in coordinate units.
 }
 \description{
-Calculates default distance bands from sampled pairwise distances.
+Calculates distance quantiles from a reproducible sample of support points.
+This is the default bandwidth calculation used by [spseg()]. Sampling uses
+population weights when supplied, otherwise equal weights, and preserves
+the caller's random-number state. Coincident-point distances are omitted.
 }
-\details{
-This helper samples up to `n` points, calculates pairwise distances among
-the sampled points, and returns the requested quantiles. By default,
-sampled points are selected with probability proportional to their total
-population, and only the lower half of the distance distribution is used.
-It is used by [spseg()] when no bandwidths are supplied.
+\examples{
+points <- data.frame(x = 1:10, y = 0, residents = 1:10)
+default_bands(points, coords = c("x", "y"), population = "residents")
 }
 \seealso{
 [spseg()]
