@@ -8,15 +8,16 @@ vignette: >
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 7,
-                      fig.height = 5, dpi = 120)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  dpi = 120
+)
 ```
 
-This overview follows one synthetic population from individual locations to
-regular grid cells, irregular polygons, and smoothed population surfaces. It
-introduces categorical, ordinal, and continuous specifications, fixed-radius
-and population nearest-neighbor environments, and extraction of indices and
-local compositions. All examples use the public package interface.
+This vignette provides an overview of key features of the spseg package, starting from a simulated data set featuring individuals chacterized by a categorical group membership and a continuous covariate. Segregation measures are generated based on this individual-level data, which is an ideal case for segregation measurement. But from there, the data are compiled into various spatial aggregates and the continuous covariate is binned. The performance and features of the package are then demonstrated on these spatially aggregated statistics. The idea is to demonstrate analogues of the kinds of data that researchers are most likely to encounter.
 
 ```{r packages, message=FALSE}
 library(spseg)
@@ -26,21 +27,23 @@ library(dplyr)
 theme_set(theme_minimal(base_size = 11))
 ```
 
-# A population with controlled spatial clustering
+# A population with spatial clustering
 
-We generate 10,000 uniformly distributed locations in a square, then generate a
-separate set of agents. Income is lognormal. Group membership predicts income
-rank, with substantial overlap between the two groups. No additional simulation
-package or external data is required.
+We start by generating 10,000 fictive housing units and 10,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a continuous trait, let's call it income, and a group membership. Income in the population of agents follows a single, log-normal distribution, but agents are then randomly assigned group memberships conditional on income, such that one group tends to be located on the lower end of the disrtribution compared to the other. 
 
 ```{r agents}
 set.seed(2026)
-N <- 10000L
+N <- 5000L
 side <- 1000
-locations <- data.frame(point_id = seq_len(N),
-                        x = runif(N, 0, side), y = runif(N, 0, side))
-agents <- data.frame(agent_id = seq_len(N),
-                     group = sample(rep(c("A", "B"), each = N / 2)))
+locations <- data.frame(
+  point_id = seq_len(N),
+  x = runif(N, 0, side),
+  y = runif(N, 0, side)
+)
+agents <- data.frame(
+  agent_id = seq_len(N),
+  group = sample(rep(c("A", "B"), each = N / 2))
+)
 
 # Parameterize the lognormal distribution by its mean and Gini coefficient.
 mean_income <- 40000
@@ -56,42 +59,28 @@ agents$income_percentile <- rank(agents$income) / N
 
 agents |>
   group_by(group) |>
-  summarise(people = n(), mean_income = mean(income),
-            median_income = median(income))
+  summarise(
+    people = n(),
+    mean_income = mean(income),
+    median_income = median(income)
+  )
+
+# Identify decile breaks for later binning of income
+income_breaks <- c(-Inf, quantile(agents$income, seq(0.1, 0.9, 0.1)), Inf)
 ```
 
-The score shift controls association, rather than specifying a Pearson
-correlation. This rank assignment preserves the sampled income distribution
-exactly. We also define quintiles now, using the same boundaries throughout the
-walkthrough. These are income intervals; their labels can alternatively be
-treated as ordered categories.
 
-```{r income-bins}
-income_breaks <- c(-Inf, quantile(agents$income, seq(0.2, 0.8, 0.2)), Inf)
-income_levels <- paste0("Q", 1:5)
-agents$income_band <- cut(agents$income, income_breaks,
-                          labels = income_levels, ordered_result = TRUE)
-```
-
-## Assigning agents to locations
-
-Inspired by the periodic utility surfaces and rank assignment used in HQSEG,
-we construct a two-dimensional cosine product. `cycles` gives the number of
-complete periods along each side, so the wavelength is `side / cycles`.
-The logarithmic transformation creates sharper troughs. Higher-income agents
-are assigned to locations with higher utility plus noise.
-
-Only the **utility signal** is periodic: distances and neighborhoods below use
-ordinary Euclidean geometry, without wrapping across the square's edges. This
-is a static data generator, rather than a run of the HQSEG housing-market model.
+The fixed set of agents is then assigned to the fixed set of housing units based on a periodic (i.e., sinusoidal) function and the agent's income, as well as random noise. The use of periodic functions and the addition of noise allow for different degrees of spatial clustering by income and group memberhsip, making the degree of segregation "tunable". Increasing `cycles` produces smaller clusters; increasing `noise` weakens sorting and makes a more even distribution. This assignment process leaves the spatial distribution of points and the joint distribution of group membership and income fixed. The only thing that varies is the differential spatial distribution of the population by group membership and income.
 
 ```{r assignment}
 location_noise <- rnorm(N)
 
 assign_city <- function(cycles = 1, noise = 0.5) {
-  periodic <- with(locations,
-                   cos(2 * pi * cycles * x / side) *
-                   cos(2 * pi * cycles * y / side))
+  periodic <- with(
+    locations,
+    cos(2 * pi * cycles * x / side) *
+      cos(2 * pi * cycles * y / side)
+  )
   utility <- log((1 + 1e-6 + periodic) / 2)
   score <- as.numeric(scale(utility)) + noise * location_noise
   destination <- order(score, locations$point_id)
@@ -101,62 +90,110 @@ assign_city <- function(cycles = 1, noise = 0.5) {
   cbind(locations, agents[assigned, , drop = FALSE])
 }
 
-scenarios <- expand.grid(cycles = c(1, 3), noise = c(0.25, 1.5))
+scenarios <- expand.grid(cycles = c(1, 3), noise = c(0.15, 1.5))
 layouts <- lapply(seq_len(nrow(scenarios)), function(i) {
   city <- assign_city(scenarios$cycles[i], scenarios$noise[i])
-  city$pattern <- paste0(scenarios$cycles[i], " cycle(s); noise = ",
-                         scenarios$noise[i])
+  city$pattern <- paste0(
+    scenarios$cycles[i],
+    " cycle(s); noise = ",
+    scenarios$noise[i]
+  )
   city
 })
-patterns <- bind_rows(layouts)
-
-ggplot(patterns, aes(x, y, colour = income_percentile)) +
-  geom_point(size = 0.35) +
-  facet_wrap(~pattern, ncol = 2) +
-  scale_colour_viridis_c(limits = c(0, 1), name = "Income\npercentile") +
-  coord_equal() + labs(x = NULL, y = NULL)
+patterns <- bind_rows(layouts) |>
+  mutate(
+    income_band = cut(
+      income,
+      income_breaks,
+      labels = paste0("Q", 1:10),
+      ordered_result = TRUE
+    )
+  )
 ```
 
-Every panel contains exactly the same locations, incomes, and group memberships.
-Increasing `cycles` produces smaller clusters; increasing `noise` weakens the
-sorting. Choose one pattern for the remaining examples.
+We can visualize the distribution of income across a few scenarios as follows:
+
+```{r assignment-income}
+ggplot(patterns, aes(x, y, colour = income_percentile)) +
+  geom_point(size = 0.3) +
+  facet_wrap(~pattern, ncol = 2) +
+  scale_colour_viridis_c(limits = c(0, 1), name = "Income\npercentile") +
+  coord_equal() +
+  labs(x = NULL, y = NULL)
+```
+
+And the distribution of groups below:
 
 ```{r people}
-city <- assign_city(cycles = 1, noise = 0.25)
-stopifnot(identical(sort(city$income), sort(agents$income)),
-          all(table(city$group) == N / 2))
-
-# A synthetic square in planar metre units; it represents no actual city.
-# The active geometry column need not be named "geometry".
-people <- st_as_sf(city, coords = c("x", "y"), remove = FALSE,
-                    crs = 3857, sf_column_name = "location")
-
-ggplot(people, aes(x, y, colour = group)) +
-  geom_point(size = 0.4) + coord_equal() +
+ggplot(patterns, aes(x, y, colour = group)) +
+  geom_point(size = 0.3) +
+  facet_wrap(~pattern, ncol = 2) +
+  coord_equal() +
   scale_colour_manual(values = c(A = "#2166ac", B = "#b2182b")) +
   labs(x = NULL, y = NULL, colour = "Group")
 ```
 
+
 # Measuring segregation in individual data
 
-Each row represents one person. We request three analyses together: group
-membership, exact income, and the ordered income categories. All three share
-spatial neighbor discovery within this call. The last is an alternative
-measurement of income, not an independent characteristic.
+We can calculate spatial segregation measures directly using the micro-data. Below I use a spatial bandwidth approach, but a k-nearest neighbors approach could also be used:
 
 ```{r micro-indices}
 micro_variables <- list(
   group = spseg_categorical(values = "group"),
-  income = spseg_continuous(values = "income",
-                             exposure = list(breaks = income_breaks)),
+  income = spseg_continuous(
+    values = "income",
+    exposure = list(breaks = income_breaks)
+  ),
   income_band = spseg_ordinal(values = "income_band")
 )
-bands <- c(25, 50, 100)
-micro <- spseg(people, variables = micro_variables, bands = bands,
-                measures = "all", weighting = "biweight",
-                scope = "multigroup", output = "full")
-head(as.data.frame(micro))
+bands <- c(25, 50, 75, 100, 200, 300, 400, 500, 600, 700)
+segcurves <- patterns |>
+  group_by(pattern) |>
+  group_split() |>
+  lapply(\(x) {
+    spseg(
+      x,
+      coords = c("x", "y"),
+      variables = micro_variables,
+      bands = bands,
+      measures = "all",
+      weighting = "biweight",
+      scope = "both",
+      output = "full"
+    )
+  })
 ```
+
+This yields a pile of segregation measures, assessed for income, both continuous and intervalled, and group memberships, and across a number of different spatial bands. We can compile these segregation measures into a dataframe as follows, where I incorporate information from the original data set to (re-)label the different patterns:
+
+```{r group-seg-graph}
+pattern_names <- patterns |> group_by(pattern) |> group_keys() |> pull(pattern)
+
+segdata <-
+  segcurves |>
+  lapply(as.data.frame) |>
+  bind_rows(.id = 'pattern') |>
+  mutate(pattern = factor(pattern, labels = pattern_names))
+
+head(segdata)
+```
+
+Now we can plot the segregation curves for different measures across bandwidths and measures. Below, I do so for segregation between groups:
+
+```{r}
+segdata |>
+  filter(variable == "group") |>
+  ggplot(aes(x = band, y = value, color = pattern)) +
+  geom_line() +
+  facet_wrap(~measure)
+```
+
+
+We can also grab the inividualized neighborhood statistics, because we requested the "full" output.
+
+
+
 
 Here `bands` are radii in coordinate units (metres). The default biweight kernel
 gives closer people more weight; `weighting = "unweighted"` gives all included
@@ -164,8 +201,13 @@ people equal weight. The focal person is included. A plain data frame works
 with explicit coordinate columns:
 
 ```{r dataframe-input, eval=FALSE}
-spseg(city, variables = micro_variables, coords = c("x", "y"),
-        bands = bands, scope = "multigroup")
+spseg(
+        city,
+        variables = micro_variables,
+        coords = c("x", "y"),
+        bands = bands,
+        scope = "both"
+)
 ```
 
 The four scalar families summarize different departures from mixing. Their
@@ -179,8 +221,14 @@ root-family generalization, and deterministic treatment of tied values.
 
 ```{r micro-profile, fig.height=4}
 ggplot(as.data.frame(micro), aes(band, value, colour = measure)) +
-  geom_line() + geom_point() + facet_wrap(~variable, nrow = 1) +
-  labs(x = "Neighborhood radius (m)", y = "Segregation index", colour = "Measure") +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~variable, nrow = 1) +
+  labs(
+    x = "Neighborhood radius (m)",
+    y = "Segregation index",
+    colour = "Measure"
+  ) +
   theme(legend.position = "bottom")
 ```
 
@@ -206,7 +254,8 @@ local_group <- st_as_sf(micro, variables = "group", bands = 100) |>
 ggplot(local_group) +
   geom_sf(aes(colour = share), size = 0.4) +
   scale_colour_viridis_c(limits = c(0, 1), name = "Local share B") +
-  coord_sf(datum = NA) + labs(x = NULL, y = NULL)
+  coord_sf(datum = NA) +
+  labs(x = NULL, y = NULL)
 ```
 
 ## Population nearest neighbors
@@ -218,9 +267,15 @@ population; equal populations here make their neighbor selections coincide.
 Boundary distance ties are included proportionately before kernel weighting.
 
 ```{r knn}
-nearest <- spseg(people, variables = micro_variables, neighbors = "knn",
-                  bands = c(100, 500), weighting = "unweighted",
-                  measures = "information", scope = "multigroup")
+nearest <- spseg(
+  people,
+  variables = micro_variables,
+  neighbors = "knn",
+  bands = c(100, 500),
+  weighting = "unweighted",
+  measures = "information",
+  scope = "multigroup"
+)
 as.data.frame(nearest)
 ```
 
@@ -232,10 +287,14 @@ regular lattice independently of the attributes. Both partitions cover the
 same square; neither is fitted to the income clusters.
 
 ```{r partitions}
-domain <- st_as_sfc(st_bbox(c(xmin = 0, ymin = 0, xmax = side, ymax = side),
-                            crs = st_crs(people)))
-coarse_grid <- st_sf(zone = seq_len(100),
-                      geometry = st_make_grid(domain, n = c(10, 10)))
+domain <- st_as_sfc(st_bbox(
+  c(xmin = 0, ymin = 0, xmax = side, ymax = side),
+  crs = st_crs(people)
+))
+coarse_grid <- st_sf(
+  zone = seq_len(100),
+  geometry = st_make_grid(domain, n = c(10, 10))
+)
 
 set.seed(2027)
 seeds <- expand.grid(x = seq(50, 950, 100), y = seq(50, 950, 100))
@@ -245,7 +304,10 @@ seed_points <- st_as_sf(seeds, coords = c("x", "y"), crs = st_crs(people))
 voronoi_geometry <- st_voronoi(st_union(seed_points), envelope = domain) |>
   st_collection_extract("POLYGON") |>
   st_intersection(domain)
-voronoi <- st_sf(zone = seq_along(voronoi_geometry), geometry = voronoi_geometry)
+voronoi <- st_sf(
+  zone = seq_along(voronoi_geometry),
+  geometry = voronoi_geometry
+)
 ```
 
 The aggregation helper explicitly keeps empty categories and zones. Counts,
@@ -259,19 +321,30 @@ income_columns <- paste0("income_", income_levels)
 aggregate_people <- function(zones) {
   membership <- st_intersects(people, zones)
   stopifnot(all(lengths(membership) == 1L))
-  zone <- factor(vapply(membership, function(i) i[[1]], integer(1)),
-                   levels = seq_len(nrow(zones)))
-  group_counts <- unclass(table(zone, factor(people$group, levels = c("A", "B"))))
+  zone <- factor(
+    vapply(membership, function(i) i[[1]], integer(1)),
+    levels = seq_len(nrow(zones))
+  )
+  group_counts <- unclass(table(
+    zone,
+    factor(people$group, levels = c("A", "B"))
+  ))
   income_counts <- unclass(table(zone, people$income_band))
   colnames(group_counts) <- group_columns
   colnames(income_counts) <- income_columns
   counts <- cbind(group_counts, income_counts)
-  stopifnot(sum(group_counts) == N, sum(income_counts) == N,
-            all(colSums(group_counts) == table(factor(people$group,
-                                                     levels = c("A", "B")))),
-            all(colSums(income_counts) == table(people$income_band)))
-  st_sf(cbind(st_drop_geometry(zones), as.data.frame(counts)),
-          geometry = st_geometry(zones))
+  stopifnot(
+    sum(group_counts) == N,
+    sum(income_counts) == N,
+    all(
+      colSums(group_counts) == table(factor(people$group, levels = c("A", "B")))
+    ),
+    all(colSums(income_counts) == table(people$income_band))
+  )
+  st_sf(
+    cbind(st_drop_geometry(zones), as.data.frame(counts)),
+    geometry = st_geometry(zones)
+  )
 }
 
 grid_counts <- aggregate_people(coarse_grid)
@@ -286,7 +359,8 @@ ggplot(partition_map) +
   geom_sf(aes(fill = share_B), colour = "white", linewidth = 0.15) +
   facet_wrap(~partition) +
   scale_fill_viridis_c(limits = c(0, 1), name = "Zone share B") +
-  coord_sf(datum = NA) + labs(x = NULL, y = NULL)
+  coord_sf(datum = NA) +
+  labs(x = NULL, y = NULL)
 ```
 
 ## Choosing the aggregate specifications
@@ -307,10 +381,18 @@ count_variables <- list(
   income = spseg_grouped(counts = income_columns),
   income_band = spseg_ordinal(counts = income_columns)
 )
-grid_raw <- spseg(grid_counts, variables = count_variables,
-                   bands = bands, scope = "multigroup")
-voronoi_raw <- spseg(voronoi_counts, variables = count_variables,
-                      bands = bands, scope = "multigroup")
+grid_raw <- spseg(
+  grid_counts,
+  variables = count_variables,
+  bands = bands,
+  scope = "multigroup"
+)
+voronoi_raw <- spseg(
+  voronoi_counts,
+  variables = count_variables,
+  bands = bands,
+  scope = "multigroup"
+)
 ```
 
 The default `surface = "raw"` places each polygon's population at its centroid.
@@ -324,9 +406,12 @@ To distinguish loss from income binning from loss from spatial aggregation,
 also measure the interval-valued incomes at the original individual locations.
 
 ```{r binned-micro}
-binned_micro <- spseg(people,
+binned_micro <- spseg(
+  people,
   variables = list(income = spseg_grouped(values = "income_band")),
-  bands = bands, scope = "multigroup")
+  bands = bands,
+  scope = "multigroup"
+)
 ```
 
 # From polygons to population surfaces
@@ -341,15 +426,33 @@ and the same neighborhood radii. Surface construction is shared across the
 requested analyses, followed by shared spatial neighbor discovery.
 
 ```{r surfaces}
-uniform_surface <- spseg(voronoi_counts, variables = count_variables,
-  bands = bands, scope = "multigroup", surface = "grid",
-  nrow = 50, ncol = 50, surface_geometry = "polygons",
-  surface_audit = TRUE, output = "full")
+uniform_surface <- spseg(
+  voronoi_counts,
+  variables = count_variables,
+  bands = bands,
+  scope = "multigroup",
+  surface = "grid",
+  nrow = 50,
+  ncol = 50,
+  surface_geometry = "polygons",
+  surface_audit = TRUE,
+  output = "full"
+)
 
-smooth_surface <- spseg(voronoi_counts, variables = count_variables,
-  bands = bands, scope = "multigroup", surface = "pycno",
-  nrow = 50, ncol = 50, max_iter = 200, converge = 3,
-  surface_geometry = "polygons", surface_audit = TRUE, output = "full")
+smooth_surface <- spseg(
+  voronoi_counts,
+  variables = count_variables,
+  bands = bands,
+  scope = "multigroup",
+  surface = "pycno",
+  nrow = 50,
+  ncol = 50,
+  max_iter = 200,
+  converge = 3,
+  surface_geometry = "polygons",
+  surface_audit = TRUE,
+  output = "full"
+)
 ```
 
 These maps show the **underlying cell compositions**, before the additional
@@ -360,19 +463,28 @@ count columns belong to each variable.
 surface_composition <- function(result, label) {
   columns <- result$surface_info$variables$group
   counts <- as.matrix(result$data[, columns, drop = FALSE])
-  st_sf(surface = label, share_B = counts[, 2] / rowSums(counts),
-          geometry = result$geometry)
+  st_sf(
+    surface = label,
+    share_B = counts[, 2] / rowSums(counts),
+    geometry = result$geometry
+  )
 }
 surface_maps <- bind_rows(
   surface_composition(uniform_surface, "Uniform allocation"),
   surface_composition(smooth_surface, "Pycnophylactic smoothing")
 ) |>
-  mutate(surface = factor(surface, levels = c("Uniform allocation",
-                                               "Pycnophylactic smoothing")))
+  mutate(
+    surface = factor(
+      surface,
+      levels = c("Uniform allocation", "Pycnophylactic smoothing")
+    )
+  )
 ggplot(surface_maps) +
-  geom_sf(aes(fill = share_B), colour = NA) + facet_wrap(~surface) +
+  geom_sf(aes(fill = share_B), colour = NA) +
+  facet_wrap(~surface) +
   scale_fill_viridis_c(limits = c(0, 1), name = "Cell share B") +
-  coord_sf(datum = NA) + labs(x = NULL, y = NULL)
+  coord_sf(datum = NA) +
+  labs(x = NULL, y = NULL)
 ```
 
 ## Checking conservation of counts
@@ -393,8 +505,10 @@ zone_error <- function(counts) {
 }
 conservation <- data.frame(
   stage = c("Initial grid", "Smoothed grid"),
-  maximum_zone_category_error = c(zone_error(audit$initial_counts),
-                                  zone_error(audit$smoothed_counts))
+  maximum_zone_category_error = c(
+    zone_error(audit$initial_counts),
+    zone_error(audit$smoothed_counts)
+  )
 )
 stopifnot(all(conservation$maximum_zone_category_error < 1e-6))
 conservation
@@ -434,9 +548,14 @@ comparison <- bind_rows(lapply(names(representations), function(label) {
 }))
 stopifnot(nrow(comparison) == length(representations) * length(bands))
 ggplot(comparison, aes(band, value, colour = representation)) +
-  geom_line() + geom_point() +
-  labs(x = "Neighborhood radius (m)", y = "Income information index",
-       colour = NULL) + theme(legend.position = "bottom") +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "Neighborhood radius (m)",
+    y = "Income information index",
+    colour = NULL
+  ) +
+  theme(legend.position = "bottom") +
   guides(colour = guide_legend(ncol = 2))
 ```
 

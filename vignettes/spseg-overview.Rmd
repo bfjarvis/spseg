@@ -65,7 +65,13 @@ With two categories, its dissimilarity index reduces to the familiar binary
 formulation. The first hypothetical pattern is completely segregated.
 
 ```{r dissimilarity}
-d_a <- spseg(coords, variables, data=pattern_a, bands=0, measures="dissimilarity")
+d_a <- spseg(
+  coords,
+  variables,
+  data = pattern_a,
+  bands = 0,
+  measures = "dissimilarity"
+)
 as.data.frame(d_a)
 ```
 
@@ -73,11 +79,20 @@ All eight patterns can be compared in one call. Their neighborhood searches
 are shared even though each uses a separate pair of count columns.
 
 ```{r all-dissimilarity}
-patterns <- setNames(lapply(seq_len(8), function(i) {
-  spseg_categorical(counts=names(spseg_data)[c(2*i-1,2*i)])
-}), LETTERS[1:8])
-as.data.frame(spseg(coords, patterns, data=spseg_data, bands=0,
-                    measures="dissimilarity", scope="multigroup"))
+patterns <- setNames(
+  lapply(seq_len(8), function(i) {
+    spseg_categorical(counts = names(spseg_data)[c(2 * i - 1, 2 * i)])
+  }),
+  LETTERS[1:8]
+)
+as.data.frame(spseg(
+  coords,
+  patterns,
+  data = spseg_data,
+  bands = 0,
+  measures = "dissimilarity",
+  scope = "multigroup"
+))
 ```
 
 # Local Environments
@@ -87,7 +102,13 @@ The Reardon and O'Sullivan measures are based on local environments. Use
 around each point.
 
 ```{r local-environment}
-env_a <- spseg(coords, variables = variables, data = pattern_a, bands = 2, output = "localenv")
+env_a <- spseg(
+  coords,
+  variables = variables,
+  data = pattern_a,
+  bands = 2,
+  output = "localenv"
+)
 
 env_a
 head(env_a$analyses$groups$env[[1]])
@@ -98,8 +119,14 @@ receive equal weight. In that case every local environment equals the overall
 group shares.
 
 ```{r local-environment-equal-weight}
-env_equal <- spseg(coords, variables = variables, data = pattern_a, bands = 20,
-                   weighting = "unweighted", output = "localenv")
+env_equal <- spseg(
+  coords,
+  variables = variables,
+  data = pattern_a,
+  bands = 20,
+  weighting = "unweighted",
+  output = "localenv"
+)
 
 head(env_equal$analyses$groups$env[[1]])
 colSums(pattern_a) / sum(as.matrix(pattern_a))
@@ -130,7 +157,8 @@ You can request a subset of measures with `measures`.
 
 ```{r selected-measures}
 selected <- spseg(
-  coords, variables = variables,
+  coords,
+  variables = variables,
   data = pattern_a,
   measures = c("information", "dissimilarity"),
   bands = 2
@@ -160,7 +188,12 @@ If `data` is omitted, `spseg` uses the non-geometry columns attached to the `sf`
 object.
 
 ```{r sf-input}
-env_sf <- spseg(grid_sf[, c("A1", "A2")], variables = variables, bands = 2, output = "localenv")
+env_sf <- spseg(
+  grid_sf[, c("A1", "A2")],
+  variables = variables,
+  bands = 2,
+  output = "localenv"
+)
 head(env_sf$analyses$groups$env[[1]])
 ```
 
@@ -173,7 +206,8 @@ over a square grid before local environments are calculated.
 
 ```{r grid-surface}
 spseg(
-  grid_sf, variables = variables,
+  grid_sf,
+  variables = variables,
   data = pattern_a,
   surface = "grid",
   nrow = 10,
