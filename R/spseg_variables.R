@@ -3,6 +3,9 @@
 #' These constructors describe data columns; they do not search neighborhoods.
 #' Supply exactly one of `values` (a single column) and `counts` (columns in
 #' category/value order). Column selectors are names or integer positions.
+#' Continuous variables accept exact observations or interval membership/counts
+#' through `representation`. Interval CDFs are interpolated directly; individual
+#' values are not imputed.
 #'
 #' @param values Column containing category membership or observed values.
 #' @param counts Columns containing nonnegative population counts.
@@ -15,16 +18,24 @@
 #' @param na.action Missing-value policy: `"fail"` or `"omit"`. Omission applies
 #'   only to this variable, including its kNN stopping population. Other
 #'   variables and radius bandwidths are unaffected.
-#' @param interpolation Grouped continuous CDF interpolation, currently `"linear"`
-#'   in overall percentile space, not in the original measurement units.
+#' @param representation Continuous input representation: `"exact"` (default)
+#'   for observed numeric values or exact-value counts, or `"intervals"` for
+#'   interval membership or ordered interval counts. Membership requires an
+#'   ordered factor or explicit `levels`; count columns supply interval order.
+#' @param interpolation For `representation = "intervals"`, CDF interpolation.
+#'   `NULL` selects `"linear"` in overall percentile space, not in the original
+#'   measurement units. Exact input does not accept this option.
 #' @param scores Exact numerical values corresponding to continuous count
-#'   columns. These are observed values, not interval midpoints.
-#' @param exposure For observed continuous variables, a list with either
+#'   columns with `representation = "exact"`. These are observed values, not
+#'   interval midpoints. Interval input does not accept scores.
+#' @param exposure For exact continuous variables, a list with either
 #'   `probs` (global weighted quantile boundaries, including 0 and 1) or `breaks`
 #'   (value boundaries covering the observations). Defaults to deciles.
 #'   Equal values stay together; empty groups are removed. These cuts do not
 #'   affect the rank-order indices. They also supply the default groups for
 #'   `localenv = "shares"` when no local cuts are specified.
+#'   Interval input uses the supplied intervals for exposure and does not accept
+#'   this option; custom local presentation cuts belong in `localenv`.
 #' @param localenv Retained local-environment summary for ordered variables:
 #'   `"quantiles"` (default) or `"shares"`, or a list with `type` and optional
 #'   `probs`/`breaks`. Quantiles default to `seq(.1, .9, .1)` and report local
@@ -44,7 +55,7 @@
 #' @examples
 #' spseg_categorical(values = "ethnicity")
 #' spseg_ordinal(counts = c("primary", "secondary", "tertiary"))
-#' spseg_grouped(counts = c("low", "middle", "high"))
+#' spseg_continuous(counts = c("low", "middle", "high"), representation = "intervals")
 #' spseg_continuous(values = "income", exposure = list(probs = c(0, .2, .8, 1)))
 #' spseg_continuous(values = "income",
 #'                  localenv = list(type = "quantiles", probs = c(.25, .5, .75)))
@@ -54,7 +65,7 @@ NULL
 
 .spseg_variable <- function(type, values, counts, levels, measures, weights,
                           na.action, interpolation = NULL, scores = NULL,
-                          exposure = NULL, localenv = "shares") {
+                          exposure = NULL, localenv = "shares", representation = NULL) {
   if (is.null(values) == is.null(counts)) {
     stop("Supply exactly one of 'values' and 'counts'", call. = FALSE)
   }
@@ -72,7 +83,8 @@ NULL
                  levels = levels, measures = measures, weights = weights,
                  na.action = match.arg(na.action, c("fail", "omit")),
                  interpolation = interpolation, scores = scores,
-                 exposure = exposure, localenv = .spseg_localenv_options(localenv)),
+                 exposure = exposure, representation = representation,
+                 localenv = .spseg_localenv_options(localenv)),
             class = "spseg_variable")
 }
 
@@ -96,29 +108,35 @@ spseg_ordinal <- function(values = NULL, counts = NULL, levels = NULL,
 
 #' @rdname spseg_variables
 #' @export
-spseg_grouped <- function(values = NULL, counts = NULL, levels = NULL,
-                       measures = NULL, weights = NULL,
-                       na.action = c("fail", "omit"),
-                       interpolation = "linear", localenv = "quantiles") {
-  if (!identical(interpolation, "linear")) {
-    stop("Only 'linear' interpolation is supported", call. = FALSE)
-  }
-  .spseg_variable("grouped", values, counts, levels, measures, weights,
-                match.arg(na.action), interpolation = interpolation, localenv = localenv)
-}
-
-#' @rdname spseg_variables
-#' @export
-spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
+spseg_continuous <- function(values = NULL, counts = NULL,
+                          representation = c("exact", "intervals"),
+                          levels = NULL, scores = NULL,
                           measures = NULL, weights = NULL,
                           na.action = c("fail", "omit"), exposure = NULL,
-                          localenv = "quantiles") {
+                          localenv = "quantiles", interpolation = NULL) {
+  representation <- match.arg(representation)
+  if (representation == "intervals") {
+    if (!is.null(scores))
+      stop("'scores' applies only to representation = 'exact'", call. = FALSE)
+    if (!is.null(exposure))
+      stop("Interval exposure uses the supplied intervals; customize 'localenv' for presentation",
+           call. = FALSE)
+    interpolation <- interpolation %||% "linear"
+    if (!identical(interpolation, "linear"))
+      stop("Only 'linear' interpolation is supported", call. = FALSE)
+  } else {
+    if (!is.null(levels))
+      stop("Continuous 'levels' applies only to representation = 'intervals'", call. = FALSE)
+    if (!is.null(interpolation))
+      stop("'interpolation' applies only to representation = 'intervals'", call. = FALSE)
+  }
   if (!is.null(values) && !is.null(scores)) {
     stop("'scores' applies only to continuous count columns", call. = FALSE)
   }
-  .spseg_variable("continuous", values, counts, NULL, measures, weights,
+  .spseg_variable("continuous", values, counts, levels, measures, weights,
                 match.arg(na.action), scores = scores, exposure = exposure,
-                localenv = localenv)
+                localenv = localenv, representation = representation,
+                interpolation = interpolation)
 }
 
 .spseg_localenv_options <- function(options) {
@@ -154,16 +172,18 @@ spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
 
 .spseg_localenv <- function(spec, labels, totals, scores) {
   options <- spec$localenv
-  if (!is.null(options$breaks) && spec$type != "continuous")
+  intervals <- identical(spec$representation, "intervals")
+  exact <- spec$type == "continuous" && !intervals
+  if (!is.null(options$breaks) && !exact)
     stop("Local share 'breaks' require exact continuous values; use 'probs' for intervals",
          call. = FALSE)
   if (options$type == "quantiles") {
     return(list(type = 1L, probs = as.numeric(options$probs), breaks = numeric(),
       map = integer(), definition = list(type = "quantiles", probs = options$probs,
         labels = paste0("q", format(options$probs, trim = TRUE)), scale = "global_rank",
-        method = if (spec$type == "grouped") "inverse_linear_cdf" else "inverse_midrank_cdf")))
+        method = if (intervals) "inverse_linear_cdf" else "inverse_midrank_cdf")))
   }
-  if (spec$type == "grouped" && !is.null(options$probs)) {
+  if (intervals && !is.null(options$probs)) {
     p <- options$probs
     return(list(type = 2L, probs = numeric(), breaks = as.numeric(p), map = integer(),
       definition = list(type = "shares", probs = p,
@@ -171,9 +191,9 @@ spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
         scale = "global_rank", method = "linear_cdf")))
   }
   cuts <- options[intersect(names(options), c("probs", "breaks"))]
-  if (spec$type == "continuous" || length(cuts)) {
+  if (exact || length(cuts)) {
     if (!length(cuts)) cuts <- spec$exposure
-    groups <- .spseg_exposure(if (spec$type == "continuous") scores else seq_along(labels),
+    groups <- .spseg_exposure(if (exact) scores else seq_along(labels),
                               totals, cuts)
     definition <- c(list(type = "shares"), groups$definition)
     map <- groups$map
@@ -277,6 +297,8 @@ spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
 
 .spseg_compile <- function(spec, data, population, measures) {
   n <- nrow(data)
+  intervals <- identical(spec$representation, "intervals")
+  exact <- spec$type == "continuous" && !intervals
   selected <- .spseg_measures(spec$measures %||% measures)
   counts <- matrix(numeric(), 0L, 0L)
   code <- rep(-1L, n)
@@ -286,7 +308,7 @@ spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
     labels <- colnames(counts)
     mass <- rowSums(counts)
     totals <- colSums(counts)
-    if (spec$type == "continuous") {
+    if (exact) {
       scores <- spec$scores
       if (!is.numeric(scores) || length(scores) != ncol(counts) ||
           any(!is.finite(scores)))
@@ -313,7 +335,7 @@ spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
     if (any(bad) && spec$na.action == "fail")
       stop("Missing observed values; choose na.action = 'omit' explicitly", call. = FALSE)
     mass[bad] <- 0
-    if (spec$type == "continuous") {
+    if (exact) {
       if (!is.numeric(values) || any(!is.finite(values[!bad])))
         stop("Continuous values must be finite numeric observations", call. = FALSE)
       scores <- sort(unique(values[mass > 0]))
@@ -345,7 +367,8 @@ spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
   if (!is.finite(total) || total <= 0)
     stop("Each variable must have a positive finite eligible population", call. = FALSE)
   shares <- totals / total
-  type <- match(spec$type, c("categorical", "ordinal", "grouped", "continuous")) - 1L
+  type <- switch(spec$type, categorical = 0L, ordinal = 1L,
+                 continuous = if (intervals) 2L else 3L)
   method <- c("categorical", "ordinal_cutoffs", "linear_cdf", "empirical_midrank")[type + 1L]
   exposure <- if (type == 3L) {
     if ("exposure" %in% selected) .spseg_exposure(scores, totals, spec$exposure) else
@@ -360,7 +383,9 @@ spseg_continuous <- function(values = NULL, counts = NULL, scores = NULL,
        env_map = localenv$map, env_columns = length(localenv$definition$labels),
        flags = as.integer(c("exposure", "information", "diversity", "dissimilarity",
                             "square_root") %in% selected),
-       metadata = list(type = spec$type, method = method, measures = selected,
+       metadata = list(type = spec$type, representation = spec$representation,
+                       interpolation = spec$interpolation,
+                       method = method, measures = selected,
                        eligible_population = total,
                        labels = labels, shares = shares, scores = scores,
                        ties = if (type == 3L) "weighted_midrank" else NULL,

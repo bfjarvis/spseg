@@ -4,7 +4,6 @@
 \alias{spseg_variables}
 \alias{spseg_categorical}
 \alias{spseg_ordinal}
-\alias{spseg_grouped}
 \alias{spseg_continuous}
 \title{Describe variables for a shared spatial segregation calculation}
 \usage{
@@ -27,26 +26,18 @@ spseg_ordinal(
   localenv = "quantiles"
 )
 
-spseg_grouped(
-  values = NULL,
-  counts = NULL,
-  levels = NULL,
-  measures = NULL,
-  weights = NULL,
-  na.action = c("fail", "omit"),
-  interpolation = "linear",
-  localenv = "quantiles"
-)
-
 spseg_continuous(
   values = NULL,
   counts = NULL,
+  representation = c("exact", "intervals"),
+  levels = NULL,
   scores = NULL,
   measures = NULL,
   weights = NULL,
   na.action = c("fail", "omit"),
   exposure = NULL,
-  localenv = "quantiles"
+  localenv = "quantiles",
+  interpolation = NULL
 )
 }
 \arguments{
@@ -82,18 +73,27 @@ Only exact continuous variables accept original-value `breaks`.
 These settings affect retained environments only, not indices or exposure.
 Environments are stored by `output = "full"` or `"localenv"` in [spseg()].}
 
-\item{interpolation}{Grouped continuous CDF interpolation, currently `"linear"`
-in overall percentile space, not in the original measurement units.}
+\item{representation}{Continuous input representation: `"exact"` (default)
+for observed numeric values or exact-value counts, or `"intervals"` for
+interval membership or ordered interval counts. Membership requires an
+ordered factor or explicit `levels`; count columns supply interval order.}
 
 \item{scores}{Exact numerical values corresponding to continuous count
-columns. These are observed values, not interval midpoints.}
+columns with `representation = "exact"`. These are observed values, not
+interval midpoints. Interval input does not accept scores.}
 
-\item{exposure}{For observed continuous variables, a list with either
+\item{exposure}{For exact continuous variables, a list with either
 `probs` (global weighted quantile boundaries, including 0 and 1) or `breaks`
 (value boundaries covering the observations). Defaults to deciles.
 Equal values stay together; empty groups are removed. These cuts do not
 affect the rank-order indices. They also supply the default groups for
-`localenv = "shares"` when no local cuts are specified.}
+`localenv = "shares"` when no local cuts are specified.
+Interval input uses the supplied intervals for exposure and does not accept
+this option; custom local presentation cuts belong in `localenv`.}
+
+\item{interpolation}{For `representation = "intervals"`, CDF interpolation.
+`NULL` selects `"linear"` in overall percentile space, not in the original
+measurement units. Exact input does not accept this option.}
 }
 \value{
 A `spseg_variable` specification for `spseg(variables = ...)`.
@@ -102,11 +102,14 @@ A `spseg_variable` specification for `spseg(variables = ...)`.
 These constructors describe data columns; they do not search neighborhoods.
 Supply exactly one of `values` (a single column) and `counts` (columns in
 category/value order). Column selectors are names or integer positions.
+Continuous variables accept exact observations or interval membership/counts
+through `representation`. Interval CDFs are interpolated directly; individual
+values are not imputed.
 }
 \examples{
 spseg_categorical(values = "ethnicity")
 spseg_ordinal(counts = c("primary", "secondary", "tertiary"))
-spseg_grouped(counts = c("low", "middle", "high"))
+spseg_continuous(counts = c("low", "middle", "high"), representation = "intervals")
 spseg_continuous(values = "income", exposure = list(probs = c(0, .2, .8, 1)))
 spseg_continuous(values = "income",
                  localenv = list(type = "quantiles", probs = c(.25, .5, .75)))

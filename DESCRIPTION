@@ -13,9 +13,10 @@ Suggests: ggplot2, knitr, dplyr, tidyr, rmarkdown, roxygen2, sfnetworks,
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Encoding: UTF-8
-Description: Measuring spatial segregation for categorical, ordinal,
-        grouped-continuous, and observed-continuous variables in individual
-        or aggregated population data. Calculates dissimilarity, information
+Description: Measuring spatial segregation for categorical, ordinal, and
+        continuous variables in individual or aggregated population data,
+        with exact or interval representations of continuous input.
+        Calculates dissimilarity, information
         theory, relative diversity, root-family, and exposure/isolation indices
         using shared spatial searches for fixed-radius and population-count
         nearest-neighbor environments. Supports Euclidean distances and supplied

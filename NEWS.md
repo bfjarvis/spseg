@@ -1,5 +1,12 @@
 # spseg 0.9.0.9000
 
+- Consolidated variable specifications into `spseg_categorical()`,
+  `spseg_ordinal()`, and `spseg_continuous()`. Continuous specifications now
+  select `representation = "exact"` (default) or `"intervals"`, including
+  interval membership and ordered interval counts. Removed `spseg_grouped()`
+  without an alias. Continuous results report their representation separately
+  from the variable type; calculation methods and compact environments are unchanged.
+
 - Retained ordinal, grouped, and continuous local environments now default to
   compact weighted quantiles of global ranks. Their constructors accept
   `localenv = "shares"` or custom quantile/cut settings. Indices and exposure

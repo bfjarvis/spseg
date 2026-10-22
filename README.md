@@ -32,8 +32,11 @@ spseg(
 ```
 
 For a plain data frame, add `coords = c("x", "y")`. For aggregate tables, use
-`counts` selectors; `spseg_grouped()` describes continuous intervals, while
-`spseg_continuous(counts = ..., scores = ...)` describes exact observed values.
+`counts` selectors. The three variable constructors are `spseg_categorical()`,
+`spseg_ordinal()`, and `spseg_continuous()`. Continuous input defaults to
+`representation = "exact"`; select `representation = "intervals"` for interval
+membership or ordered interval counts. Exact-value count tables also require
+`scores`; interval input uses CDF interpolation without imputing individual values.
 With `neighbors = "knn"`, each variable selects its own eligible population:
 `bands = 100` includes 100 eligible people before distance weighting, even
 when the variables cover different populations. Neighbor discovery is shared.
@@ -42,7 +45,7 @@ For neighborhood construction, use `output = "localenv"` (or `"full"` to also
 calculate indices). Ordered variables retain local deciles of global ranks by
 default. For quartiles, specify
 `localenv = list(type = "quantiles", probs = c(.25, .5, .75))` in
-`spseg_ordinal()`, `spseg_grouped()`, or `spseg_continuous()`. Use
+`spseg_ordinal()` or `spseg_continuous()` (either representation). Use
 `localenv = "shares"` for local category shares. These presentation settings
 do not coarsen the index calculations. Extract summaries with
 `as.data.frame(result, what = "env")` or `sf::st_as_sf(result)`.

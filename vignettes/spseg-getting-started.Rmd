@@ -400,8 +400,9 @@ ggplot(partition_map) +
 
 ## Choosing the aggregate specifications
 
-`spseg_grouped()` treats ordered count columns as intervals of an underlying
-continuous variable. It interpolates the local CDF linearly between the known
+`spseg_continuous(representation = "intervals")` treats ordered count columns
+as intervals of an underlying continuous variable. It interpolates the local
+CDF linearly between the known
 global percentile boundaries. It does not assign everyone the interval midpoint,
 and does not require an endpoint for an open-ended top interval. This is an
 assumption about the unknown within-bin rank distribution.
@@ -413,7 +414,7 @@ specification would require actual values, which this table no longer provides.
 ```{r aggregate-indices}
 count_variables <- list(
   group = spseg_categorical(counts = group_columns),
-  income = spseg_grouped(counts = income_columns),
+  income = spseg_continuous(counts = income_columns, representation = "intervals"),
   income_band = spseg_ordinal(counts = income_columns)
 )
 grid_raw <- spseg(
@@ -443,7 +444,8 @@ also measure the interval-valued incomes at the original individual locations.
 ```{r binned-micro}
 binned_micro <- spseg(
   people,
-  variables = list(income = spseg_grouped(values = "income_band")),
+  variables = list(income = spseg_continuous(values = "income_band",
+                                            representation = "intervals")),
   bands = bands,
   scope = "multigroup"
 )

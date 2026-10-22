@@ -53,7 +53,7 @@ test_that("network paths agree with Euclidean paths for every variable type", {
   edges <- data.frame(from=letters[1:4],to=letters[2:5],cost=diff(d$x))
   net <- spseg_network(edges,cost="cost",units="minutes")
   variables <- list(g=spseg_categorical(counts=c("a","b")),
-    o=spseg_ordinal(values="o"),b=spseg_grouped(counts=c("a","b")),
+    o=spseg_ordinal(values="o"),b=spseg_continuous(representation = "intervals", counts=c("a","b")),
     v=spseg_continuous(values="v"))
   for (mode in c("radius","knn")) for (kernel in c("unweighted","biweight","inverse","exponential")) {
     bands <- if(mode=="radius") c(0,2,5) else c(2,4)
@@ -77,7 +77,7 @@ test_that("weighted and unweighted neighborhoods match an independent reference"
   d <- data.frame(node=1:n,a=sample(0:4,n,TRUE),b=sample(1:3,n,TRUE),
     c=sample(0:2,n,TRUE),e=sample(1:2,n,TRUE))
   vars <- list(g=spseg_categorical(counts=c("a","b")),
-               h=spseg_grouped(counts=c("c","e"),localenv="shares"))
+               h=spseg_continuous(representation = "intervals", counts=c("c","e"),localenv="shares"))
   for (directed in c(FALSE,TRUE)) for (weighted in c(FALSE,TRUE)) {
     net <- spseg_network(edges,cost=if(weighted)"cost" else NULL,directed=directed)
     distance <- network_distances(as.character(1:n),edges,weighted,directed)

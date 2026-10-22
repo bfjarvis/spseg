@@ -23,7 +23,8 @@
 #' @param row.names,optional Standard data-frame generic arguments.
 #' @param ... Reserved for generic methods. Extraction rejects unused arguments.
 #' @return Printing returns `x` invisibly. Data-frame extraction returns a long
-#'   table with the analysis name, type, method, and band. Environment tables
+#'   table with the analysis name, type, continuous input `representation`
+#'   (`NA` for other types), method, and band. Environment tables
 #'   identify the input row as `location`. Spatial extraction returns this
 #'   environment table with the corresponding input geometry attached. Quantile
 #'   rows have `summary = "quantiles"`, `prob`, and `rank`; share rows have
@@ -79,7 +80,9 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     if (what == "env" && is.null(analysis$env))
       stop("Local environments were not stored; use output = 'full' or 'localenv'", call. = FALSE)
     for (b in selected$bands) {
-      base <- list(variable = name, type = definition$type, method = definition$method,
+      base <- list(variable = name, type = definition$type,
+                   representation = definition$representation %||% NA_character_,
+                   method = definition$method,
                    band = x$bands[b])
       if (what == "indices") {
         for (key in intersect(names(keys), names(analysis$indices$multigroup))) {

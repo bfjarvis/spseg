@@ -47,9 +47,12 @@ as.data.frame(result)
 ```
 
 `spseg_ordinal(values=...)` requires an ordered factor or explicit `levels`.
-`spseg_grouped(values=..., levels=...)` describes membership in intervals hiding
-an underlying continuous variable. Supplied interval labels do not determine
-numerical spacing. `values` and `counts` are mutually exclusive.
+`spseg_continuous(values=..., representation="intervals", levels=...)` describes
+membership in intervals of an underlying continuous variable. The default
+`representation="exact"` instead requires numeric observations. Supplied
+interval labels do not determine numerical spacing. `values` and `counts` are
+mutually exclusive. These and `spseg_categorical()` are the three specification
+constructors; interval input uses the same continuous constructor as exact input.
 
 ```{r aggregates}
 blocks <- data.frame(x=1:4, y=0,
@@ -58,7 +61,8 @@ aggregate_result <- spseg(
   blocks, coords=c("x", "y"),
   variables=list(
     education=spseg_ordinal(counts=c("low", "middle", "high")),
-    income=spseg_grouped(counts=c("low", "middle", "high")),
+    income=spseg_continuous(counts=c("low", "middle", "high"),
+                            representation="intervals"),
     exact_age=spseg_continuous(counts=c("low", "middle", "high"), scores=c(20, 40, 60))
   ), bands=c(0, 2), measures=c("information", "diversity", "square_root", "dissimilarity")
 )
@@ -69,6 +73,10 @@ The three specifications in this example make different claims about the
 *same count table*: ordered categories, unobserved continuous intervals, or
 exact values. A single area mean does not recover its residents' distribution.
 Exact-value count input is never expanded into individual records.
+Interval input uses linear CDF interpolation in global percentile space and
+does not impute individual incomes or use bin midpoints. Its exposure uses the
+supplied intervals. `scores` and custom `exposure` cuts apply only to exact
+input; `levels` and `interpolation` apply only to interval input.
 
 Each specification can override `measures`. The common selectors are
 `"information"`, `"diversity"`, `"dissimilarity"`, `"square_root"`, and `"exposure"`.
@@ -322,7 +330,7 @@ in global percentile space. Probabilities zero and one select local support
 limits; an empty local environment has missing summaries.
 
 The `localenv` setting is independent of `exposure` and of all scalar indices.
-It is available in `spseg_ordinal()`, `spseg_grouped()`, and `spseg_continuous()`.
+It is available in `spseg_ordinal()` and both representations of `spseg_continuous()`.
 For instance, request quartiles or category shares:
 
 ```{r compact-environments}
@@ -380,7 +388,7 @@ polygons <- sf::st_make_grid(sf::st_as_sfc(sf::st_bbox(
 areas <- sf::st_sf(blocks, geometry=polygons)
 gridded <- spseg(areas,
   variables=list(education=spseg_ordinal(counts=c("low","middle","high")),
-                 income=spseg_grouped(counts=c("low","middle","high"))),
+                 income=spseg_continuous(representation = "intervals", counts=c("low","middle","high"))),
   surface="grid", nrow=4, ncol=4, bands=1, output="full")
 as.data.frame(gridded)
 ```

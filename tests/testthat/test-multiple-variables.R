@@ -96,7 +96,7 @@ test_that("ordinal, grouped, and empirical calculators match independent referen
   w <- (1-(distance/2.5)^3)^3; w[distance>2.5] <- 0
   local <- w %*% counts
   variables <- list(o=spseg_ordinal(counts=colnames(counts)),
-                    g=spseg_grouped(counts=colnames(counts)),
+                    g=spseg_continuous(representation = "intervals", counts=colnames(counts)),
                     c=spseg_continuous(counts=colnames(counts),scores=c(-5,0,1,100)))
   result <- spseg(d,coords=c("x","y"),variables=variables,bands=2.5)
   for (v in names(variables)) {
@@ -164,8 +164,8 @@ test_that("proportional subdivision of a continuous interval preserves the inter
   d <- data.frame(x=1:4,y=0,a=c(1,4,6,2),b=c(2,6,1,3),c=c(8,2,3,6))
   d$b1 <- d$b*.3; d$b2 <- d$b*.7
   result <- spseg(d,coords=c("x","y"),variables=list(
-    original=spseg_grouped(counts=c("a","b","c")),
-    split=spseg_grouped(counts=c("a","b1","b2","c"))),
+    original=spseg_continuous(representation = "intervals", counts=c("a","b","c")),
+    split=spseg_continuous(representation = "intervals", counts=c("a","b1","b2","c"))),
     measures=c("information","diversity","dissimilarity","square_root"),bands=c(0,2))
   expect_equal(result$analyses$original$indices,result$analyses$split$indices,tolerance=1e-10)
 })
@@ -206,11 +206,11 @@ test_that("deterministic new-interface calls do not create an RNG state", {
 
 test_that("single populated intervals and near-endpoint grouped integrals are stable", {
   d <- data.frame(x=1:3,y=0,a=c(1,4,2),b=0)
-  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_grouped(counts=c("a","b"))),bands=2)
+  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", counts=c("a","b"))),bands=2)
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-12)
   d$a <- c(1e-8,2e-8,3e-8); d$b <- c(1,2,3)
   d$c <- c(1e8,2e8,3e8)
-  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_grouped(counts=c("a","b","c"))),bands=2)
+  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", counts=c("a","b","c"))),bands=2)
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-10)
 })
 
@@ -286,7 +286,7 @@ test_that("aggregate kNN populations and boundary fractions are variable-specifi
                   race_a=c(4,10,9,12,15),race_b=c(6,10,31,8,25),
                   income_low=c(0,4,2,8,6),income_high=c(0,6,2,16,4))
   vars <- list(race=spseg_categorical(counts=c("race_a","race_b")),
-                income=spseg_grouped(counts=c("income_low","income_high"),
+                income=spseg_continuous(representation = "intervals", counts=c("income_low","income_high"),
                                      localenv="shares"))
   for (kernel in c("unweighted","biweight","inverse","exponential")) {
     r <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=c(7,20),

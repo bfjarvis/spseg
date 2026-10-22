@@ -40,7 +40,8 @@
 }
 \value{
 Printing returns `x` invisibly. Data-frame extraction returns a long
-  table with the analysis name, type, method, and band. Environment tables
+  table with the analysis name, type, continuous input `representation`
+  (`NA` for other types), method, and band. Environment tables
   identify the input row as `location`. Spatial extraction returns this
   environment table with the corresponding input geometry attached. Quantile
   rows have `summary = "quantiles"`, `prob`, and `rank`; share rows have

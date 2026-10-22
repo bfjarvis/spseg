@@ -32,7 +32,7 @@ nodes <- data.frame(
 )
 variables <- list(
   ethnicity=spseg_categorical(counts=c("group_a","group_b")),
-  income=spseg_grouped(counts=c("low","high"))
+  income=spseg_continuous(representation = "intervals", counts=c("low","high"))
 )
 network <- spseg_network(edges)
 result <- spseg(nodes, variables, network=network, node_id="node",
