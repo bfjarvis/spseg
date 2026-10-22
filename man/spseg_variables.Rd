@@ -23,7 +23,7 @@ spseg_ordinal(
   measures = NULL,
   weights = NULL,
   na.action = c("fail", "omit"),
-  localenv = "quantiles"
+  localenv = "shares"
 )
 
 spseg_continuous(
@@ -58,9 +58,10 @@ Defaults to the `population` supplied to [spseg()], or its inferred default.}
 only to this variable, including its kNN stopping population. Other
 variables and radius bandwidths are unaffected.}
 
-\item{localenv}{Retained local-environment summary for ordered variables:
-`"quantiles"` (default) or `"shares"`, or a list with `type` and optional
-`probs`/`breaks`. Quantiles default to `seq(.1, .9, .1)` and report local
+\item{localenv}{Retained local-environment summary: ordinal variables default
+to `"shares"`; continuous variables default to `"quantiles"` for either
+input representation. Select either summary, or a list with `type` and
+optional `probs`/`breaks`. Quantiles default to `seq(.1, .9, .1)` and report local
 weighted quantiles of global population ranks. Ordinal and exact continuous
 observations use weighted midranks and the inverse weighted empirical CDF;
 grouped intervals use the inverse linearly interpolated CDF. Probabilities
@@ -113,7 +114,7 @@ spseg_continuous(counts = c("low", "middle", "high"), representation = "interval
 spseg_continuous(values = "income", exposure = list(probs = c(0, .2, .8, 1)))
 spseg_continuous(values = "income",
                  localenv = list(type = "quantiles", probs = c(.25, .5, .75)))
-spseg_ordinal(values = "education", localenv = "shares")
+spseg_ordinal(values = "education", localenv = "quantiles")
 }
 \seealso{
 [spseg()]

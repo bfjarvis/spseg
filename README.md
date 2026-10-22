@@ -42,8 +42,9 @@ With `neighbors = "knn"`, each variable selects its own eligible population:
 when the variables cover different populations. Neighbor discovery is shared.
 
 For neighborhood construction, use `output = "localenv"` (or `"full"` to also
-calculate indices). Ordered variables retain local deciles of global ranks by
-default. For quartiles, specify
+calculate indices). Categorical and ordinal variables retain category shares by
+default. Continuous variables retain local deciles of global ranks for either
+input representation. For quartiles, specify
 `localenv = list(type = "quantiles", probs = c(.25, .5, .75))` in
 `spseg_ordinal()` or `spseg_continuous()` (either representation). Use
 `localenv = "shares"` for local category shares. These presentation settings

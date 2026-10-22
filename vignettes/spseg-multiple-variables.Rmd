@@ -315,9 +315,11 @@ These exposure cuts do not coarsen the continuous segregation indices.
 `result$analyses[[name]]` contains scalar and optional categorical pairwise
 indices, exposure matrices, method metadata, actual normalizers, and per-band
 status. `as.data.frame()` adds variable type and method to each result.
-`output="full"` or `"localenv"` retains compact matrices. Categorical variables
-store category shares. Ordinal, grouped, and exact continuous variables default
-to local weighted deciles of **global population ranks**, not original values.
+`output="full"` or `"localenv"` retains compact matrices. Categorical and ordinal
+variables default to category shares. Continuous variables, with either exact
+or interval input, default to local weighted deciles of **global population ranks**,
+not original values. Ordinal variables can opt into rank quantiles with
+`localenv="quantiles"`.
 For example, a local median rank of .8 places the weighted median neighbor at
 the population's 80th percentile. Kernel weights, population weights, and kNN
 boundary fractions are included in these summaries.
@@ -338,7 +340,7 @@ environments <- spseg(people, coords=c("x", "y"), bands=3, output="localenv",
   variables=list(
     income=spseg_continuous(values="income",
       localenv=list(type="quantiles", probs=c(.25, .5, .75))),
-    education=spseg_ordinal(values="education", localenv="shares"),
+    education=spseg_ordinal(values="education"),
     income_groups=spseg_continuous(values="income",
       localenv=list(type="shares", breaks=c(-Inf, 30, Inf)))
   ))

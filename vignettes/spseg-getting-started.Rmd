@@ -203,8 +203,9 @@ micro <- segcurves[[1]]
 income_levels <- levels(people$income_band)
 ```
 
-Continuous and ordered variables retain local deciles of global ranks by
-default. These summaries are compact even for large neighborhoods: income's
+Continuous variables retain local deciles of global ranks by default, for either
+input representation. Categorical and ordinal variables retain category shares.
+These summaries are compact even for large neighborhoods: income's
 median rank describes its local position, and its lower and upper quantiles
 describe local spread. The indices still use the fine-grained data.
 Each retained income environment has nine columns regardless of how many

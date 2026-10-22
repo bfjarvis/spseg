@@ -79,7 +79,7 @@ test_that("presentation settings leave all indices and exposure unchanged", {
     custom=spseg_continuous(values="v",
       localenv=list(type="shares",breaks=c(-Inf,2,Inf))),
     ordinal=spseg_ordinal(values="o"),
-    categories=spseg_ordinal(values="o",localenv="shares"))
+    ordinal_quantiles=spseg_ordinal(values="o",localenv="quantiles"))
   for(mode in c("radius","knn")) {
     r <- spseg(d,coords=c("x","y"),variables=specs,bands=c(1,3),
                  neighbors=mode,output="full")
@@ -87,8 +87,12 @@ test_that("presentation settings leave all indices and exposure unchanged", {
     expect_equal(as.data.frame(r),as.data.frame(indices),tolerance=1e-12)
     for(name in c("quartiles","shares","custom"))
       expect_equal(r$analyses$default$indices,r$analyses[[name]]$indices)
-    expect_equal(r$analyses$ordinal$indices,r$analyses$categories$indices)
-    for(name in c("shares","custom","categories"))
+    expect_equal(r$analyses$ordinal$indices,r$analyses$ordinal_quantiles$indices)
+    expect_identical(r$analyses$ordinal$definition$localenv$type,"shares")
+    expect_equal(unname(r$analyses$ordinal$env[[1]]),
+                 diag(3)[as.integer(d$o),,drop=FALSE])
+    expect_equal(ncol(r$analyses$ordinal_quantiles$env[[1]]),9L)
+    for(name in c("shares","custom","ordinal"))
       expect_equal(rowSums(r$analyses[[name]]$env[[2]]),rep(1,nrow(d)),ignore_attr=TRUE)
     expect_equal(ncol(r$analyses$custom$env[[1]]),2)
     expect_equal(ncol(r$analyses$default$env[[1]]),9)

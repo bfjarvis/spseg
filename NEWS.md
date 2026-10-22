@@ -7,9 +7,10 @@
   without an alias. Continuous results report their representation separately
   from the variable type; calculation methods and compact environments are unchanged.
 
-- Retained ordinal, grouped, and continuous local environments now default to
-  compact weighted quantiles of global ranks. Their constructors accept
-  `localenv = "shares"` or custom quantile/cut settings. Indices and exposure
+- Retained local environments default to category shares for categorical and
+  ordinal variables, and compact weighted quantiles of global ranks for either
+  continuous representation. Ordinal and continuous constructors accept
+  `localenv = "shares"`, `"quantiles"`, or custom quantile/cut settings. Indices and exposure
   still use the full available distributions; exact local distributions are
   no longer duplicated in the result. Environment extraction reports either
   `prob`/`rank` or `category`/`share`, with the summary type recorded explicitly.

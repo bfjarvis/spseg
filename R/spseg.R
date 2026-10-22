@@ -91,8 +91,9 @@
 #' @param output Return mode. "indices" stores only segregation indices.
 #'   "full" stores both indices and local environments. "localenv"
 #'   stores local environments without calculating indices.
-#'   Categorical environments contain category shares; ordered variables default
-#'   to compact local quantiles of global ranks. Customize the retained summary
+#'   Categorical and ordinal environments default to category shares; continuous
+#'   variables default to compact local quantiles of global ranks for either
+#'   input representation. Customize the retained summary
 #'   with `localenv` in the variable constructors, independently of the indices.
 #' @param verbose Logical. If `TRUE`, report progress messages.
 #' @param variables Required uniquely named list of [spseg_variables]

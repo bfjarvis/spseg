@@ -4,8 +4,8 @@
 #'
 #' [spseg()] returns a `spseg_result`. Each element of `analyses` contains `indices`, optional
 #' `env`, `definition`, `normalizers`, and a status for each band. Stored
-#' environments are compact matrices: categorical shares, or local quantiles
-#' of global ranks for ordered variables by default. The ordered constructors'
+#' environments are compact matrices: categorical and ordinal shares, or local
+#' quantiles of global ranks for continuous variables by default. The ordered constructors'
 #' `localenv` option selects quantiles or category shares; settings are recorded
 #' in `definition$localenv`. The regional reference distribution is retained
 #' once when environments are stored. Inputs and environments are omitted in the
