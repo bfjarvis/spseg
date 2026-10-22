@@ -23,7 +23,8 @@ spseg_ordinal(
   levels = NULL,
   measures = NULL,
   weights = NULL,
-  na.action = c("fail", "omit")
+  na.action = c("fail", "omit"),
+  localenv = "quantiles"
 )
 
 spseg_grouped(
@@ -33,7 +34,8 @@ spseg_grouped(
   measures = NULL,
   weights = NULL,
   na.action = c("fail", "omit"),
-  interpolation = "linear"
+  interpolation = "linear",
+  localenv = "quantiles"
 )
 
 spseg_continuous(
@@ -43,7 +45,8 @@ spseg_continuous(
   measures = NULL,
   weights = NULL,
   na.action = c("fail", "omit"),
-  exposure = NULL
+  exposure = NULL,
+  localenv = "quantiles"
 )
 }
 \arguments{
@@ -64,6 +67,21 @@ Defaults to the `population` supplied to [spseg()], or its inferred default.}
 only to this variable, including its kNN stopping population. Other
 variables and radius bandwidths are unaffected.}
 
+\item{localenv}{Retained local-environment summary for ordered variables:
+`"quantiles"` (default) or `"shares"`, or a list with `type` and optional
+`probs`/`breaks`. Quantiles default to `seq(.1, .9, .1)` and report local
+weighted quantiles of global population ranks. Ordinal and exact continuous
+observations use weighted midranks and the inverse weighted empirical CDF;
+grouped intervals use the inverse linearly interpolated CDF. Probabilities
+must increase strictly within [0, 1]; endpoints select the local support
+limits. Shares default to the supplied ordinal categories or intervals,
+or the continuous variable's exposure groups (deciles unless overridden).
+For shares, `probs` must increase from 0 to 1 and define global quantile
+groups; grouped intervals are apportioned using their interpolated CDF.
+Only exact continuous variables accept original-value `breaks`.
+These settings affect retained environments only, not indices or exposure.
+Environments are stored by `output = "full"` or `"localenv"` in [spseg()].}
+
 \item{interpolation}{Grouped continuous CDF interpolation, currently `"linear"`
 in overall percentile space, not in the original measurement units.}
 
@@ -73,8 +91,9 @@ columns. These are observed values, not interval midpoints.}
 \item{exposure}{For observed continuous variables, a list with either
 `probs` (global weighted quantile boundaries, including 0 and 1) or `breaks`
 (value boundaries covering the observations). Defaults to deciles.
-Equal values stay together; empty groups are removed. These cuts affect
-exposure only, not the rank-order indices.}
+Equal values stay together; empty groups are removed. These cuts do not
+affect the rank-order indices. They also supply the default groups for
+`localenv = "shares"` when no local cuts are specified.}
 }
 \value{
 A `spseg_variable` specification for `spseg(variables = ...)`.
@@ -89,6 +108,9 @@ spseg_categorical(values = "ethnicity")
 spseg_ordinal(counts = c("primary", "secondary", "tertiary"))
 spseg_grouped(counts = c("low", "middle", "high"))
 spseg_continuous(values = "income", exposure = list(probs = c(0, .2, .8, 1)))
+spseg_continuous(values = "income",
+                 localenv = list(type = "quantiles", probs = c(.25, .5, .75)))
+spseg_ordinal(values = "education", localenv = "shares")
 }
 \seealso{
 [spseg()]

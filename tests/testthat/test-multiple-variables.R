@@ -120,8 +120,8 @@ test_that("raw tied and weighted observations equal exact-value count input", {
   expect_equal(a$analyses$v$indices,b$analyses$v$indices,tolerance=1e-12)
   expect_equal(a$analyses$v$indices,c$analyses$v$indices,tolerance=1e-12)
   expect_equal(a$analyses$v$definition$exposure$shares,c(7,3,4)/14)
-  expect_equal(sum(a$analyses$v$env[[1]][[1]]$share),1)
-  expect_lte(length(a$analyses$v$env[[1]][[1]]$share),length(unique(d$v)))
+  expect_equal(dim(a$analyses$v$env[[1]]), c(nrow(d), 9L))
+  expect_equal(unname(a$analyses$v$env[[1]][1,]), rep(.25, 9))
   permutation <- c(4,2,1,3)
   changed <- d[permutation,]; changed$v <- exp(changed$v)
   r <- spseg(changed,coords=c("x","y"),population="w",
@@ -214,7 +214,7 @@ test_that("single populated intervals and near-endpoint grouped integrals are st
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-10)
 })
 
-test_that("mixed SF results, sparse output, and search backends work together", {
+test_that("mixed SF results, compact output, and search backends work together", {
   d <- data.frame(x=c(0,0,1,3,4),y=0,g=c("a","b","a","c","c"),
                   o=ordered(c("low","low","mid","high","mid"),levels=c("low","mid","high")),
                   v=c(0,0,2,3,4))
@@ -261,12 +261,12 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
                   income=as.numeric(seq_len(140)))
   d$income[89:100] <- NA_real_
   variables <- list(race=spseg_categorical(values="race"),
-                    income=spseg_continuous(values="income",na.action="omit"))
+                    income=spseg_continuous(values="income",na.action="omit",
+                      localenv=list(type="quantiles",probs=c(0,.1,.5,.9,1))))
   r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
              bands=100,weighting="unweighted",scope="multigroup",output="full")
-  expected <- c(1:88,101:112)
-  expect_equal(r$analyses$income$env[[1]][[1]]$value,expected)
-  expect_equal(r$analyses$income$env[[1]][[1]]$share,rep(.01,100))
+  expect_equal(unname(r$analyses$income$env[[1]][1,]),
+               (c(1,10,50,90,100)-.5)/128)
   for (name in names(variables)) {
     expect_equal(r$analyses[[name]]$knn$min_population,100)
     expect_equal(r$analyses[[name]]$knn$max_population,100)
@@ -286,7 +286,8 @@ test_that("aggregate kNN populations and boundary fractions are variable-specifi
                   race_a=c(4,10,9,12,15),race_b=c(6,10,31,8,25),
                   income_low=c(0,4,2,8,6),income_high=c(0,6,2,16,4))
   vars <- list(race=spseg_categorical(counts=c("race_a","race_b")),
-                income=spseg_grouped(counts=c("income_low","income_high")))
+                income=spseg_grouped(counts=c("income_low","income_high"),
+                                     localenv="shares"))
   for (kernel in c("unweighted","biweight","inverse","exponential")) {
     r <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=c(7,20),
                weighting=kernel,output="full")

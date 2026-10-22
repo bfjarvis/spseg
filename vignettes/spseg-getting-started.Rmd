@@ -29,7 +29,7 @@ theme_set(theme_minimal(base_size = 11))
 
 # A population with spatial clustering
 
-We start by generating 10,000 fictive housing units and 10,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a continuous trait, let's call it income, and a group membership. Income in the population of agents follows a single, log-normal distribution, but agents are then randomly assigned group memberships conditional on income, such that one group tends to be located on the lower end of the disrtribution compared to the other. 
+We start by generating 5,000 fictive housing units and 5,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a continuous trait, let's call it income, and a group membership. Income in the population of agents follows a single, log-normal distribution, but agents are then randomly assigned group memberships conditional on income, such that one group tends to be located on the lower end of the disrtribution compared to the other.
 
 ```{r agents}
 set.seed(2026)
@@ -163,6 +163,7 @@ segcurves <- patterns |>
       output = "full"
     )
   })
+format(object.size(segcurves), units = "MiB")
 ```
 
 This yields a pile of segregation measures, assessed for income, both continuous and intervalled, and group memberships, and across a number of different spatial bands. We can compile these segregation measures into a dataframe as follows, where I incorporate information from the original data set to (re-)label the different patterns:
@@ -190,8 +191,41 @@ segdata |>
 ```
 
 
-We can also grab the inividualized neighborhood statistics, because we requested the "full" output.
+We can also retrieve individualized neighborhood statistics because we requested
+the `"full"` output. For the remaining maps and aggregation examples, select the
+first pattern and attach its synthetic planar geometry.
 
+```{r selected-pattern}
+city <- patterns[patterns$pattern == pattern_names[1], ]
+people <- st_as_sf(city, coords = c("x", "y"), remove = FALSE,
+                    crs = 3857, sf_column_name = "location")
+micro <- segcurves[[1]]
+income_levels <- levels(people$income_band)
+```
+
+Continuous and ordered variables retain local deciles of global ranks by
+default. These summaries are compact even for large neighborhoods: income's
+median rank describes its local position, and its lower and upper quantiles
+describe local spread. The indices still use the fine-grained data.
+Each retained income environment has nine columns regardless of how many
+neighbors it includes.
+
+```{r local-income-ranks}
+dim(micro$analyses$income$env[["100"]])
+local_income <- st_as_sf(micro, variables = "income", bands = 100) |>
+  filter(prob == 0.5)
+ggplot(local_income) +
+  geom_sf(aes(colour = rank), size = 0.4) +
+  scale_colour_viridis_c(limits = c(0, 1), name = "Local median\nincome rank") +
+  coord_sf(datum = NA) + labs(x = NULL, y = NULL)
+```
+
+Customize this presentation in the variable constructor. For example,
+`spseg_continuous(values = "income", localenv = list(type = "quantiles",
+probs = c(.25, .5, .75)))` retains quartiles. Use `localenv = "shares"` for
+local shares in the continuous variable's exposure groups, or in the supplied
+categories for ordinal and grouped inputs. These choices affect neither the
+segregation indices nor exposure/isolation calculations.
 
 
 
@@ -236,7 +270,7 @@ ggplot(as.data.frame(micro), aes(band, value, colour = measure)) +
 
 Exposure is returned separately, without normalization: each row describes a
 focal group's average exposure to a destination group. The diagonal contains
-isolation. For exact income, we requested the same quintile cuts used elsewhere
+isolation. For exact income, we requested the same decile cuts used elsewhere
 in this vignette. The default would be deciles; these cuts affect exposure only,
 not the continuous scalar indices.
 
@@ -245,8 +279,9 @@ as.data.frame(micro, what = "exposure", variables = "group") |>
   filter(band == 100)
 ```
 
-`output = "full"` retains local environments and geometry for mapping. Use the
-default `output = "indices"` when these larger objects are unnecessary.
+`output = "full"` retains compact local environments and geometry for mapping.
+Use `output = "localenv"` for neighborhood summaries without indices, or the
+default `output = "indices"` when only the indices are needed.
 
 ```{r local-environments}
 local_group <- st_as_sf(micro, variables = "group", bands = 100) |>

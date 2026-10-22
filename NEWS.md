@@ -1,5 +1,12 @@
 # spseg 0.9.0.9000
 
+- Retained ordinal, grouped, and continuous local environments now default to
+  compact weighted quantiles of global ranks. Their constructors accept
+  `localenv = "shares"` or custom quantile/cut settings. Indices and exposure
+  still use the full available distributions; exact local distributions are
+  no longer duplicated in the result. Environment extraction reports either
+  `prob`/`rank` or `category`/`share`, with the summary type recorded explicitly.
+
 - Added a synthetic-population overview covering individual, regular-grid,
   Voronoi, and pycnophylactic workflows. The older overview is retained and
   marked as a legacy introductory guide.

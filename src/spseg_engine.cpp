@@ -78,8 +78,9 @@ struct Model {
   int type, k, groups, bands;
   NumericMatrix input;
   arma::mat counts;
-  IntegerVector code, exposure_map, flags;
-  NumericVector mass, shares, scores, z;
+  IntegerVector code, exposure_map, flags, env_map;
+  NumericVector mass, shares, scores, z, env_probs, env_breaks;
+  int env_type, env_columns;
   CharacterVector labels;
   std::vector<double> q, prefix;
   double total, reference[5] = {0,0,0,0,0};
@@ -108,6 +109,11 @@ struct Model {
       knn_target(b), knn_min(b,R_PosInf), knn_max(b,0.0),
       radius_min(b,R_PosInf), radius_max(b,0.0)
   {
+    env_map = as<IntegerVector>(config["env_map"]);
+    env_probs = as<NumericVector>(config["env_probs"]);
+    env_breaks = as<NumericVector>(config["env_breaks"]);
+    env_type = as<int>(config["env_type"]);
+    env_columns = as<int>(config["env_columns"]);
     k=shares.size(); groups=labels.size();
     total=std::accumulate(mass.begin(),mass.end(),0.0);
     double cumulative=0;
@@ -141,10 +147,8 @@ struct Model {
       for(int a=0;a<k-1;++a) for(int c=a+1;c<k;++c) pairs.push_back({a,c});
       pair_acc.zeros(pairs.size(),5,b);
     }
-    if(keep_env) for(int band=0;band<b;++band) {
-      if(type==3) environments[band]=List(n);
-      else environments[band]=NumericMatrix(n,k);
-    }
+    if(keep_env) for(int band=0;band<b;++band)
+      environments[band]=NumericMatrix(n,env_columns);
   }
 
   double focal(int i,int g) const {
@@ -175,6 +179,62 @@ struct Model {
     const double left=integral_global(split)-integral_global(a);
     const double right=integral_global(b)-integral_global(split);
     return std::max(0.0,p*(split-a)-left+right-p*(b-split));
+  }
+
+  // Retain only the requested presentation. Index calculations below continue
+  // to use the complete p/sparse distribution for this focal row and band.
+  void store_environment(int i, int band, const std::vector<double>& p,
+                         const std::vector<std::pair<int,double>>& sparse,
+                         double local) {
+    NumericMatrix env = environments[band];
+    if(local <= 0) {
+      for(int j=0;j<env_columns;++j) env(i,j)=NA_REAL;
+      return;
+    }
+    if(env_type == 1) {
+      int target=0;
+      double cumulative=0, last=NA_REAL;
+      const double tolerance=8*std::numeric_limits<double>::epsilon();
+      auto add = [&](int g, double share) {
+        if(share <= 0) return;
+        const double previous=cumulative;
+        cumulative+=share;
+        last=type==2 ? q[g] : z[g];
+        while(target<env_columns && env_probs[target]<1 &&
+              env_probs[target]<=cumulative+tolerance) {
+          if(type==2) {
+            const double lower=g==0 ? 0 : q[g-1];
+            const double fraction=std::max(0.0,std::min(1.0,
+              (env_probs[target]-previous)/share));
+            env(i,target)=lower+fraction*(q[g]-lower);
+          } else env(i,target)=z[g];
+          ++target;
+        }
+      };
+      if(type==3) for(const auto& item:sparse) add(item.first,item.second);
+      else for(int g=0;g<k;++g) add(g,p[g]);
+      while(target<env_columns) env(i,target++)=last;
+    } else if(env_type == 2) {
+      // Apportion grouped intervals to requested global-rank bins using the
+      // same linear interpolant as the grouped segregation indices.
+      for(int g=0;g<k;++g) {
+        const double lower=g==0 ? 0 : q[g-1], width=q[g]-lower;
+        if(width<=0 || p[g]<=0) continue;
+        for(int j=0;j<env_columns;++j) {
+          const double overlap=std::min(q[g],env_breaks[j+1])-
+                               std::max(lower,env_breaks[j]);
+          if(overlap>0) env(i,j)+=p[g]*overlap/width;
+        }
+      }
+    } else {
+      if(type==3) {
+        for(const auto& item:sparse) {
+          const int g=env_map[item.first];
+          if(g>=0) env(i,g)+=item.second;
+        }
+      } else for(int g=0;g<k;++g)
+        if(env_map[g]>=0) env(i,env_map[g])+=p[g];
+    }
   }
 
   void update(int i,int band,const Contributions& c) {
@@ -217,19 +277,7 @@ struct Model {
       if(local>0) for(double& v:p) v/=local;
       if(type==3) for(int g=0;g<k;++g) if(p[g]>0) sparse.push_back({g,p[g]});
     }
-    if(keep_env) {
-      if(type==3) {
-        NumericVector rank(sparse.size()), value(sparse.size()), share(sparse.size());
-        for(std::size_t a=0;a<sparse.size();++a) {
-          rank[a]=z[sparse[a].first]; value[a]=scores[sparse[a].first]; share[a]=sparse[a].second;
-        }
-        List env=environments[band];
-        env[i]=List::create(_["value"]=value,_["rank"]=rank,_["share"]=share);
-      } else {
-        NumericMatrix env=environments[band];
-        for(int g=0;g<k;++g) env(i,g)=local>0 ? p[g] : NA_REAL;
-      }
-    }
+    if(keep_env) store_environment(i,band,p,sparse,local);
     if(!indices || mass[i]<=0) return;
     if(local<=0) {empty[band]=true;return;}
     if(multigroup) {

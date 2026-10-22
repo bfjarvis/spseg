@@ -3,7 +3,7 @@ R package 'spseg' for measuring and visualising population segregation
 
 Pre-1.0 development: the interface may change before the first stable release.
 
-Start with `vignette("spseg-getting-started")` for a reproducible 10,000-person
+Start with `vignette("spseg-getting-started")` for a reproducible synthetic-population
 example covering individual data, regular and Voronoi aggregation, and
 count-preserving population surfaces. The older `spseg-overview` vignette is
 retained as a legacy guide to the bundled population patterns.
@@ -37,6 +37,15 @@ For a plain data frame, add `coords = c("x", "y")`. For aggregate tables, use
 With `neighbors = "knn"`, each variable selects its own eligible population:
 `bands = 100` includes 100 eligible people before distance weighting, even
 when the variables cover different populations. Neighbor discovery is shared.
+
+For neighborhood construction, use `output = "localenv"` (or `"full"` to also
+calculate indices). Ordered variables retain local deciles of global ranks by
+default. For quartiles, specify
+`localenv = list(type = "quantiles", probs = c(.25, .5, .75))` in
+`spseg_ordinal()`, `spseg_grouped()`, or `spseg_continuous()`. Use
+`localenv = "shares"` for local category shares. These presentation settings
+do not coarsen the index calculations. Extract summaries with
+`as.data.frame(result, what = "env")` or `sf::st_as_sf(result)`.
 
 See `vignette("spseg-multiple-variables")` for definitions, sources, deterministic
 tie handling, population-count kNN neighborhoods, and exposure cuts. Polygon count specifications also support shared grid and pycnophylactic

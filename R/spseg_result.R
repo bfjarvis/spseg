@@ -4,9 +4,11 @@
 #'
 #' [spseg()] returns a `spseg_result`. Each element of `analyses` contains `indices`, optional
 #' `env`, `definition`, `normalizers`, and a status for each band. Stored
-#' categorical/ordinal/grouped environments are category-share matrices;
-#' continuous environments are sparse lists of exact values, global midranks,
-#' and local population shares. Inputs and environments are omitted in the
+#' environments are compact matrices: categorical shares, or local quantiles
+#' of global ranks for ordered variables by default. The ordered constructors'
+#' `localenv` option selects quantiles or category shares; settings are recorded
+#' in `definition$localenv`. The regional reference distribution is retained
+#' once when environments are stored. Inputs and environments are omitted in the
 #' default `output = "indices"` mode.
 #' Each definition records its `eligible_population`. For kNN, each analysis
 #' also contains a `knn` table: requested population, minimum/maximum selected
@@ -23,7 +25,10 @@
 #' @return Printing returns `x` invisibly. Data-frame extraction returns a long
 #'   table with the analysis name, type, method, and band. Environment tables
 #'   identify the input row as `location`. Spatial extraction returns this
-#'   environment table with the corresponding input geometry attached.
+#'   environment table with the corresponding input geometry attached. Quantile
+#'   rows have `summary = "quantiles"`, `prob`, and `rank`; share rows have
+#'   `summary = "shares"`, `category`, and `share`. Unused columns are `NA`.
+#'   Empty environments retain rows with missing summaries.
 #'   Network environments also identify `node`. Network-only results support
 #'   ordinary extraction; spatial extraction requires stored geometry or coordinates.
 #' @name spseg_result
@@ -95,19 +100,17 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
         if (!is.null(mat) && length(mat)) rows[[length(rows) + 1L]] <- data.frame(base,
           expand.grid(from_group = rownames(mat), to_group = colnames(mat),
                       stringsAsFactors = FALSE), exposure = as.vector(mat))
-      } else if (definition$type == "continuous") {
-        env <- analysis$env[[b]]
-        for (i in seq_along(env)) if (length(env[[i]]$share)) {
-          rows[[length(rows) + 1L]] <- data.frame(base, location = i,
-            category = NA_character_, value = env[[i]]$value,
-            rank = env[[i]]$rank, share = env[[i]]$share)
-        }
       } else {
         env <- analysis$env[[b]]
-        index <- which(!is.na(env), arr.ind = TRUE)
-        if (nrow(index)) rows[[length(rows) + 1L]] <- data.frame(base,
-          location = index[, 1], category = colnames(env)[index[, 2]],
-          value = NA_real_, rank = NA_real_, share = env[index])
+        location <- rep(seq_len(nrow(env)), times = ncol(env))
+        column <- rep(seq_len(ncol(env)), each = nrow(env))
+        quantiles <- definition$localenv$type == "quantiles"
+        if (length(location)) rows[[length(rows) + 1L]] <- data.frame(base,
+          location = location, summary = definition$localenv$type,
+          prob = if (quantiles) definition$localenv$probs[column] else NA_real_,
+          rank = if (quantiles) as.vector(env) else NA_real_,
+          category = if (quantiles) NA_character_ else colnames(env)[column],
+          share = if (quantiles) NA_real_ else as.vector(env))
       }
     }
   }

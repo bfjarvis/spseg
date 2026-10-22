@@ -271,7 +271,7 @@ insensitivity. Do not claim Reardon's strict exchange properties for them.
 
 The algorithms integrate CDFs directly: no separate binary datasets,
 polynomial fitting, or all-pairs rank-difference matrices are constructed.
-Observed-value environments stay sparse. Empirical dissimilarity uses prefix
+Observed-value calculations stay sparse. Empirical dissimilarity uses prefix
 integrals of the overall CDF, avoiding a full regional scan per neighborhood.
 
 # Exposure and isolation
@@ -307,9 +307,50 @@ These exposure cuts do not coarsen the continuous segregation indices.
 `result$analyses[[name]]` contains scalar and optional categorical pairwise
 indices, exposure matrices, method metadata, actual normalizers, and per-band
 status. `as.data.frame()` adds variable type and method to each result.
-`output="full"` or `"localenv"` stores category-share matrices or sparse
-continuous distributions. Use `as.data.frame(result, what="env")` or
-`sf::st_as_sf(result)` to obtain long local-distribution tables.
+`output="full"` or `"localenv"` retains compact matrices. Categorical variables
+store category shares. Ordinal, grouped, and exact continuous variables default
+to local weighted deciles of **global population ranks**, not original values.
+For example, a local median rank of .8 places the weighted median neighbor at
+the population's 80th percentile. Kernel weights, population weights, and kNN
+boundary fractions are included in these summaries.
+
+For ordinal categories and exact observations, ties have global weighted
+midranks and quantiles select the first rank at which cumulative local weight
+reaches the requested probability. They do not interpolate between observed
+ranks. For grouped intervals, quantiles invert the piecewise-linear local CDF
+in global percentile space. Probabilities zero and one select local support
+limits; an empty local environment has missing summaries.
+
+The `localenv` setting is independent of `exposure` and of all scalar indices.
+It is available in `spseg_ordinal()`, `spseg_grouped()`, and `spseg_continuous()`.
+For instance, request quartiles or category shares:
+
+```{r compact-environments}
+environments <- spseg(people, coords=c("x", "y"), bands=3, output="localenv",
+  variables=list(
+    income=spseg_continuous(values="income",
+      localenv=list(type="quantiles", probs=c(.25, .5, .75))),
+    education=spseg_ordinal(values="education", localenv="shares"),
+    income_groups=spseg_continuous(values="income",
+      localenv=list(type="shares", breaks=c(-Inf, 30, Inf)))
+  ))
+head(as.data.frame(environments, what="env", variables="income"))
+head(as.data.frame(environments, what="env", variables="income_groups"))
+```
+
+Share summaries use the supplied ordinal categories or intervals by default;
+exact continuous variables use their exposure groups, even when no exposure
+index is requested. Custom share `probs` run from zero to one and define
+global quantile bins, with equal observed values kept together. For grouped
+intervals, such bins use CDF interpolation. Original-value `breaks` are available
+only for exact continuous input. Changing local-environment cuts does not
+change the exposure matrix or any segregation index.
+
+Use `as.data.frame(result, what="env")` or `sf::st_as_sf(result)` to obtain long
+tables. Quantile rows have `summary="quantiles"`, `prob`, and `rank`; category
+rows have `summary="shares"`, `category`, and `share`. Unused fields are missing.
+`definition$localenv` records the representation and its settings. The detailed
+local distributions are used transiently for calculation and are not retained.
 
 An exact constant variable has undefined scalar indices (`NA`, status
 `"constant"`), but its exposure can be one. A single populated *interval*

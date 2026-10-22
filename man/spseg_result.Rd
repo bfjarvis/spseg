@@ -42,16 +42,21 @@
 Printing returns `x` invisibly. Data-frame extraction returns a long
   table with the analysis name, type, method, and band. Environment tables
   identify the input row as `location`. Spatial extraction returns this
-  environment table with the corresponding input geometry attached.
+  environment table with the corresponding input geometry attached. Quantile
+  rows have `summary = "quantiles"`, `prob`, and `rank`; share rows have
+  `summary = "shares"`, `category`, and `share`. Unused columns are `NA`.
+  Empty environments retain rows with missing summaries.
   Network environments also identify `node`. Network-only results support
   ordinary extraction; spatial extraction requires stored geometry or coordinates.
 }
 \description{
 [spseg()] returns a `spseg_result`. Each element of `analyses` contains `indices`, optional
 `env`, `definition`, `normalizers`, and a status for each band. Stored
-categorical/ordinal/grouped environments are category-share matrices;
-continuous environments are sparse lists of exact values, global midranks,
-and local population shares. Inputs and environments are omitted in the
+environments are compact matrices: categorical shares, or local quantiles
+of global ranks for ordered variables by default. The ordered constructors'
+`localenv` option selects quantiles or category shares; settings are recorded
+in `definition$localenv`. The regional reference distribution is retained
+once when environments are stored. Inputs and environments are omitted in the
 default `output = "indices"` mode.
 Each definition records its `eligible_population`. For kNN, each analysis
 also contains a `knn` table: requested population, minimum/maximum selected

@@ -57,8 +57,8 @@
   }
   if (keep_env) {
     names(result$env) <- as.character(bands)
-    if (config$type != 3L) result$env <- lapply(result$env, function(z) {
-      colnames(z) <- config$metadata$labels
+    result$env <- lapply(result$env, function(z) {
+      colnames(z) <- config$metadata$localenv$labels
       z
     })
   }
