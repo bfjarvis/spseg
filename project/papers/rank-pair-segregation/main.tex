@@ -1,0 +1,621 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,booktabs,array,microtype}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[round,authoryear]{natbib}
+\usepackage[colorlinks=true,allcolors=blue]{hyperref}
+\newtheorem{proposition}{Proposition}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\dd}{\,\mathrm{d}}
+\newcommand{\T}{\mathcal{T}}
+\newcommand{\V}{V}
+\title{Income Segregation across the Rank Distribution\\
+\large Slice comparisons, pairwise representations, and evaluative choices}
+\author{Working discussion draft}
+\date{23 October 2026}
+\begin{document}
+\maketitle
+\begin{abstract}
+How segregated are different parts of the income distribution from one another, and which comparisons account for changes in an overall summary? This paper starts from comparisons between equally sized income-rank slices, producing a surface that describes separation across the full hierarchy. Weighted summaries decompose exactly into contributions from pairs of rank bands, with a corresponding decomposition of changes when the weighting rule is held fixed. Rank-based measurement separates residential sorting from the monetary spacing of incomes, allowing income inequality to remain a potential explanation for segregation rather than a mechanical component of the outcome. We express slice comparisons in a general pairwise framework and show how appropriate distribution-dependent weights recover Reardon's cumulative-threshold measures. Beta-product and power-gap specifications make alternative valuations of rank comparisons explicit. Toy examples illustrate these valuations and their decompositions, followed by approaches to estimation and an agenda for mathematical and empirical validation.
+\end{abstract}
+
+\section{Segregation across the income hierarchy}
+
+Income segregation concerns who lives near whom across the income distribution. The separation of the very poor from the very rich is one important comparison. Others concern the poor and the lower middle class, the lower and upper middle classes, or different segments of the affluent population. A comprehensive description should make it possible to examine these comparisons together and to identify which parts of the hierarchy are moving closer together or farther apart.
+
+Existing research gives substantive reasons to distinguish these patterns. In their estimates for 117 large US metropolitan areas, \citet{bischoff2014} report higher segregation of affluence than of poverty throughout 1970--2009, but a larger increase for poverty over the full period; the two also moved in opposite directions during the 1970s. \citet{reardonbischoff2011} find that the association with income inequality is concentrated particularly in large-scale segregation of affluence. These findings motivate questions about which rank comparisons account for a reported change in segregation.
+
+A rise in the separation of the rich from everyone else invites a more detailed question: how have the very rich become separated from the quite rich, the middle class, and the poor? These comparisons distinguish sorting within the affluent population from its relationships with the rest of the hierarchy. A useful summary should retain this detail through an exact accounting of contributions: how much of its level, and how much of its change, comes from each comparison? Decomposability across rank pairs is therefore a central design objective, alongside rank invariance and explicit evaluative weights.
+
+Comparisons through the middle of the hierarchy are especially difficult to infer from overall indices or summaries of the two tails. Detailed neighborhood-exposure research already describes contexts across income levels \citep{reardonfox2015}. In the related setting of school districts, \citet{owens2016} identify increasing separation involving middle- and upper-middle-income families among families with children in public school. A systematic surface of rank-pair segregation would make comparisons such as the 25th versus the 65th percentile directly available alongside comparisons of the tails. The question is how to represent and summarize these relationships consistently across places and times.
+
+A second requirement is central to that comparison: the measure should separate sorting from changes in the income distribution itself. If everyone's income changes through a strictly increasing transformation while rank positions and neighborhood assignments remain fixed, measured rank segregation should remain fixed as well. Income inequality can then be used to explain differences in sorting. Otherwise, a relationship between inequality and measured segregation could partly reflect the arithmetic of the outcome rather than a change in residential allocation. This follows the rank-invariance principle emphasized by \citet{reardon2011} and supports research on inequality as a potential determinant of segregation.
+
+Our target is therefore residential sorting conditional on the income distribution, operationalized by expressing positions as population ranks. Monetary inequality and the allocation of those ranks across neighborhoods are treated as separate dimensions. Inequality may still influence sorting through housing prices, resources, and residential choices; the measure allows that relationship to be investigated empirically. Rank standardization supplies the measurement distinction, while an explanatory analysis supplies the statistical conditioning and identification strategy.
+
+We begin with segregation between narrow, equally sized rank slices. This produces a two-dimensional surface indexed by both ranks. Reardon's approach evaluates the two groups below and above each cumulative threshold; we relate that construction to the slice surface after developing a common pairwise representation. The resulting identities locate established measures within a broader framework. Alternative weighting assumptions then express which comparisons matter for a particular analysis, followed by toy examples, approaches to empirical estimation, and an agenda for mathematical validation.
+
+\section{From income ranks to slice-wise segregation}
+\label{sec:slices}
+
+Consider a population with a continuous income distribution $F_Y$. Let $R=F_Y(Y)$ be global income rank, uniform on $[0,1]$. Mutually exclusive and exhaustive neighborhoods have shares $w_j>0$ summing to one. Write
+\[
+G_j(q)=\Pr(R\leq q\mid J=j),\qquad
+g_j(q)=G'_j(q),\qquad
+\sum_jw_jG_j(q)=q,\quad \sum_jw_jg_j(q)=1
+\]
+with the density identity holding almost everywhere. We work with absolutely continuous local distributions. Here $q$ is a threshold on the \emph{global} rank scale and $G_j(q)$ is the \emph{local} share below it.
+
+For a rank interval $I$ of width $\delta$, the neighborhood distribution of its residents is
+\[
+\pi_j(I)=\Pr(J=j\mid R\in I)
+=\frac{w_j}{\delta}\int_I g_j(q)\dd q.
+\]
+Two disjoint intervals of equal width contain equal population shares. We can restrict attention to their residents and calculate a two-group segregation index. As their widths shrink around ranks $r$ and $s$, their neighborhood distributions approach $w_jg_j(r)$ and $w_jg_j(s)$ almost everywhere. This defines the population slice comparison independently of a particular empirical choice of bins.
+
+Let $\phi$ be a nonnegative, symmetric, concave binary variation function with $\phi(0)=\phi(1)=0$ and $\phi(1/2)>0$. We consider
+\[
+\phi_{\rm info}(p)=-p\log p-(1-p)\log(1-p),\qquad
+\phi_{\rm div}(p)=p(1-p),\qquad
+\phi_{\rm root}(p)=\sqrt{p(1-p)}.
+\]
+Logs are natural and $0\log0=0$. These supply information-theory, relative-diversity, and square-root comparisons; multiplicative constants in $\phi$ cancel.
+
+For local densities $x$ and $y$, define the mixing contribution
+\begin{equation}
+B_\phi(x,y)=\frac{x+y}{2}\,
+\frac{\phi\!\left(x/(x+y)\right)}{\phi(1/2)}.
+\label{eq:mixing}
+\end{equation}
+Set $B_\phi(0,0)=0$. Within neighborhood $j$, the pooled slices have population share $w_j(x+y)/2$, and their binary composition is $x/(x+y)$. Accordingly, $B_\phi$ combines the neighborhood's relative representation with its normalized variation. For the three functions,
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Index family & $B_\phi(x,y)$\\
+\midrule
+Information theory & $\{(x+y)\log(x+y)-x\log x-y\log y\}/(2\log2)$\\[3pt]
+Relative diversity & $2xy/(x+y)$\\[3pt]
+Square root & $\sqrt{xy}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+The segregation surface and a weighted scalar summary are
+\begin{equation}
+L_\phi(r,s)=1-\sum_jw_jB_\phi(g_j(r),g_j(s)),\qquad
+\overline L_{\phi,K}=
+\frac{\int_{\T}K(r,s)L_\phi(r,s)\dd r\dd s}
+{\int_{\T}K(r,s)\dd r\dd s},
+\label{eq:surface}
+\end{equation}
+where $\T=\{(r,s):0\leq r<s\leq1\}$ counts each unordered pair once, and $K$ is nonnegative with finite, positive integral. Concavity gives $0\leq L_\phi\leq1$, with zero when the two slices have the same neighborhood distribution. Their weighted average has the same bounds.
+
+The full surface describes which ranks are separated from which others. The scalar summary adds an evaluative choice: $K\equiv1$ gives equal attention to all rank-pair locations, while other weights emphasize particular portions of the hierarchy or particular gaps. Keeping the surface alongside the summary makes these choices visible.
+
+Both objects measure sorting on a common rank scale. For any strictly increasing income transformation $T$, $F_{T(Y)}(T(Y))=F_Y(Y)$, so the local rank distributions, the surface, and every summary with a fixed rank-based weighting rule are unchanged. This holds whether a comparison concerns the tails or the middle. It supplies the same separation of sorting from monetary inequality throughout the distribution.
+
+\subsection{Contributions to levels and changes}
+\label{sec:decomposition}
+
+Partition the rank interval into ordered reporting bands $I_1,\ldots,I_m$. For $a<b$, let $\T_{ab}=I_a\times I_b$, and let $\T_{aa}=(I_a\times I_a)\cap\T$. These cells cover every unordered rank pair once. The diagonal cells retain comparisons \emph{within} each reporting band, such as comparisons of the very rich with the quite rich when both belong to a broad affluent band.
+
+Write $Z_K=\int_\T K(r,s)\dd r\dd s$. Define each cell's weighting mass, its share of total weight, and its average segregation by
+\begin{align}
+W_{ab}&=\int_{\T_{ab}}K(r,s)\dd r\dd s,
+&\omega_{ab}&=W_{ab}/Z_K,\nonumber\\
+D_{ab}&=\frac{1}{W_{ab}}\int_{\T_{ab}}K(r,s)L_\phi(r,s)\dd r\dd s,
+&C_{ab}&=\omega_{ab}D_{ab}.
+\label{eq:cell-contributions}
+\end{align}
+For a zero-weight cell set $C_{ab}=0$ and leave $D_{ab}$ unreported. Additivity of integration gives
+\begin{equation}
+\overline L_{\phi,K}=\sum_{a\leq b}C_{ab}
+=\sum_{a\leq b}\omega_{ab}D_{ab},\qquad
+\sum_{a\leq b}\omega_{ab}=1.
+\label{eq:level-decomposition}
+\end{equation}
+Thus $D_{ab}$ reports how segregated the constituent slice comparisons are on average, while $C_{ab}$ reports how much they contribute to the overall index. The latter incorporates the analyst's evaluative weighting. Both are useful: a highly segregated comparison may receive little weight in a particular summary. Each $D_{ab}$ averages the fine-slice surface over a reporting cell; calculating a new two-group index after pooling everyone in each band is a different operation.
+
+Under uniform weighting, if band $a$ has width $\delta_a$, then $\omega_{ab}=2\delta_a\delta_b$ for $a<b$ and $\omega_{aa}=\delta_a^2$. Reporting bands can be refined or combined without changing the underlying summary: contributions of subcells sum to the contribution of their union. These reporting choices are separate from the resolution used to estimate the surface.
+
+For observations at times $t=0,1$, retain the same rank boundaries and weighting function $K$. The weights then remain fixed even if total population changes, and
+\begin{equation}
+\Delta\overline L_{\phi,K}
+=\sum_{a\leq b}\Delta C_{ab}
+=\sum_{a\leq b}\omega_{ab}\bigl(D_{ab,1}-D_{ab,0}\bigr).
+\label{eq:change-decomposition}
+\end{equation}
+Level contributions are nonnegative; change contributions can be positive or negative. A table or triangular heat map of $\Delta C_{ab}$ identifies comparisons accounting for increases and those offsetting them. For example, one can report the very-rich--poor, very-rich--middle, and very-rich--quite-rich contributions separately, together with the remaining cells. This provides a summary and a complete accounting of the rank comparisons underlying its change.
+
+\section{A common pairwise representation}
+\label{sec:pairwise}
+
+The slice formulation can also be expressed through pairs drawn within neighborhoods. For a nonnegative pair-contribution rule $A(r,s;G)$, define
+\begin{equation}
+V_A(G)=\int_{\T}A(r,s;G)\dd G(r)\dd G(s),\qquad
+S_A=1-\frac{\sum_jw_jV_A(G_j)}{V_A(U)},\quad U(q)=q.
+\label{eq:candidate}
+\end{equation}
+We consider finite integrals and a positive denominator. The same rule is evaluated locally and in the population. A rule expressed in ranks and their distributions preserves the income-transformation invariance above.
+
+\subsection{From slices to local pairs}
+
+The connection follows from changing the integration measure. Slice comparisons use $\dd r\dd s$, whereas within-neighborhood pair comparisons use
+$\dd G(r)\dd G(s)=g(r)g(s)\dd r\dd s$. Define
+\begin{equation}
+A^{\rm slice}_{\phi,K}(r,s;G)
+=K(r,s)\frac{B_\phi(g(r),g(s))}{g(r)g(s)}.
+\label{eq:slice-A}
+\end{equation}
+The expression applies where both densities are positive. Assign it zero elsewhere: for the three variation functions, $B_\phi(x,y)=0$ whenever $xy=0$, and these pairs contribute zero under either integration measure. Then
+\begin{equation}
+\int_{\T} A^{\rm slice}_{\phi,K}\dd G(r)\dd G(s)
+=\int_{\T} K(r,s)B_\phi(g(r),g(s))\dd r\dd s.
+\label{eq:forward}
+\end{equation}
+For the uniform distribution, $B_\phi(1,1)=1$, giving the denominator $\int_{\T}K\dd r\dd s$. Consequently, substituting $A^{\rm slice}_{\phi,K}$ into the general pairwise ratio \eqref{eq:candidate} yields $\overline L_{\phi,K}$ exactly.
+
+For example, equal-slice diversity and square-root comparisons correspond to
+\[
+A^{\rm slice}_{{\rm div},K}=\frac{2K(r,s)}{g(r)+g(s)},
+\qquad
+A^{\rm slice}_{{\rm root},K}=\frac{K(r,s)}{\sqrt{g(r)g(s)}},
+\]
+on positive-density pairs. The information-theory contribution follows by inserting its expression for $B_\phi$ into \eqref{eq:slice-A}. Thus all three equal-slice measures fit the pairwise ratio through an explicit choice of $A$.
+
+\subsection{From pair contributions to weighted slice mixing}
+
+The change of measure also works in the other direction. For a nonnegative pair contribution $A(r,s;G)$ with finite variation, define the distribution-dependent weight
+\begin{equation}
+W_{A,\phi}(r,s;G)
+=\frac{A(r,s;G)g(r)g(s)}{B_\phi(g(r),g(s))}
+\label{eq:reverse-weight}
+\end{equation}
+on positive-density pairs, with zero contribution elsewhere. This gives
+\begin{equation}
+V_A(G)=\int_{\T}A(r,s;G)\dd G(r)\dd G(s)
+=\int_{\T}W_{A,\phi}(r,s;G)B_\phi(g(r),g(s))\dd r\dd s.
+\label{eq:reverse}
+\end{equation}
+The corresponding index is therefore
+\begin{equation}
+S_A=1-
+\frac{\sum_jw_j\int_{\T}W_{A,\phi}(r,s;G_j)B_\phi(g_j(r),g_j(s))\dd r\dd s}
+{\int_{\T}W_{A,\phi}(r,s;U)\dd r\dd s}.
+\label{eq:weighted-mixing}
+\end{equation}
+The weight is applied to each neighborhood's mixing contribution before summing, and the same rule is evaluated at the overall distribution for normalization. Substituting $A=A^{\rm slice}_{\phi,K}$ gives $W=K$ on contributing pairs and returns the original slice average. Other pair contributions correspond to distribution-dependent weights on those same mixing terms.
+
+Equations~\eqref{eq:slice-A} and \eqref{eq:reverse-weight} translate between population-slice and local-pair integration. They make the formulations commensurable while keeping the weighting and normalization explicit. This provides the basis for relating the framework to cumulative-threshold measures.
+
+\section{Reardon's measures as special cases}
+\label{sec:reardon}
+
+Reardon's rank-order approach \citep{reardon2011} compares the population below and above every rank threshold $q$. For a variation function $\phi$, the binary index at that threshold is
+\[
+H_\phi(q)=1-\frac{\sum_jw_j\phi(G_j(q))}{\phi(q)},\qquad 0<q<1.
+\]
+Averaging with weight $\phi(q)$ gives
+\begin{equation}
+V_\phi(G)=\int_0^1\phi(G(q))\dd q,\qquad
+S_\phi=1-\frac{\sum_jw_jV_\phi(G_j)}{V_\phi(U)}.
+\label{eq:baseline}
+\end{equation}
+This is the variation-ratio representation in Reardon's equations 15--16. With our scalings, the population denominators are $1/2$ for information theory, $1/6$ for relative diversity, and $\pi/8$ for square root. The mixture identity and concavity imply $0\leq S_\phi\leq1$.
+
+At a given threshold, $H_\phi(q)$ depends on each neighborhood's total shares below and above $q$. Redistributing very-rich and quite-rich residents while preserving those totals leaves that threshold comparison unchanged. Thresholds within the affluent range can register the redistribution. The slice surface locates the corresponding relationships by both endpoints, making within-affluent and affluent--other comparisons available separately. Its contribution accounting addresses this broader set of comparisons.
+
+\subsection{The corresponding pair contributions}
+
+For a continuous local CDF $G$, define
+\begin{equation}
+a_\phi(p)=\frac{\phi(p)}{p(1-p)},\quad 0<p<1,
+\qquad
+A_\phi(r,s;G)=\int_r^s a_\phi(G(q))\dd q.
+\label{eq:pairscore}
+\end{equation}
+The distinction between the two functions is substantive. Lowercase $a_\phi(p)$ gives the contribution of crossing a threshold whose cumulative share is $p$. Uppercase $A_\phi(r,s;G)$ gives the total contribution of a pair at global ranks $r<s$, by accumulating these contributions over the thresholds between them. The argument $q$ is a global rank threshold, whereas $G(q)$ is the share below it in the distribution being evaluated. Set $a_\phi(0)=a_\phi(1)=0$: thresholds outside the distribution's support have no straddling pairs. Endpoint limits inside the support are treated as improper integrals.
+
+\begin{proposition}[Pairwise representation]
+For each of the three variation functions above,
+\begin{equation}
+V_\phi(G)
+=
+\int_{\T}A_\phi(r,s;G)\dd G(r)\dd G(s).
+\label{eq:identity}
+\end{equation}
+\end{proposition}
+\begin{proof}
+The integrands are nonnegative, so Tonelli's theorem permits exchanging integration order. At threshold $q$, the mass of ordered pairs with $r<q<s$ is $G(q)\{1-G(q)\}$. Hence
+\[
+\int_{\T}\int_r^s a_\phi(G(q))\dd q\,\dd G(r)\dd G(s)
+=
+\int_0^1a_\phi(G(q))G(q)\{1-G(q)\}\dd q
+=
+V_\phi(G).
+\]
+Continuity eliminates boundary atoms. The last integral is finite for the stated functions.
+\end{proof}
+
+Writing $h(p)=-p\log p-(1-p)\log(1-p)$, the three functions and their pair contributions are explicitly
+\begin{align}
+a_{\rm info}(p)&=\frac{h(p)}{p(1-p)}, &
+A_{\rm info}(r,s;G)&=\int_r^s\frac{h(G(q))}{G(q)\{1-G(q)\}}\dd q,
+\label{eq:info-pair}\\
+a_{\rm div}(p)&=1, &
+A_{\rm div}(r,s;G)&=s-r,
+\label{eq:div-pair}\\
+a_{\rm root}(p)&=\frac{1}{\sqrt{p(1-p)}}, &
+A_{\rm root}(r,s;G)&=\int_r^s\frac{\dd q}{\sqrt{G(q)\{1-G(q)\}}}.
+\label{eq:root-pair}
+\end{align}
+These expressions use the endpoint convention above; the diversity expression holds for almost every contributing pair. Substitution into the baseline gives the common pairwise form
+\begin{equation}
+S_\phi=1-
+\frac{\sum_jw_j\int_{\T}A_\phi(r,s;G_j)\dd G_j(r)\dd G_j(s)}
+{\int_{\T}A_\phi(r,s;U)\dd r\dd s}.
+\label{eq:pair-baseline}
+\end{equation}
+Thus each Reardon index is exactly a comparison of local and population-wide pairwise variation, using its corresponding $A_\phi$. The same rule is evaluated at $G_j$ locally and at $U$ in the denominator. For information theory and square root, a pair's contribution depends on the cumulative shares encountered between its ranks. Distribution dependence is therefore already part of the pairwise representation of the established measures.
+
+Relative diversity provides the simplest illustration. Its pair contribution is the rank gap itself, so
+\begin{equation}
+S_{\rm div}
+=
+1-\frac{\sum_jw_j\int_{\T}(s-r)\dd G_j(r)\dd G_j(s)}
+{\int_{\T}(s-r)\dd r\dd s}
+=
+1-3\sum_jw_j\E|R_j-R'_j|,
+\label{eq:gini}
+\end{equation}
+where $R_j,R'_j$ are independent local draws and the triangular denominator is $1/6$. This is exactly Reardon's rank-order variance ratio, also expressible as
+$6\sum_jw_j\int_0^1\{G_j(q)-q\}^2\dd q$.
+
+
+\subsection{Recovery from slice mixing}
+
+Under the density assumptions of Section~\ref{sec:slices}, substitute these $A_\phi$ into the weight $W_{A,\phi}$ in \eqref{eq:reverse-weight}. Equation~\eqref{eq:weighted-mixing} then recovers each Reardon measure from the slice-mixing contributions. Two explicit weights are
+\[
+W_{\rm div}(r,s;G)=\tfrac12(s-r)\{g(r)+g(s)\},\qquad
+W_{\rm root}(r,s;G)=A_{\rm root}(r,s;G)\sqrt{g(r)g(s)}.
+\]
+The information-theory weight follows by inserting $A_{\rm info}$ and $B_{\rm info}$ into the same rule. These weights are evaluated separately for each local distribution and for the overall population.
+
+Thus both the pairwise ratio and its weighted slice-mixing representation contain Reardon's measures as particular specifications. The reduction identifies the required contribution function, distribution dependence, and normalization. It also supplies an established reference from which to vary the emphasis assigned to different rank comparisons.
+
+\section{Choosing which rank comparisons matter}
+\label{sec:beta}
+
+The general family permits analysts to state how comparisons across the income hierarchy should be valued. A convenient specification modifies a reference pair contribution:
+\begin{equation}
+A_{\phi,\theta}(r,s;G)=K_\theta(r,s)A_\phi(r,s;G),\qquad
+K_{\theta_0}(r,s)=1.
+\label{eq:multiplicative}
+\end{equation}
+Its index is computed using \eqref{eq:candidate}; at $\theta_0$ it equals the corresponding Reardon measure. The slice average in \eqref{eq:surface} provides another direct use of the weighting surface. A common positive rescaling cancels in either ratio.
+
+The analogy with \citet{atkinson1970} is the explicit treatment of evaluative choices. Here those choices concern which income ranks are compared and how strongly their separation contributes to the summary. We distinguish the locations of a pair's endpoints from the size of the gap between them.
+
+\subsection{Beta-product weights for rank locations}
+
+Products of beta densities locate attention at the two endpoints of a comparison. Define
+\begin{equation}
+b_{a,b}(r)=\frac{r^{a-1}(1-r)^{b-1}}{\mathrm{B}(a,b)},
+\qquad a,b>0,
+\label{eq:beta-density}
+\end{equation}
+where $\mathrm{B}(a,b)$ is the beta function. For two such densities $f$ and $h$, let
+\begin{equation}
+K_{f,h}(r,s)=\frac{f(r)h(s)+h(r)f(s)}{2}.
+\label{eq:beta-product}
+\end{equation}
+Symmetrization assigns the same weight to a comparison whichever member is named first. These densities describe the analyst's allocation of attention across rank pairs. Because each density integrates to one and the product is symmetric,
+\[
+\int_{\T}K_{f,h}(r,s)\dd r\dd s=\frac12.
+\]
+Thus $2K_{f,h}$ is a normalized weighting density on the triangular comparison domain.
+
+For an interpretable set of components, take $\kappa>1$ and define
+\[
+f_U(r)=1,\qquad
+f_P(r)=b_{1,\kappa}(r),\qquad
+f_M(r)=b_{\kappa,\kappa}(r),\qquad
+f_R(r)=b_{\kappa,1}(r).
+\]
+Here $P$, $M$, and $R$ concentrate on poor, middle, and rich ranks; $U$ distributes attention uniformly. Increasing $\kappa$ concentrates the corresponding attention more tightly. The combinations specify distinct comparisons:
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Component & Emphasis\\
+\midrule
+$K_{P,U}$ & Poor ranks compared with the full hierarchy\\
+$K_{R,U}$ & Rich ranks compared with the full hierarchy\\
+$K_{P,R}$ & Poor ranks compared with rich ranks\\
+$K_{P,P}$ or $K_{R,R}$ & Comparisons within a tail\\
+$K_{M,M}$ & Comparisons within the middle\\
+$K_{M,U}$ & Middle ranks compared with the full hierarchy\\
+\bottomrule
+\end{tabular}
+\end{center}
+The parameters of each density can also vary independently, allowing asymmetric tail emphasis or an interior peak away from the median. Mixtures combine these priorities:
+\begin{equation}
+K_\theta(r,s)=\sum_{m=1}^{M}\lambda_m K_{f_m,h_m}(r,s),
+\qquad \lambda_m\geq0,\quad \sum_m\lambda_m=1.
+\label{eq:beta-mixture}
+\end{equation}
+Every component has the same triangular integral, so $\lambda_m$ is its share of total weighting mass. For example, a mixture of $K_{P,P}$ and $K_{R,R}$ emphasizes comparisons within both tails, while $K_{P,R}$ emphasizes comparisons across them. The allocation among these components expresses what segregation of the poor and rich means for the application.
+
+\subsection{Applying the weighting surface}
+
+A beta-product surface provides two explicit index specifications within the general framework. Multiplying Reardon's pair contribution gives
+\begin{equation}
+A^{\beta}_{\phi,\theta}(r,s;G)=K_\theta(r,s)A_\phi(r,s;G),
+\label{eq:beta-A}
+\end{equation}
+which is inserted into \eqref{eq:candidate} with its corresponding population denominator. Taking $f=h=f_U$, or setting all beta shape parameters to one, gives $K=1$ and exactly recovers the corresponding Reardon measure. Other parameter choices change the relative contributions of rank pairs. The mixture shares describe the additional weighting surface; the full contribution also incorporates $A_\phi$ and the distribution of local pairs.
+
+Alternatively, the same surface can directly weight the equal-slice indices:
+\begin{equation}
+\overline L_{\phi,\theta}
+=2\int_{\T}K_\theta(r,s)L_\phi(r,s)\dd r\dd s
+=\sum_m\lambda_m\overline L_{\phi,f_m,h_m}.
+\label{eq:beta-slices}
+\end{equation}
+This is a bounded weighted average with a transparent allocation of attention among comparisons. Its pair contribution is $A^{\rm slice}_{\phi,K_\theta}$ from \eqref{eq:slice-A}. The two applications therefore share a weighting vocabulary and a general pairwise form. Their normalizations and the transformation in \eqref{eq:reverse-weight} specify the connection between their contributions.
+
+\subsection{Power-gap weights and threshold weights}
+
+A complementary parameter controls how much a rank gap matters. Within the pairwise family, take $A_\alpha(r,s;G)=(s-r)^\alpha$, giving
+\begin{equation}
+S_\alpha=
+1-\frac{\sum_jw_j\E|R_j-R'_j|^\alpha}
+{2/\{(\alpha+1)(\alpha+2)\}}.
+\label{eq:power}
+\end{equation}
+For $0<\alpha<2$, this is the rank application of generalized categorical Gini correlation \citep{dang2021}, related to distance-components analysis \citep{rizzo2010}. At $\alpha=1$ it recovers Reardon's relative-diversity index; $\alpha=2$ gives the between-neighborhood variance ratio of ranks. Larger exponents place greater relative emphasis on larger gaps.
+
+For a direct slice average, choosing $K(r,s)=(s-r)^\gamma$, $\gamma\geq0$, gives
+\[
+\overline L_{\phi,\gamma}
+=(\gamma+1)(\gamma+2)\int_{\T}(s-r)^\gamma L_\phi(r,s)\dd r\dd s.
+\]
+The two formulas apply gap weighting to their respective contributions and reference distributions. A beta-product surface can also be multiplied by $(s-r)^\gamma$ to specify endpoint locations and gap emphasis together, using the resulting integral for normalization.
+
+Threshold weighting is another member of the framework. Replacing $A_\phi$ by
+$\int_r^s\omega(q)a_\phi(G(q))\dd q$ gives
+$V(G)=\int_0^1\omega(q)\phi(G(q))\dd q$.
+For common nonnegative $\omega$, concavity preserves the usual bounds. A beta density for $\omega$ can emphasize low, central, or high thresholds. Endpoint weights describe which two ranks receive attention; threshold weights accumulate attention along the interval between them.
+
+\section{Toy cases: inequality, sorting, and valuation}
+\label{sec:examples}
+
+\subsection{Changing inequality while holding sorting fixed}
+
+Hold the joint distribution of rank $R$ and neighborhood $J$ fixed. Compare income schedules $Y_1=R$ and $Y_2=R^3$. Their income Gini coefficients are $1/3$ and $3/5$, respectively, but both assign the same global rank to every resident. Consequently, $G_j$, $g_j$, the full slice surface, and each index with a fixed rank-based weighting rule are identical. Conversely, reallocating the same ranks among neighborhoods can change segregation while leaving the income distribution unchanged. These comparisons isolate the two dimensions that an empirical study may seek to relate.
+
+\subsection{Separating the poor or the rich}
+
+Consider a population divided into two neighborhoods, one containing ranks $[0,c]$ and the other ranks $[c,1]$, each uniform on its support. Their population shares are $c$ and $1-c$. Every Reardon measure considered here equals
+\[
+S_\phi=1-\{c^2+(1-c)^2\}=2c(1-c),
+\]
+since each neighborhood's integrated variation is its support length times $V_\phi(U)$. Thus separating the bottom quarter ($c=1/4$) and separating the top quarter ($c=3/4$) both give $0.375$.
+
+For equal-slice comparisons, $L_\phi(r,s)$ is one when $r<c<s$ and zero otherwise, for all three variation functions. If $F_f$ and $F_h$ are the CDFs of the weighting densities, the beta-weighted index has the exact expression
+\begin{equation}
+\overline L_{\phi,f,h}(c)
+=F_f(c)\{1-F_h(c)\}+F_h(c)\{1-F_f(c)\}.
+\label{eq:beta-example}
+\end{equation}
+With $\kappa=4$, this gives
+\begin{center}
+\begin{tabular}{lrr}
+\toprule
+Specification & Bottom quarter separated & Top quarter separated\\
+\midrule
+Reardon, each of the three measures & .3750 & .3750\\
+Equal-slice, $K_{U,U}$ & .3750 & .3750\\
+Equal-slice, $K_{P,U}$ & .5918 & .2520\\
+Equal-slice, $K_{R,U}$ & .2520 & .5918\\
+Equal-slice, $K_{P,R}$ & .6822 & .6822\\
+Equal-slice, $K_{M,M}$ & .1312 & .1312\\
+\bottomrule
+\end{tabular}
+\end{center}
+Emphasizing poor ranks assigns higher segregation to the first arrangement; emphasizing rich ranks reverses that ordering. Poor--rich comparisons receive high values under both arrangements because either isolates one end of the hierarchy. Comparisons within the middle receive lower values because much of their weighting mass falls on ranks sharing a neighborhood. The equality of the uniform-slice and Reardon values in this example follows from these particular contiguous supports. The changed values and reversed ordering under other weights demonstrate how the framework generates alternative measures, with differences traceable to explicit evaluative choices.
+
+\subsection{Contiguous and interleaved ranks}
+
+A further comparison holds neighborhood shares fixed at one half and varies the arrangement of ranks. Each local distribution is uniform on the following supports:
+\begin{center}
+\small
+\begin{tabular}{p{0.12\linewidth}p{0.33\linewidth}rrrr}
+\toprule
+Arrangement & Neighborhood supports & $H^R$ & $R^R$ & $S^R$ & $\overline L_{\phi,1}$\\
+\midrule
+Contiguous & $[0,.5]$; $[.5,1]$ & .5000 & .5000 & .5000 & .5000\\
+Interleaved & $[0,.25]\cup[.5,.75]$; complement & .1534 & .1250 & .1817 & .5000\\
+\bottomrule
+\end{tabular}
+\end{center}
+The equal-weight slice average is the same for all three $\phi$: half of rank pairs occupy different neighborhoods. Reardon's interleaved values follow from $V_\phi(G_j)=\tfrac12V_\phi(U)+\tfrac14\phi(1/2)$. They reflect the spacing and arrangement of ranks through the corresponding $A_\phi$. Applying the weights in \eqref{eq:reverse-weight} to slice mixing reproduces each of those values. The framework therefore accommodates both summaries and makes their different emphases explicit.
+
+The decomposition reveals the changes hidden by the unchanged uniform-slice summary. Take the four quartiles as reporting bands $I_1,\ldots,I_4$. Each off-diagonal cell has weight $1/8$; within-quartile contributions are zero in both arrangements. Moving from contiguous to interleaved ranks gives
+\begin{center}
+\begin{tabular}{lrrr}
+\toprule
+Quartile pair & Contiguous $C_{ab}$ & Interleaved $C_{ab}$ & Change\\
+\midrule
+1--2 & 0 & $1/8$ & $+1/8$\\
+1--3 & $1/8$ & 0 & $-1/8$\\
+1--4 & $1/8$ & $1/8$ & 0\\
+2--3 & $1/8$ & $1/8$ & 0\\
+2--4 & $1/8$ & 0 & $-1/8$\\
+3--4 & 0 & $1/8$ & $+1/8$\\
+\midrule
+Total & $1/2$ & $1/2$ & 0\\
+\bottomrule
+\end{tabular}
+\end{center}
+Separation increases between the bottom two quartiles and between the top two, while decreases in two other comparisons exactly offset those increases. The same accounting applies when the net change is positive or negative. Retaining the contributions shows whether a trend is broadly shared across the hierarchy or concentrated in particular comparisons.
+
+\section{Approaches to empirical application}
+\label{sec:empirical}
+
+An application can begin by estimating the slice surface for a common reference population and geography, then report summaries under a small, prespecified set of weights. Comparing surfaces over time distinguishes changes near the tails from changes among interior rank pairs. Inequality measures, such as the income Gini or monetary quantile gaps, can then enter an explanatory analysis as separate variables. The choice of rank reference---for example, metropolitan rather than national ranks---defines the hierarchy whose sorting is being measured.
+
+\subsection{Grouped observations and interpolation}
+
+Suppose the data provide neighborhood counts in income intervals. Let their global rank boundaries be $Q_{b-1},Q_b$, their population shares $h_b=Q_b-Q_{b-1}>0$, and local shares $p_{jb}$. A coherent reconstruction is
+\begin{equation}
+G_j(q)=C_{j,b-1}+p_{jb}\frac{q-Q_{b-1}}{h_b},
+\qquad Q_{b-1}\leq q\leq Q_b,
+\label{eq:interpolation}
+\end{equation}
+where $C_{j,b-1}$ is the local share below bin $b$. It preserves reported shares and the mixture identity because $h_b=\sum_jw_jp_{jb}$. This assumes constant local density of global ranks within each bin, giving $g_j(q)=p_{jb}/h_b$.
+
+The fitted slice surface is constant on bin-pair rectangles. Its integral becomes a weighted sum, with weights $\int_{I_b}\int_{I_c}K(r,s)\dd r\dd s$, restricted to the triangle when necessary. For beta products, these weights follow from differences in the beta CDFs. Other pair contributions can be evaluated by analytic integration or quadrature using the same fitted distributions. This provides a direct connection between grouped data, the diagnostic surface, and the scalar summaries.
+
+\subsection{Individual observations and density estimation}
+
+Individual observations permit a weighted global rank transformation followed by estimation of local rank distributions. Shared rank bins, constrained density estimation, or models of neighborhood membership can supply the required densities. A useful parameterization is
+\[
+\pi_j(r)=\Pr(J=j\mid R=r),\qquad
+g_j(r)=\pi_j(r)/w_j.
+\]
+Coherent fitted probabilities satisfy both $\sum_j\pi_j(r)=1$ and $\int_0^1\pi_j(r)\dd r=w_j$. These constraints preserve the overall uniform rank distribution and each neighborhood's population share. They provide targets for a joint fitting or calibration procedure.
+
+Different functionals can also admit simpler estimators. The power-distance index in \eqref{eq:power}, for example, can be estimated through pair moments. Distribution reconstruction is particularly useful when the goal includes the full slice surface. Work on reconstructing neighborhood income distributions from public-use data provides a methodological precedent \citep{simpson2021}.
+
+\subsection{An empirical comparison strategy}
+
+A first study could compare a common set of metropolitan areas over time, harmonizing neighborhood boundaries, population definitions, and income reference periods. For each area-period it would report the fitted surface, selected poor--middle, middle--middle, and poor--rich summaries, and the Reardon reference indices. A common set of reporting bands would accompany the scalar summaries with matrices of $D_{ab}$, $C_{ab}$, and $\Delta C_{ab}$. These distinguish the intensity of each comparison from its weighted contribution and identify offsetting trends. The same weighting parameters would be retained across observations. Sensitivity analyses would vary inferential resolution while holding the target weighting rule fixed.
+
+Uncertainty assessment should propagate sampling variation and distribution estimation into the surface and its summaries. \citet{leung2023} show that finite-sample bias, income measurement error, and temporal pooling can materially alter estimated income-segregation levels and trends. This makes comparison of estimation procedures an integral part of the application, especially when moving between census and survey data.
+
+\section{Open questions and mathematical development}
+
+The proposal begins with a substantive object---segregation between rank slices throughout the income distribution---and makes its aggregation explicit. The pairwise representation connects that object to established measures and to alternative valuations. The next stage is to establish which specifications are useful segregation measures and how reliably they can be estimated.
+
+\paragraph{Admissible weights and bounds.}
+Direct slice averages with nonnegative weights inherit their $[0,1]$ bounds from $L_\phi$. For the general pairwise ratio, a nonnegative $A$ gives an upper bound of one and zero under identical local distributions; concavity of $G\mapsto V_A(G)$ under mixtures is sufficient for a nonnegative lower bound. Multiplying a Reardon contribution by an arbitrary beta-product weight need not preserve that concavity. Characterization should establish admissible parameters, integrability near rank endpoints, equality conditions, and the distinction between universal bounds and maxima attainable under fixed neighborhood shares.
+
+\paragraph{Evaluative and segregation properties.}
+Axioms should address population replication, organizational equivalence, decomposition, and ordered exchanges of ranks. A targeted measure may deliberately give little weight to changes elsewhere in the hierarchy, so its zero condition and transfer properties should be interpreted relative to that target. At the power-distance endpoint $\alpha=2$, for example, the index detects differences in neighborhood mean ranks. The relation between evaluative parameters and a welfare interpretation also calls for explicit assumptions.
+
+\paragraph{Equivalence and distinctness.}
+The change-of-measure identities keep contributions and normalization together. Recovering Reardon through slice mixing uses distribution-dependent weights on neighborhood contributions before aggregation. A common $K$ instead weights the already-computed slice indices. Establishing further equivalences, identifying transformations that leave a normalized index unchanged, and separating new indices from new representations are part of the mathematical agenda.
+
+\paragraph{Decomposition and attribution.}
+The rank-cell decomposition is an exact descriptive accounting. Interpreting a contribution to change as a causal mechanism requires additional evidence. For a general pairwise rule, including Reardon's representation, an analogous accounting follows from
+\begin{equation}
+C^A_{ab}=\frac{1}{V_A(U)}\int_{\T_{ab}}
+\left[A(r,s;U)-\sum_jw_j A(r,s;G_j)g_j(r)g_j(s)\right]\dd r\dd s,
+\qquad S_A=\sum_{a\leq b}C^A_{ab}.
+\label{eq:general-decomposition}
+\end{equation}
+These cell contributions can be signed even for levels. Reardon's information and square-root pair rules also depend on the local CDF along the interval between endpoints. Accordingly, their contributions allocate an established index across pairs under the chosen representation; the direct slice construction additionally supplies bounded two-slice comparisons and nonnegative level contributions. Decompositions can depend on the pair representation, so it should be specified alongside the index. When comparing direct slice averages, fixing $K$ isolates changes in the fitted surface. If weights change, the exact identity is $\Delta\overline L=\sum_{a\leq b}\overline\omega_{ab}\Delta D_{ab}+\sum_{a\leq b}\overline D_{ab}\Delta\omega_{ab}$, with bars denoting two-period averages and positive cell weights in both periods. Absolute contributions to change remain informative when increases and decreases nearly cancel; percentages of a small net change can be unstable.
+
+\paragraph{Resolution, identification, and inference.}
+The continuous surface is a population estimand. Fitting a separate rank interval to each unique observed resident reproduces perfect slice-specific membership; estimating a population surface requires an explicit resolution or smoothing model. Constant within-bin densities imply zero fitted segregation between slices inside the same bin, so within-bin sorting remains unidentified. Ties, genuine income atoms, survey weights, global-rank uncertainty, and the bias--variance consequences of smoothing require treatment. Population rank invariance should be carried through to the estimator rather than undermined by dollar-space fitting choices.
+
+\paragraph{Spatial scope and explanation.}
+The derivations use a partition whose weighted local distributions reproduce the population distribution. Overlapping spatial or network environments generally require different population accounting, so their bounds and interpretation need separate analysis. In explanatory applications, rank standardization prevents a mechanical response to monetary rescaling, but does not establish a causal effect of inequality on sorting. Such an effect requires a design addressing confounding, reverse causation, and residential adjustment.
+
+\paragraph{Relation to prior work.}
+The proposed family builds on ordinal segregation \citep{meng2006}, connections between segregation and inequality \citep{jargowsky2009}, axiomatic cardinal-income segregation \citep{lasso2020}, and pairwise neighborhood inequality \citep{andreoli2021,turk2023}. Its power-distance component directly overlaps categorical Gini correlation \citep{dang2021,rizzo2010}; detailed neighborhood-exposure analysis is another close precedent \citep{reardonfox2015}. The prospective contribution is the systematic treatment of comparisons across the full rank hierarchy, their relation to established indices, and the interpretation and validation of alternative aggregation choices. A fuller literature assessment and an empirical demonstration will determine its distinct scope.
+
+\begin{thebibliography}{99}\small
+\bibitem[Andreoli and Peluso(2021)]{andreoli2021}
+Andreoli, F., and E. Peluso. 2021.
+Inference for the neighbourhood inequality index.
+\emph{Spatial Economic Analysis} 16(3):313--332.
+\href{https://doi.org/10.1080/17421772.2020.1800071}{doi:10.1080/17421772.2020.1800071}.
+
+\bibitem[Atkinson(1970)]{atkinson1970}
+Atkinson, A. B. 1970. On the measurement of inequality.
+\emph{Journal of Economic Theory} 2:244--263.
+\href{https://doi.org/10.1016/0022-0531(70)90039-6}{doi:10.1016/0022-0531(70)90039-6}.
+
+\bibitem[Bischoff and Reardon(2014)]{bischoff2014}
+Bischoff, K., and S. F. Reardon. 2014.
+Residential segregation by income, 1970--2009.
+In \emph{Diversity and Disparities: America Enters a New Century},
+edited by J. R. Logan, 208--233. Russell Sage Foundation.
+\href{https://www.russellsage.org/sites/all/files/logan/logan_diversity_chapter7.pdf}{Published chapter}.
+
+\bibitem[Dang et al.(2021)]{dang2021}
+Dang, X., D. Nguyen, Y. Chen, and J. Zhang. 2021.
+A new Gini correlation between quantitative and qualitative variables.
+\emph{Scandinavian Journal of Statistics} 48(4):1314--1343.
+\href{https://doi.org/10.1111/sjos.12490}{doi:10.1111/sjos.12490}.
+\href{https://home.olemiss.edu/~xdang/papers/CategoricalGini.pdf}{Author manuscript}.
+
+\bibitem[Jargowsky and Kim(2009)]{jargowsky2009}
+Jargowsky, P. A., and J. Kim. 2009.
+The information theory of segregation: Uniting segregation and inequality in a common framework.
+\emph{Research on Economic Inequality} 17:3--31.
+\href{https://doi.org/10.1108/S1049-2585(2009)0000017004}{doi:10.1108/S1049-2585(2009)0000017004}.
+
+\bibitem[Lasso de la Vega and Volij(2020)]{lasso2020}
+Lasso de la Vega, C., and O. Volij. 2020.
+The measurement of income segregation.
+\emph{International Economic Review} 61(4):1479--1500.
+\href{https://doi.org/10.1111/iere.12466}{doi:10.1111/iere.12466}.
+
+\bibitem[Leung-Gagn\'e and Reardon(2023)]{leung2023}
+Leung-Gagn\'e, J., and S. F. Reardon. 2023.
+It is surprisingly difficult to measure income segregation.
+\emph{Demography} 60(5):1387--1413.
+\href{https://doi.org/10.1215/00703370-10932629}{doi:10.1215/00703370-10932629}.
+
+\bibitem[Meng et al.(2006)]{meng2006}
+Meng, G., G. B. Hall, and S. Roberts. 2006.
+Multi-group segregation indices for measuring ordinal classes.
+\emph{Computers, Environment and Urban Systems} 30(3):275--299.
+\href{https://doi.org/10.1016/j.compenvurbsys.2005.06.005}{doi:10.1016/j.compenvurbsys.2005.06.005}.
+
+\bibitem[Owens et al.(2016)]{owens2016}
+Owens, A., S. F. Reardon, and C. Jencks. 2016.
+Income segregation between schools and school districts.
+\emph{American Educational Research Journal} 53(4):1159--1197.
+\href{https://doi.org/10.3102/0002831216652722}{doi:10.3102/0002831216652722}.
+
+\bibitem[Reardon(2011)]{reardon2011}
+Reardon, S. F. 2011. \emph{Measures of Income Segregation}.
+Stanford Center on Poverty and Inequality working paper, revised September.
+\href{https://inequality.stanford.edu/sites/default/files/reardon_measures-income-seg.pdf}{Working paper}.
+
+\bibitem[Reardon and Bischoff(2011)]{reardonbischoff2011}
+Reardon, S. F., and K. Bischoff. 2011.
+Income inequality and income segregation.
+\emph{American Journal of Sociology} 116(4):1092--1153.
+\href{https://doi.org/10.1086/657114}{doi:10.1086/657114}.
+
+\bibitem[Reardon et al.(2015)]{reardonfox2015}
+Reardon, S. F., L. Fox, and J. Townsend. 2015.
+Neighborhood income composition by household race and income, 1990--2009.
+\emph{The Annals of the American Academy of Political and Social Science}
+660(1):78--97.
+\href{https://doi.org/10.1177/0002716215576104}{doi:10.1177/0002716215576104}.
+
+\bibitem[Rizzo and Sz\'ekely(2010)]{rizzo2010}
+Rizzo, M. L., and G. J. Sz\'ekely. 2010.
+DISCO analysis: A nonparametric extension of analysis of variance.
+\emph{Annals of Applied Statistics} 4(2):1034--1055.
+\href{https://doi.org/10.1214/09-AOAS245}{doi:10.1214/09-AOAS245}.
+
+\bibitem[Simpson et al.(2021)]{simpson2021}
+Simpson, M., S. H. Holan, C. K. Wikle, and J. R. Bradley. 2021.
+Interpolating population distributions using public-use data:
+An application to income segregation using American Community Survey data.
+Preprint, revised November; originally posted 2018.
+\href{https://arxiv.org/abs/1802.02626}{arXiv:1802.02626}.
+
+\bibitem[T\"urk and \"Osth(2023)]{turk2023}
+T\"urk, U., and J. \"Osth. 2023.
+Introducing a spatially explicit Gini measure for spatial segregation.
+\emph{Journal of Geographical Systems} 25:469--488.
+\href{https://doi.org/10.1007/s10109-023-00412-1}{doi:10.1007/s10109-023-00412-1}.
+\end{thebibliography}
+\end{document}

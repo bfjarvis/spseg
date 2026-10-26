@@ -4,4 +4,5 @@
 ^\.claude$
 ^[.]?air[.]toml$
 ^\.vscode$
-^references$
+^AGENTS\.md$
+^project$

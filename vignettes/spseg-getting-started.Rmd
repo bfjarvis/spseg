@@ -147,8 +147,8 @@ micro_variables <- list(
   ),
   income_band = spseg_ordinal(values = "income_band")
 )
-bands <- c(25, 50, 75, 100, 200, 300, 400, 500, 600, 700)
-segcurves <- patterns |>
+bands <- c(25, 50, 75, 100, 200, 300, 400, 500, 750, 1000)
+results <- patterns |>
   group_by(pattern) |>
   group_split() |>
   lapply(\(x) {
@@ -163,7 +163,7 @@ segcurves <- patterns |>
       output = "full"
     )
   })
-format(object.size(segcurves), units = "MiB")
+format(object.size(results), units = "MiB")
 ```
 
 This yields a pile of segregation measures, assessed for income, both continuous and intervalled, and group memberships, and across a number of different spatial bands. We can compile these segregation measures into a dataframe as follows, where I incorporate information from the original data set to (re-)label the different patterns:
@@ -171,13 +171,13 @@ This yields a pile of segregation measures, assessed for income, both continuous
 ```{r group-seg-graph}
 pattern_names <- patterns |> group_by(pattern) |> group_keys() |> pull(pattern)
 
-segdata <-
-  segcurves |>
+curves <-
+  results |>
   lapply(as.data.frame) |>
   bind_rows(.id = 'pattern') |>
   mutate(pattern = factor(pattern, labels = pattern_names))
 
-head(segdata)
+head(curves)
 ```
 
 Now we can plot the segregation curves for different measures across bandwidths and measures. Below, I do so for segregation between groups:
@@ -190,15 +190,54 @@ segdata |>
   facet_wrap(~measure)
 ```
 
+For income, we have measures produced using the underlying continuous covariates and a binned version of the covariate. We can incorporate both into the plot. In this case, the difference between the two is very small. 
 
-We can also retrieve individualized neighborhood statistics because we requested
-the `"full"` output. For the remaining maps and aggregation examples, select the
-first pattern and attach its synthetic planar geometry.
+```{r}
+segdata |>
+  filter(variable %in% c("income", "income_band")) |>
+  ggplot(aes(
+    x = band,
+    y = value,
+    color = pattern,
+    linetype = variable,
+    group = interaction(pattern, variable)
+  )) +
+  geom_line() +
+  facet_wrap(~measure)
+```
+
+
+# Obtaining local environments
+
+We can also retrieve individualized neighborhood statistics because we requested the `"full"` output. That is we can characterize the local environment at various different values of bandwidth or k-nearest neighbors. If we apply st_as_sf(), we can get all of the local environments for all variables and bandwidths in a long data frame. Below, I take an additional step and compile this across scenarios. 
 
 ```{r selected-pattern}
+localenvs <- lapply(results, st_as_sf) |>
+  bind_rows(.id = "pattern")
+```
+
+
+
+
+localenvs |> 
+  filter(variable=="income", prob==0.5, band==100) |> 
+  ggplot(aes(color=rank)) +
+  geom_sf() +
+  facet_wrap(~pattern)
+
+
+
+
+
+
 city <- patterns[patterns$pattern == pattern_names[1], ]
-people <- st_as_sf(city, coords = c("x", "y"), remove = FALSE,
-                    crs = 3857, sf_column_name = "location")
+people <- st_as_sf(
+  city,
+  coords = c("x", "y"),
+  remove = FALSE,
+  crs = 3857,
+  sf_column_name = "location"
+)
 micro <- segcurves[[1]]
 income_levels <- levels(people$income_band)
 ```
@@ -218,7 +257,8 @@ local_income <- st_as_sf(micro, variables = "income", bands = 100) |>
 ggplot(local_income) +
   geom_sf(aes(colour = rank), size = 0.4) +
   scale_colour_viridis_c(limits = c(0, 1), name = "Local median\nincome rank") +
-  coord_sf(datum = NA) + labs(x = NULL, y = NULL)
+  coord_sf(datum = NA) +
+  labs(x = NULL, y = NULL)
 ```
 
 Customize this presentation in the variable constructor. For example,
@@ -415,7 +455,10 @@ specification would require actual values, which this table no longer provides.
 ```{r aggregate-indices}
 count_variables <- list(
   group = spseg_categorical(counts = group_columns),
-  income = spseg_continuous(counts = income_columns, representation = "intervals"),
+  income = spseg_continuous(
+    counts = income_columns,
+    representation = "intervals"
+  ),
   income_band = spseg_ordinal(counts = income_columns)
 )
 grid_raw <- spseg(
@@ -445,8 +488,12 @@ also measure the interval-valued incomes at the original individual locations.
 ```{r binned-micro}
 binned_micro <- spseg(
   people,
-  variables = list(income = spseg_continuous(values = "income_band",
-                                            representation = "intervals")),
+  variables = list(
+    income = spseg_continuous(
+      values = "income_band",
+      representation = "intervals"
+    )
+  ),
   bands = bands,
   scope = "multigroup"
 )
