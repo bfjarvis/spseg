@@ -24,6 +24,14 @@ through that step with small examples. The goal is to make clear what happens
 when every polygon receives grid cells directly, and what happens when one or
 more populated polygons are too small to receive a grid-cell centroid.
 
+For continuous interval summaries, resolve the global grouping grid from the
+source-zone eligible counts before constructing or smoothing the surface. A
+category that crosses a requested probability boundary is apportioned across
+groups in global-rank space, and the same fractions apply to focal populations
+and local target shares after grid redistribution. This assumes a common
+within-category rank distribution across source zones. Interpolation is warned
+about once and retained in result metadata.
+
 ```{r setup}
 library(spseg)
 library(sf)
@@ -519,6 +527,21 @@ pycno_result <- spseg(
   converge = 1
 )
 
+income_surface <- spseg(
+  fallback_case,
+  variables = list(income = spseg_continuous(
+    counts = c("A", "B"),
+    representation = "intervals",
+    summary = list(type = "quantiles", mean_rank = TRUE)
+  )),
+  surface = "grid",
+  nrow = 6,
+  ncol = 6,
+  bands = c(1, 2),
+  measures = "exposure",
+  output = "full"
+)
+
 as.data.frame(grid_result, what = "indices")
 as.data.frame(pycno_result, what = "indices")
 
@@ -526,7 +549,22 @@ pycno_result$surface_info$fallback
 names(pycno_result$surface_info$audit)
 head(pycno_result$surface_info$audit$cells)
 pycno_result$surface_info$audit$fallback
+
+as.data.frame(income_surface, what = "exposure") |>
+  filter(summary == "quantiles") |>
+  select(from_group, band, statistic, prob, rank)
+income_surface$analyses$income$definition$summary[c(
+  "requested_probs", "effective_probs", "groups", "interpolation"
+)]
 ```
+
+Here the two populated income intervals are allocated across the four requested
+quartile groups. The first interval's `.435` share fills the first quartile and
+contributes `.185` to the second; the second interval supplies the rest of the
+second quartile and the final two groups. The requested grid stays at
+`.25`, `.5`, and `.75`; the warning and metadata record the fractional
+allocation. Local rank quantiles use those requested positions under the same
+global-percentile interpolation assumption.
 
 The lightweight `surface_info$grid` and `surface_info$fallback` fields are
 stored for gridded surfaces by default. Setting `surface_audit = TRUE` also

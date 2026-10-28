@@ -51,7 +51,14 @@
   }
   for (key in names(result$indices$pairwise)) {
     result$indices$pairwise[[key]] <- lapply(result$indices$pairwise[[key]], function(z) {
-      dimnames(z) <- list(config$metadata$labels, config$metadata$labels)
+      dimnames(z) <- list(config$pair_labels, config$pair_labels)
+      z
+    })
+  }
+  if (length(result$rank_summary)) {
+    names(result$rank_summary) <- as.character(bands)
+    result$rank_summary <- lapply(result$rank_summary, function(z) {
+      dimnames(z) <- list(config$exposure_labels, config$metadata$localenv$labels)
       z
     })
   }
@@ -61,6 +68,14 @@
       colnames(z) <- config$metadata$localenv$labels
       z
     })
+    if (length(result$interpolation)) {
+      names(result$interpolation) <- as.character(bands)
+      result$interpolation <- lapply(result$interpolation, function(z) {
+        colnames(z) <- c("bottom_category_share", "top_category_share",
+                         "interpolated_share")
+        z
+      })
+    }
   }
   metadata <- config$metadata
   # Millions of exact values are calculation inputs, not lightweight metadata.
@@ -120,8 +135,9 @@
   } else .spseg_population(population, variables, checked$data)
   if (neighbors == "radius" && (!is.finite(sum(population)) || sum(population) <= 0))
     stop("The common population total must be positive and finite", call. = FALSE)
-  compiled <- lapply(variables, .spseg_compile, data = checked$data,
-                     population = population, measures = measures)
+  compiled <- Map(function(spec, name) {
+    .spseg_compile(spec, checked$data, population, measures, variable = name)
+  }, variables, names(variables))
   surface_info <- list(type = "raw", fallback = list(count = 0L), audit = NULL)
   if (surface != "raw") {
     # Gridding transports all count tables in one surface-construction pass.
@@ -211,7 +227,8 @@
     colnames(counts) <- config$metadata$labels
     spec$counts <- seq_len(ncol(counts))
     if (config$type == 3L) spec$scores <- config$scores
-    .spseg_compile(spec, as.data.frame(counts), population, measures)
+    .spseg_compile(spec, as.data.frame(counts), population, measures,
+                   resolution = config$summary_config)
   }, variables, compiled, columns)
   checked$coords <- as.matrix(prepared$coords)
   checked$data <- as.data.frame(prepared$data)

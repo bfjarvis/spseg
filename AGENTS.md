@@ -39,6 +39,9 @@
   Expected scientific results should not merely duplicate the implementation.
 - Run checks appropriate to the change. Use clean-session vignette rendering for
   workflow changes and `R CMD check` for release candidates; report checks not run.
+- Install local updates before loading the package or its installed help in that
+  R process. Restart any analysis session that had the replaced package loaded,
+  even when installation ran elsewhere; use private libraries for agent experiments.
 - Optimize measured bottlenecks. Record baseline/candidate revisions, workload,
   environment, runtime and memory where relevant, and numerical agreement.
 - Keep examples reproducible and practical to run. Document required external data;

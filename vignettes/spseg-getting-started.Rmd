@@ -22,55 +22,63 @@ This vignette provides an overview of key features of the spseg package, startin
 ```{r packages, message=FALSE}
 library(spseg)
 library(sf)
-library(ggplot2)
-library(dplyr)
+library(tidyverse)
 theme_set(theme_minimal(base_size = 11))
 ```
 
 # A population with spatial clustering
 
-We start by generating 5,000 fictive housing units and 5,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a continuous trait, let's call it income, and a group membership. Income in the population of agents follows a single, log-normal distribution, but agents are then randomly assigned group memberships conditional on income, such that one group tends to be located on the lower end of the disrtribution compared to the other.
+We start by generating 5,000 fictive housing units and 5,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a binary trait, `group`, an ordinal trait, `status`, and a continuous trait, `resource`. This is abstracted, but we could relate these to race/ethnicity, education, and income. The first two traits are categorical, but the last trait, resources, is intervally scaled. I use a log-normal distribution calibrated to match a given gini coefficient to generate the sample of resources. I establish the draws from this distribution first before assigning agents to attributes. Agents are assigned traits in the following order: start with group membership, then assign status conditional on group membership, and finally assign resources as a function of group membership and status. For later testing, we'll also cut the resources into deciles, which roughly corresponds to the way US Census income data are delivered.
 
 ```{r agents}
 set.seed(2026)
 N <- 5000L
 side <- 1000
-locations <- data.frame(
+resource_mean <- 10
+resource_gini <- 0.4
+resource_sd <- sqrt(2) * qnorm((1 + resource_gini) / 2)
+resources <- sort(rlnorm(
+  N,
+  log(resource_mean) - resource_sd^2 / 2,
+  resource_sd
+))
+
+locations <- tibble(
   point_id = seq_len(N),
   x = runif(N, 0, side),
   y = runif(N, 0, side)
 )
-agents <- data.frame(
+
+agents <- tibble(
   agent_id = seq_len(N),
   group = sample(rep(c("A", "B"), each = N / 2))
-)
-
-# Parameterize the lognormal distribution by its mean and Gini coefficient.
-mean_income <- 40000
-income_gini <- 0.4
-sdlog <- sqrt(2) * qnorm((1 + income_gini) / 2)
-income_draws <- rlnorm(N, log(mean_income) - sdlog^2 / 2, sdlog)
-
-# Assign the same income draws using a noisy, group-dependent rank score.
-income_score <- ifelse(agents$group == "B", 0.75, -0.75) + rnorm(N)
-agents$income <- numeric(N)
-agents$income[order(income_score, agents$agent_id)] <- sort(income_draws)
-agents$income_percentile <- rank(agents$income) / N
-
-agents |>
-  group_by(group) |>
-  summarise(
-    people = n(),
-    mean_income = mean(income),
-    median_income = median(income)
+) |>
+  mutate(
+    status = 1L * (group == "A") + rnorm(N),
+    status = rank(status) / n(),
+    status = case_when(status < 1 / 3 ~ 1L, status < 2 / 3 ~ 2L, .default = 3L),
+  ) |>
+  mutate(
+    resource = status + 1L * (group == "A") + 2 * rnorm(N),
+  ) |>
+  arrange(resource) |>
+  mutate(
+    resources = resources,
+    status = factor(status, ordered = TRUE),
+    group = factor(group),
+    resources_bin = cut_number(resources, 10),
+    resources_rank = percent_rank(resources)
   )
-
-# Identify decile breaks for later binning of income
-income_breaks <- c(-Inf, quantile(agents$income, seq(0.1, 0.9, 0.1)), Inf)
 ```
 
+We can confirm the relationships between agent resources, status, and group membership using linear and multinomial regression:
 
-The fixed set of agents is then assigned to the fixed set of housing units based on a periodic (i.e., sinusoidal) function and the agent's income, as well as random noise. The use of periodic functions and the addition of noise allow for different degrees of spatial clustering by income and group memberhsip, making the degree of segregation "tunable". Increasing `cycles` produces smaller clusters; increasing `noise` weakens sorting and makes a more even distribution. This assignment process leaves the spatial distribution of points and the joint distribution of group membership and income fixed. The only thing that varies is the differential spatial distribution of the population by group membership and income.
+```{r }
+lm(log(resources) ~ group + status, data = agents) |> summary()
+nnet::multinom(status ~ group, data = agents) |> summary()
+```
+
+The next step is to assign these agents to the housing units based on a periodic (i.e., sinusoidal) function and the agent's resources, as well as random noise. The use of periodic functions and the addition of noise allow for different degrees of spatial clustering by income and group memberhsip, making the degree of segregation "tunable". Increasing `cycles` produces smaller clusters; increasing `noise` weakens sorting and makes a more even distribution. This assignment process leaves the spatial distribution of points and the joint distribution of group membership and income fixed. The only thing that varies is the differential spatial distribution of the population by income and hence, indirectly, by group membership and status.
 
 ```{r assignment}
 location_noise <- rnorm(N)
@@ -84,14 +92,14 @@ assign_city <- function(cycles = 1, noise = 0.5) {
   utility <- log((1 + 1e-6 + periodic) / 2)
   score <- as.numeric(scale(utility)) + noise * location_noise
   destination <- order(score, locations$point_id)
-  source <- order(agents$income, agents$agent_id)
+  source <- order(agents$resources, agents$agent_id)
   assigned <- integer(N)
   assigned[destination] <- source
   cbind(locations, agents[assigned, , drop = FALSE])
 }
 
 scenarios <- expand.grid(cycles = c(1, 3), noise = c(0.15, 1.5))
-layouts <- lapply(seq_len(nrow(scenarios)), function(i) {
+patterns <- lapply(seq_len(nrow(scenarios)), function(i) {
   city <- assign_city(scenarios$cycles[i], scenarios$noise[i])
   city$pattern <- paste0(
     scenarios$cycles[i],
@@ -100,54 +108,111 @@ layouts <- lapply(seq_len(nrow(scenarios)), function(i) {
   )
   city
 })
-patterns <- bind_rows(layouts) |>
-  mutate(
-    income_band = cut(
-      income,
-      income_breaks,
-      labels = paste0("Q", 1:10),
-      ordered_result = TRUE
-    )
-  )
 ```
 
 We can visualize the distribution of income across a few scenarios as follows:
 
-```{r assignment-income}
-ggplot(patterns, aes(x, y, colour = income_percentile)) +
+```{r patterns-resource}
+patterns |>
+  bind_rows() |>
+  ggplot(aes(x, y, colour = resources_rank)) +
   geom_point(size = 0.3) +
   facet_wrap(~pattern, ncol = 2) +
-  scale_colour_viridis_c(limits = c(0, 1), name = "Income\npercentile") +
+  scale_colour_viridis_c() +
   coord_equal() +
-  labs(x = NULL, y = NULL)
+  theme_void()
 ```
 
 And the distribution of groups below:
 
-```{r people}
-ggplot(patterns, aes(x, y, colour = group)) +
+```{r patterns-group}
+patterns |>
+  bind_rows() |>
+  ggplot(aes(x, y, colour = group)) +
   geom_point(size = 0.3) +
   facet_wrap(~pattern, ncol = 2) +
   coord_equal() +
-  scale_colour_manual(values = c(A = "#2166ac", B = "#b2182b")) +
-  labs(x = NULL, y = NULL, colour = "Group")
+  theme_void() +
+  scale_colour_manual(values = c(A = "#2166ac", B = "#b2182b"))
 ```
 
+And finally the distribution of statuses
+
+```{r patterns-status}
+patterns |>
+  bind_rows() |>
+  ggplot(aes(x, y, colour = status)) +
+  geom_point(size = 0.3) +
+  facet_wrap(~pattern, ncol = 2) +
+  coord_equal() +
+  theme_void()
+```
 
 # Measuring segregation in individual data
 
-We can calculate spatial segregation measures directly using the micro-data. Below I use a spatial bandwidth approach, but a k-nearest neighbors approach could also be used:
+We can calculate spatial segregation measures using the `spseg` function, here using the micro-data directly. The call below requests a k-nearest neighbors ("knn") approach applied to the first residential pattern using multiple different bandwidths. We can request the measures for multiple variables in one call using a list that nests calls to `spseg_categorical()`, `spseg_ordinal()`, and `spseg_continuous()` helper functions. This is computationally more efficient than calling the function separately for each variable (set), because we can reuse the same nearest neighbor calculations across variables. 
 
 ```{r micro-indices}
 micro_variables <- list(
   group = spseg_categorical(values = "group"),
-  income = spseg_continuous(
-    values = "income",
-    exposure = list(breaks = income_breaks)
+  resources = spseg_continuous(
+    values = "resources",
+    localenv = list(type = "shares", probs = c(0, 0.25, .5, 0.75, 1)),
+    exposure = list(probs = c(0, 0.25, .5, 0.75, 1))
   ),
-  income_band = spseg_ordinal(values = "income_band")
+  status = spseg_ordinal(values = "status")
 )
-bands <- c(25, 50, 75, 100, 200, 300, 400, 500, 750, 1000)
+bands <- c(25, 50, 75, 100, 200, 300, 400, 500, 1000)
+result <- spseg(
+  patterns[[1]],
+  coords = c("x", "y"),
+  variables = micro_variables,
+  bands = bands,
+  neighbors = "knn",
+  measures = "all",
+  weighting = "biweight",
+  scope = "both",
+  output = "full"
+)
+```
+
+Note that for continuous variables, there were several choices to make with respect to how to calculate local envrivonments and exposures. While the overall continuous segregation measures looks across fine grained income distinctions, it isn't really feasible to report corresponding exposure and local environment measures back. So here, I look at the share of (spatially weighted) nearest neighbors in each income quartile and the mean exposure of each quartile to the other.
+
+The output of the function, stored in `result`, has a package-specific `spseg_result` class with a set of names and methods.
+
+```{r class-result}
+class(result)
+```
+
+```{r print-result}
+print(result)
+```
+
+```{r names-result}
+names(result)
+```
+
+We can use `as.data.frame` methods to extract different pieces of information from `result`. For example, to get segregation statistics, we can do as follows
+
+```{r segstats-result}
+result_seg_stats <- as.data.frame(result, what = 'indices')
+result_seg_stats <- as.data.frame(result, what = 'pairwise')
+```
+
+
+
+
+
+
+Below I use a spatial bandwidth approach, but a k-nearest neighbors approach could also be used. The 
+
+```{r micro-indices}
+micro_variables <- list(
+  group = spseg_categorical(values = "group"),
+  resources = spseg_continuous(values = "resources"),
+  status = spseg_ordinal(values = "status")
+)
+bands <- c(25, 50, 75, 100, 200, 300, 400, 500)
 results <- patterns |>
   group_by(pattern) |>
   group_split() |>
@@ -183,129 +248,83 @@ head(curves)
 Now we can plot the segregation curves for different measures across bandwidths and measures. Below, I do so for segregation between groups:
 
 ```{r}
-segdata |>
+curves |>
   filter(variable == "group") |>
   ggplot(aes(x = band, y = value, color = pattern)) +
   geom_line() +
-  facet_wrap(~measure)
+  facet_wrap(~measure) +
+  labs(title = "Group Segregation")
 ```
 
-For income, we have measures produced using the underlying continuous covariates and a binned version of the covariate. We can incorporate both into the plot. In this case, the difference between the two is very small. 
+Then by resources:
 
 ```{r}
-segdata |>
-  filter(variable %in% c("income", "income_band")) |>
-  ggplot(aes(
-    x = band,
-    y = value,
-    color = pattern,
-    linetype = variable,
-    group = interaction(pattern, variable)
-  )) +
+curves |>
+  filter(variable == "resources") |>
+  ggplot(aes(x = band, y = value, color = pattern)) +
   geom_line() +
-  facet_wrap(~measure)
+  facet_wrap(~measure) +
+  labs(title = "Resource segregation")
 ```
 
+And finally by status:
+
+```{r}
+curves |>
+  filter(variable == "status") |>
+  ggplot(aes(x = band, y = value, color = pattern)) +
+  geom_line() +
+  facet_wrap(~measure) +
+  labs(title = "Status segregation")
+```
+
+These measures aren't strictly comparable across group, resources, and satus, but the impression is that resource segregation is strongest, followed by status segregation and finally group segregation. 
 
 # Obtaining local environments
 
-We can also retrieve individualized neighborhood statistics because we requested the `"full"` output. That is we can characterize the local environment at various different values of bandwidth or k-nearest neighbors. If we apply st_as_sf(), we can get all of the local environments for all variables and bandwidths in a long data frame. Below, I take an additional step and compile this across scenarios. 
+We can also retrieve individualized neighborhood statistics because we requested the `"full"` output. That is we can characterize the local environment at various different values of bandwidth or k-nearest neighbors. If we apply st_as_sf(), we can get all of the local environments for all variables and bandwidths in a long data frame. Below, I take the additional step of compiling across scenarios or different raw "patterns". 
 
 ```{r selected-pattern}
 localenvs <- lapply(results, st_as_sf) |>
   bind_rows(.id = "pattern")
 ```
 
+With these patterns in hand, we can plot thumbnails of the income exposure for different patterns and bandwidths:
 
-
-
-localenvs |> 
-  filter(variable=="income", prob==0.5, band==100) |> 
-  ggplot(aes(color=rank)) +
+```{r income-band-thumbnail-50}
+localenvs |>
+  filter(variable == "income", prob == 0.5) |>
+  ggplot(aes(color = rank)) +
   geom_sf() +
-  facet_wrap(~pattern)
-
-
-
-
-
-
-city <- patterns[patterns$pattern == pattern_names[1], ]
-people <- st_as_sf(
-  city,
-  coords = c("x", "y"),
-  remove = FALSE,
-  crs = 3857,
-  sf_column_name = "location"
-)
-micro <- segcurves[[1]]
-income_levels <- levels(people$income_band)
+  theme_void() +
+  facet_grid(rows = vars(band), cols = vars(pattern))
 ```
 
-Continuous variables retain local deciles of global ranks by default, for either
-input representation. Categorical and ordinal variables retain category shares.
-These summaries are compact even for large neighborhoods: income's
-median rank describes its local position, and its lower and upper quantiles
-describe local spread. The indices still use the fine-grained data.
-Each retained income environment has nine columns regardless of how many
-neighbors it includes.
+Note that we did this for the median income rank above. That is, the above plot shows the overall percentile rank of income for those at median income in each bespoke neighborhood. We could have requested a different within-neighborhood percentile rank. For example, the following shot show the overall percentile rank of income for a person at the 10th percentile within each bespoke neighborhood.
 
-```{r local-income-ranks}
-dim(micro$analyses$income$env[["100"]])
-local_income <- st_as_sf(micro, variables = "income", bands = 100) |>
-  filter(prob == 0.5)
-ggplot(local_income) +
-  geom_sf(aes(colour = rank), size = 0.4) +
-  scale_colour_viridis_c(limits = c(0, 1), name = "Local median\nincome rank") +
-  coord_sf(datum = NA) +
-  labs(x = NULL, y = NULL)
+```{r income-band-thumbnails-10}
+localenvs |>
+  filter(variable == "income", prob == 0.5) |>
+  ggplot(aes(color = rank)) +
+  geom_sf() +
+  theme_void() +
+  facet_grid(rows = vars(band), cols = vars(pattern))
 ```
 
-Customize this presentation in the variable constructor. For example,
-`spseg_continuous(values = "income", localenv = list(type = "quantiles",
-probs = c(.25, .5, .75)))` retains quartiles. Use `localenv = "shares"` for
-local shares in the continuous variable's exposure groups, or in the supplied
-categories for ordinal and grouped inputs. These choices affect neither the
-segregation indices nor exposure/isolation calculations.
+The default is to calculate these overall percentile ranks at the level of deciles within neighborhoods, but more or less detail can be requested.
 
+We can also extract and plot spatially weighted group shares from the local environment objects. We just need to pick the right variable and category. Here I align the color coding for the group shares with the color coding for plotting the raw data. The one change is that we now have continuous shares, rather than a binary variable, and the midpoint is colored white. This represents not the absence of population, but just equal (spatially weighted) representation:
 
-
-Here `bands` are radii in coordinate units (metres). The default biweight kernel
-gives closer people more weight; `weighting = "unweighted"` gives all included
-people equal weight. The focal person is included. A plain data frame works
-with explicit coordinate columns:
-
-```{r dataframe-input, eval=FALSE}
-spseg(
-        city,
-        variables = micro_variables,
-        coords = c("x", "y"),
-        bands = bands,
-        scope = "both"
-)
+```{r group-band-thumbnails}
+localenvs |>
+  filter(variable == "group", category == "A") |>
+  ggplot(aes(color = share)) +
+  geom_sf() +
+  theme_void() +
+  facet_grid(rows = vars(band), cols = vars(pattern)) +
+  scale_color_gradient2(midpoint = 0.5)
 ```
 
-The four scalar families summarize different departures from mixing. Their
-numerical values are not interchangeable, and different variable types use
-different constructions and normalizers. Categorical measures start from
-Reardon's multigroup framework; ordinal and rank-order measures use cumulative
-thresholds. The ordinal and rank-order dissimilarity versions are package
-supplements, not measures attributed to Reardon. See
-[definitions and sources](spseg-multiple-variables.html) for the formulas,
-root-family generalization, and deterministic treatment of tied values.
-
-```{r micro-profile, fig.height=4}
-ggplot(as.data.frame(micro), aes(band, value, colour = measure)) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~variable, nrow = 1) +
-  labs(
-    x = "Neighborhood radius (m)",
-    y = "Segregation index",
-    colour = "Measure"
-  ) +
-  theme(legend.position = "bottom")
-```
 
 ## Exposure and local environments
 

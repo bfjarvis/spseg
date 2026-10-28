@@ -10,6 +10,7 @@ vignette: >
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(collapse=TRUE, comment="#>")
 library(spseg)
+library(dplyr)
 ```
 
 `spseg()` uses Euclidean distance unless a `network` is supplied. In network
@@ -48,6 +49,44 @@ population. Observation nodes absent from the edge list are isolated.
 Self-loops and parallel edges do not duplicate population. If an entity is
 allocated to several nodes, apportion its counts or weights before calling
 spseg; repeating its full population would count that population repeatedly.
+
+The same continuous summary interface works with network neighborhoods. The
+two supplied income intervals below preserve the requested median boundary
+(`.5`) by proportionally allocating the category that crosses it in global
+rank space. The warning and summary metadata report the allocation; this
+assumes the same within-category rank distribution at every node. Because the path is undirected here, the example's
+outward environments are also reachable in reverse. On a directed network,
+rank summaries describe outward reachable neighbors and need not be symmetric.
+
+```{r network-income-summary}
+network_income <- spseg(
+  nodes,
+  variables = list(income = spseg_continuous(
+    counts = c("low", "high"),
+    representation = "intervals",
+    summary = list(type = "quantiles", probs = 0.5, mean_rank = TRUE)
+  )),
+  network = network,
+  node_id = "node",
+  bands = c(1, 2),
+  weighting = "unweighted",
+  measures = "exposure",
+  output = "full"
+)
+
+as.data.frame(network_income, what = "exposure") |>
+  filter(summary == "quantiles") |>
+  select(from_group, band, statistic, prob, rank)
+network_income$analyses$income$definition$summary[c(
+  "requested_probs", "effective_probs", "groups", "interpolation"
+)]
+```
+
+With `summary = list(type = "shares")`, the default quartile grid still defines
+four groups. The two interval categories are apportioned across those groups
+at the requested boundaries. Binary continuous pairwise comparisons use those
+resolved group shares and the same full-variable network neighborhoods; they
+do not rerun shortest paths for each pair.
 
 The categorical, ordinal, grouped continuous and observed continuous variable
 specifications and index formulas are the same as for Euclidean environments.

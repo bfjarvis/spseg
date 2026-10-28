@@ -105,16 +105,21 @@ counts when applicable. The default retains only lightweight grid and
 fallback metadata.}
 
 \item{scope}{Whether to calculate "multigroup" measures, "pairwise"
-two-group measures, or "both" for categorical outcomes. Ordered outcomes
+two-group measures, or "both" for categorical outcomes and resolved continuous
+global groups. Continuous pairwise indices use binary group shares within
+the original full-variable neighborhoods, independently of summary mode.
+They do not replace full-resolution continuous scalar indices. Ordered outcomes
 always return their cumulative-threshold summaries; exposure is separate.}
 
 \item{output}{Return mode. "indices" stores only segregation indices.
 "full" stores both indices and local environments. "localenv"
 stores local environments without calculating indices.
 Categorical and ordinal environments default to category shares; continuous
-variables default to compact local quantiles of global ranks for either
-input representation. Customize the retained summary
-with `localenv` in the variable constructors, independently of the indices.}
+variables default to shares of resolved global quartile groups. Use
+`summary = list(type = "quantiles")` for synchronized local/grouped rank
+summaries, with `mean_rank = TRUE` in that list for a separate mean.
+Customize continuous summaries with `summary`, or ordinal summaries with
+`localenv`, independently of full-resolution scalar indices.}
 
 \item{verbose}{Logical. If `TRUE`, report progress messages.}
 
@@ -195,9 +200,12 @@ zero. This avoids artificial perturbation of the data and prevents
 `0 * log(0)` from producing `NaN`.
 }
 \note{
-The exposure/isolation index, P, is presented in matrix form. The spatial
+In shares mode the exposure/isolation measure, P, is presented in matrix form. The spatial
 exposure of group 'm' to group 'n' is located in row 'm' and column 'n'.
 The matrix is rarely symmetric in practice.
+In continuous quantiles mode, `measures = "exposure"` requests focal-group
+averages of local rank statistics, stored as `rank_summary` rather than P.
+These descriptive profiles are neither P matrices nor segregation indices.
 }
 \examples{
 data(spseg_data)

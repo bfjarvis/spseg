@@ -1,5 +1,22 @@
 # spseg 0.9.0.9000
 
+- Continuous variables now default to synchronized quartile shares through one
+  `summary` specification. Explicit quantiles use the same probability grid for
+  focal groups and local rank evaluations, with optional full-distribution mean
+  rank. Interval categories are proportionally apportioned across the requested
+  grid using a shared linear global-rank model for focal/neighbor populations,
+  replacing the earlier whole-interval matching rule. One warning flags the
+  assumption; per-neighborhood output records bottom/top category shares and
+  the local share requiring apportionment, with allocation fractions in metadata.
+  Grouped extraction remains `what = "exposure"` with typed share/rank rows;
+  rank profiles are stored separately from P. Continuous binary pairwise indices
+  compare resolved global groups within original neighborhoods, while scalar
+  continuous indices remain full-resolution. Explicit old `localenv`/`exposure`
+  settings retain a deprecated compatibility path and cannot mix with `summary`.
+
+- Documented a fresh-session workflow for local installation and restarting after
+  replacing a loaded package, avoiding stale lazy-load and installed-help state.
+
 - Consolidated variable specifications into `spseg_categorical()`,
   `spseg_ordinal()`, and `spseg_continuous()`. Continuous specifications now
   select `representation = "exact"` (default) or `"intervals"`, including
@@ -8,12 +25,12 @@
   from the variable type; calculation methods and compact environments are unchanged.
 
 - Retained local environments default to category shares for categorical and
-  ordinal variables, and compact weighted quantiles of global ranks for either
-  continuous representation. Ordinal and continuous constructors accept
-  `localenv = "shares"`, `"quantiles"`, or custom quantile/cut settings. Indices and exposure
-  still use the full available distributions; exact local distributions are
-  no longer duplicated in the result. Environment extraction reports either
-  `prob`/`rank` or `category`/`share`, with the summary type recorded explicitly.
+  ordinal variables, and synchronized global-group shares for either continuous
+  representation. Ordinal constructors accept `localenv`; continuous constructors
+  use `summary` for shares or compact weighted rank quantiles and optional mean
+  rank. Full-resolution scalar indices use the complete available distributions;
+  exact local distributions are not duplicated in the result. Extraction reports
+  typed `prob`/`rank` or `category`/`share` rows.
 
 - Added a synthetic-population overview covering individual, regular-grid,
   Voronoi, and pycnophylactic workflows. The older overview is retained and
@@ -42,8 +59,9 @@
   ordinal and rank-distribution dissimilarity supplements.
 * Observed continuous variables use deterministic weighted midranks and
   empirical normalizers; grouped CDFs use analytical linear interpolation in
-  percentile space. Exposure is unnormalized, with default global weighted
-  decile groups for observed continuous values and configurable cuts.
+  percentile space. Share exposure is unnormalized, with default global weighted
+  quartile groups, retaining the requested probabilities through interpolation
+  for interval input. Exact shares can alternatively use absolute income cuts.
 * Added multi-analysis results and extraction methods, methodological source
   documentation, and numerical regression tests. The new interface initially
   supports raw support and shared grid/pycnophylactic construction for count specifications.

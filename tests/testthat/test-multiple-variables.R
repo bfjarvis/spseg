@@ -96,7 +96,8 @@ test_that("ordinal, grouped, and empirical calculators match independent referen
   w <- (1-(distance/2.5)^3)^3; w[distance>2.5] <- 0
   local <- w %*% counts
   variables <- list(o=spseg_ordinal(counts=colnames(counts)),
-                    g=spseg_continuous(representation = "intervals", counts=colnames(counts)),
+    g=spseg_continuous(representation = "intervals", counts=colnames(counts),
+      summary=list(probs=head(cumsum(colSums(counts))/sum(counts),-1))),
                     c=spseg_continuous(counts=colnames(counts),scores=c(-5,0,1,100)))
   result <- spseg(d,coords=c("x","y"),variables=variables,bands=2.5)
   for (v in names(variables)) {
@@ -119,9 +120,9 @@ test_that("raw tied and weighted observations equal exact-value count input", {
              bands=c(0,2,10))
   expect_equal(a$analyses$v$indices,b$analyses$v$indices,tolerance=1e-12)
   expect_equal(a$analyses$v$indices,c$analyses$v$indices,tolerance=1e-12)
-  expect_equal(a$analyses$v$definition$exposure$shares,c(7,3,4)/14)
-  expect_equal(dim(a$analyses$v$env[[1]]), c(nrow(d), 9L))
-  expect_equal(unname(a$analyses$v$env[[1]][1,]), rep(.25, 9))
+  expect_equal(a$analyses$v$definition$exposure$shares,c(7,7)/14)
+  expect_equal(dim(a$analyses$v$env[[1]]), c(nrow(d), 2L))
+  expect_equal(unname(a$analyses$v$env[[1]][1,]), c(1, 0))
   permutation <- c(4,2,1,3)
   changed <- d[permutation,]; changed$v <- exp(changed$v)
   r <- spseg(changed,coords=c("x","y"),population="w",
@@ -163,9 +164,13 @@ test_that("two-category ordinal measures reduce to binary categorical measures",
 test_that("proportional subdivision of a continuous interval preserves the interpolant", {
   d <- data.frame(x=1:4,y=0,a=c(1,4,6,2),b=c(2,6,1,3),c=c(8,2,3,6))
   d$b1 <- d$b*.3; d$b2 <- d$b*.7
+  group_probs <- head(cumsum(colSums(d[c("a","b","c")])) /
+                        sum(d[c("a","b","c")]), -1)
   result <- spseg(d,coords=c("x","y"),variables=list(
-    original=spseg_continuous(representation = "intervals", counts=c("a","b","c")),
-    split=spseg_continuous(representation = "intervals", counts=c("a","b1","b2","c"))),
+    original=spseg_continuous(representation = "intervals", counts=c("a","b","c"),
+      summary=list(probs=group_probs)),
+    split=spseg_continuous(representation = "intervals", counts=c("a","b1","b2","c"),
+      summary=list(probs=group_probs))),
     measures=c("information","diversity","dissimilarity","square_root"),bands=c(0,2))
   expect_equal(result$analyses$original$indices,result$analyses$split$indices,tolerance=1e-10)
 })
@@ -174,8 +179,8 @@ test_that("exposure cut selection affects only exposure, and preserves ties and 
   d <- data.frame(x=1:20,y=0,v=rep(c(0,5,10,20),c(12,3,3,2)))
   set.seed(701); seed <- .Random.seed
   result <- spseg(d,coords=c("x","y"),variables=list(
-    deciles=spseg_continuous(values="v"),
-    values=spseg_continuous(values="v",exposure=list(breaks=c(-Inf,6,Inf)))),
+    deciles=spseg_continuous(values="v",summary=list(probs=seq(.1,.9,.1))),
+    values=spseg_continuous(values="v",summary=list(cuts=6))),
     bands=c(0,3),output="full")
   expect_identical(.Random.seed,seed)
   expect_equal(nrow(result$analyses$deciles$indices$multigroup$p[[1]]),4L)
@@ -186,7 +191,8 @@ test_that("exposure cut selection affects only exposure, and preserves ties and 
   expect_equal(rowSums(result$analyses$values$indices$multigroup$p[[2]]),c(1,1),ignore_attr=TRUE)
   unique <- transform(d, v=seq_len(nrow(d)))
   ten <- spseg(unique[1:10,],coords=c("x","y"),
-                variables=list(v=spseg_continuous(values="v")),bands=1)
+                variables=list(v=spseg_continuous(values="v",
+                  summary=list(probs=seq(.1,.9,.1)))),bands=1)
   expect_equal(ten$analyses$v$definition$exposure$shares,rep(.1,10))
 })
 
@@ -206,11 +212,11 @@ test_that("deterministic new-interface calls do not create an RNG state", {
 
 test_that("single populated intervals and near-endpoint grouped integrals are stable", {
   d <- data.frame(x=1:3,y=0,a=c(1,4,2),b=0)
-  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", counts=c("a","b"))),bands=2)
+  expect_warning(r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", counts=c("a","b"))),bands=2), "Interval summary interpolation")
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-12)
   d$a <- c(1e-8,2e-8,3e-8); d$b <- c(1,2,3)
   d$c <- c(1e8,2e8,3e8)
-  r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", counts=c("a","b","c"))),bands=2)
+  expect_warning(r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", counts=c("a","b","c"))),bands=2), "Interval summary interpolation")
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-10)
 })
 
@@ -261,7 +267,7 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
                   income=as.numeric(seq_len(140)))
   d$income[89:100] <- NA_real_
   variables <- list(race=spseg_categorical(values="race"),
-                    income=spseg_continuous(values="income",na.action="omit",
+                    income=legacy_continuous(values="income",na.action="omit",
                       localenv=list(type="quantiles",probs=c(0,.1,.5,.9,1))))
   r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
              bands=100,weighting="unweighted",scope="multigroup",output="full")
@@ -273,7 +279,7 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
   }
   adults <- d[!is.na(d$income),]
   income_only <- spseg(adults,coords=c("x","y"),neighbors="knn",bands=100,
-                       variables=list(income=spseg_continuous(values="income")),
+                       variables=list(income=legacy_continuous(values="income")),
                        weighting="unweighted",scope="multigroup")
   expect_equal(r$analyses$income$indices,income_only$analyses$income$indices,
                tolerance=1e-12)
@@ -286,7 +292,7 @@ test_that("aggregate kNN populations and boundary fractions are variable-specifi
                   race_a=c(4,10,9,12,15),race_b=c(6,10,31,8,25),
                   income_low=c(0,4,2,8,6),income_high=c(0,6,2,16,4))
   vars <- list(race=spseg_categorical(counts=c("race_a","race_b")),
-                income=spseg_continuous(representation = "intervals", counts=c("income_low","income_high"),
+                income=legacy_continuous(representation = "intervals", counts=c("income_low","income_high"),
                                      localenv="shares"))
   for (kernel in c("unweighted","biweight","inverse","exponential")) {
     r <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=c(7,20),

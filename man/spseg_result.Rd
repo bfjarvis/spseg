@@ -32,7 +32,9 @@
 \item{row.names, optional}{Standard data-frame generic arguments.}
 
 \item{what}{Extract scalar `"indices"`, categorical `"pairwise"` indices,
-`"exposure"` matrices, or stored `"env"` distributions.}
+`"exposure"` group summaries, or stored `"env"` distributions. Continuous
+pairwise results compare resolved global groups using binary categorical
+formulas within the original full-variable neighborhoods.}
 
 \item{variables}{Optional names of analyses to extract.}
 
@@ -49,13 +51,28 @@ Printing returns `x` invisibly. Data-frame extraction returns a long
   Empty environments retain rows with missing summaries.
   Network environments also identify `node`. Network-only results support
   ordinary extraction; spatial extraction requires stored geometry or coordinates.
+  Grouped extraction is explicitly typed: shares have `statistic = "share"`
+  and retain the `exposure` column. Quantile profiles have `summary = "quantiles"`,
+  `statistic = "quantile_rank"` or `"mean_rank"`, `rank`, and no target group.
+  Both have `value`; mean-rank rows have missing `prob`. Rank profiles are stored
+  in `analyses[[name]]$rank_summary`, separately from the share-valued P matrix.
+  Local extraction also identifies `statistic`. For interval input, retained
+  environments include `bottom_category_share`, `top_category_share`, and
+  `interpolated_share`, stored by band in `analyses[[name]]$interpolation`.
+  These are shares of the weighted local population in the first category,
+  last category, and any category apportioned across requested groups. They
+  are missing for other input types or empty local environments, and repeated
+  across summary rows for the same location/band. Group allocation fractions
+  are recorded in `definition$summary$groups$allocation`. A single positive
+  interval can provide interpolated rank summaries under this stated model.
 }
 \description{
 [spseg()] returns a `spseg_result`. Each element of `analyses` contains `indices`, optional
 `env`, `definition`, `normalizers`, and a status for each band. Stored
 environments are compact matrices: categorical and ordinal shares, or local
-quantiles of global ranks for continuous variables by default. The ordered constructors'
-`localenv` option selects quantiles or category shares; settings are recorded
+shares of global groups for continuous variables by default. Continuous
+`summary` selects synchronized shares or rank summaries; ordinal `localenv`
+selects quantiles or category shares. Settings are recorded
 in `definition$localenv`. The regional reference distribution is retained
 once when environments are stored. Inputs and environments are omitted in the
 default `output = "indices"` mode.

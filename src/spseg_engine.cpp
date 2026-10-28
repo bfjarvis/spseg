@@ -77,10 +77,13 @@ double abs_segment(double a, double b) {
 struct Model {
   int type, k, groups, bands;
   NumericMatrix input;
+  NumericMatrix group_fractions;
   arma::mat counts;
   IntegerVector code, exposure_map, flags, env_map;
+  IntegerVector split_intervals;
   NumericVector mass, shares, scores, z, env_probs, env_breaks;
   int env_type, env_columns;
+  bool synchronized, env_mean;
   CharacterVector labels;
   std::vector<double> q, prefix;
   double total, reference[5] = {0,0,0,0,0};
@@ -88,9 +91,12 @@ struct Model {
   std::vector<int> active_groups;
   arma::mat accum;
   arma::cube exposure_acc;
+  arma::cube rank_acc;
+  std::vector<double> group_shares;
   std::vector<std::pair<int,int>> pairs;
   arma::cube pair_acc;
   List environments;
+  List interpolation;
   bool keep_env, indices, multigroup, pairwise;
   std::vector<bool> empty;
   NumericVector knn_target, knn_min, knn_max, radius_min, radius_max;
@@ -99,13 +105,15 @@ struct Model {
   Model(List config, int n, int b, bool store, bool calculate, bool multi, bool pair)
     : type(as<int>(config["type"])), bands(b),
       input(as<NumericMatrix>(config["counts"])),
+      group_fractions(config["group_fractions"]),
       counts(input.begin(), input.nrow(), input.ncol(), false),
       code(config["code"]), exposure_map(config["exposure_map"]),
       flags(config["flags"]), mass(config["mass"]), shares(config["shares"]),
       scores(config["scores"]), z(config["z"]), labels(config["exposure_labels"]),
       accum(b,5,arma::fill::zeros), environments(store ? b : 0),
+      interpolation(store && group_fractions.nrow()>0 ? b : 0),
       keep_env(store), indices(calculate), multigroup(multi || type!=0),
-      pairwise(pair && type==0), empty(b,false),
+      pairwise(pair && (type==0 || as<bool>(config["synchronized"]))), empty(b,false),
       knn_target(b), knn_min(b,R_PosInf), knn_max(b,0.0),
       radius_min(b,R_PosInf), radius_max(b,0.0)
   {
@@ -114,7 +122,14 @@ struct Model {
     env_breaks = as<NumericVector>(config["env_breaks"]);
     env_type = as<int>(config["env_type"]);
     env_columns = as<int>(config["env_columns"]);
+    synchronized = as<bool>(config["synchronized"]);
+    env_mean = as<bool>(config["env_mean"]);
+    split_intervals = as<IntegerVector>(config["split_intervals"]);
     k=shares.size(); groups=labels.size();
+    group_shares.assign(groups, 0.0);
+    for (int g=0; g<k; ++g) {
+      add_group_mass(group_shares,g,shares[g]);
+    }
     total=std::accumulate(mass.begin(),mass.end(),0.0);
     double cumulative=0;
     for(int g=0;g<k;++g) {
@@ -142,13 +157,28 @@ struct Model {
       }
     }
     reference[3]=2*reference[2];
-    if(indices && flags[0]) exposure_acc.zeros(groups,groups,b);
+    if(indices && flags[0]) {
+      if(synchronized && env_type==1) rank_acc.zeros(groups,env_columns,b);
+      else exposure_acc.zeros(groups,groups,b);
+    }
     if(indices && pairwise) {
-      for(int a=0;a<k-1;++a) for(int c=a+1;c<k;++c) pairs.push_back({a,c});
+      const int pair_groups=synchronized ? groups : k;
+      for(int a=0;a<pair_groups-1;++a)
+        for(int c=a+1;c<pair_groups;++c) pairs.push_back({a,c});
       pair_acc.zeros(pairs.size(),5,b);
     }
-    if(keep_env) for(int band=0;band<b;++band)
+    if(keep_env) for(int band=0;band<b;++band) {
       environments[band]=NumericMatrix(n,env_columns);
+      if(group_fractions.nrow()>0) interpolation[band]=NumericMatrix(n,3);
+    }
+  }
+
+  void add_group_mass(std::vector<double>& out, int g, double value) const {
+    if(group_fractions.nrow()>0) {
+      for(int a=0;a<groups;++a) out[a]+=value*group_fractions(g,a);
+    } else if(g<exposure_map.size() && exposure_map[g]>=0) {
+      out[exposure_map[g]]+=value;
+    }
   }
 
   double focal(int i,int g) const {
@@ -183,13 +213,13 @@ struct Model {
 
   // Retain only the requested presentation. Index calculations below continue
   // to use the complete p/sparse distribution for this focal row and band.
-  void store_environment(int i, int band, const std::vector<double>& p,
+  std::vector<double> summarize_environment(const std::vector<double>& p,
                          const std::vector<std::pair<int,double>>& sparse,
                          double local) {
-    NumericMatrix env = environments[band];
+    std::vector<double> summary(env_columns,0.0);
     if(local <= 0) {
-      for(int j=0;j<env_columns;++j) env(i,j)=NA_REAL;
-      return;
+      std::fill(summary.begin(),summary.end(),NA_REAL);
+      return summary;
     }
     if(env_type == 1) {
       int target=0;
@@ -200,20 +230,26 @@ struct Model {
         const double previous=cumulative;
         cumulative+=share;
         last=type==2 ? q[g] : z[g];
-        while(target<env_columns && env_probs[target]<1 &&
+        while(target<env_probs.size() && env_probs[target]<1 &&
               env_probs[target]<=cumulative+tolerance) {
           if(type==2) {
             const double lower=g==0 ? 0 : q[g-1];
             const double fraction=std::max(0.0,std::min(1.0,
               (env_probs[target]-previous)/share));
-            env(i,target)=lower+fraction*(q[g]-lower);
-          } else env(i,target)=z[g];
+            summary[target]=lower+fraction*(q[g]-lower);
+          } else summary[target]=z[g];
           ++target;
         }
       };
       if(type==3) for(const auto& item:sparse) add(item.first,item.second);
       else for(int g=0;g<k;++g) add(g,p[g]);
-      while(target<env_columns) env(i,target++)=last;
+      while(target<env_probs.size()) summary[target++]=last;
+      if(env_mean) {
+        double mean=0;
+        if(type==3) for(const auto& item:sparse) mean+=item.second*z[item.first];
+        else for(int g=0;g<k;++g) mean+=p[g]*z[g];
+        summary.back()=mean;
+      }
     } else if(env_type == 2) {
       // Apportion grouped intervals to requested global-rank bins using the
       // same linear interpolant as the grouped segregation indices.
@@ -223,18 +259,21 @@ struct Model {
         for(int j=0;j<env_columns;++j) {
           const double overlap=std::min(q[g],env_breaks[j+1])-
                                std::max(lower,env_breaks[j]);
-          if(overlap>0) env(i,j)+=p[g]*overlap/width;
+          if(overlap>0) summary[j]+=p[g]*overlap/width;
         }
       }
     } else {
-      if(type==3) {
+      if(group_fractions.nrow()>0) {
+        for(int g=0;g<k;++g) add_group_mass(summary,g,p[g]);
+      } else if(type==3) {
         for(const auto& item:sparse) {
           const int g=env_map[item.first];
-          if(g>=0) env(i,g)+=item.second;
+          if(g>=0) summary[g]+=item.second;
         }
       } else for(int g=0;g<k;++g)
-        if(env_map[g]>=0) env(i,env_map[g])+=p[g];
+        if(env_map[g]>=0) summary[env_map[g]]+=p[g];
     }
+    return summary;
   }
 
   void update(int i,int band,const Contributions& c) {
@@ -277,7 +316,23 @@ struct Model {
       if(local>0) for(double& v:p) v/=local;
       if(type==3) for(int g=0;g<k;++g) if(p[g]>0) sparse.push_back({g,p[g]});
     }
-    if(keep_env) store_environment(i,band,p,sparse,local);
+    std::vector<double> summary;
+    if(keep_env && group_fractions.nrow()>0) {
+      NumericMatrix diagnostic=interpolation[band];
+      double apportioned=0;
+      for(int g:split_intervals) apportioned+=p[g];
+      diagnostic(i,0)=local>0 ? p.front() : NA_REAL;
+      diagnostic(i,1)=local>0 ? p.back() : NA_REAL;
+      diagnostic(i,2)=local>0 ? apportioned : NA_REAL;
+    }
+    if(keep_env || (indices && synchronized &&
+                    (flags[0] || (pairwise && env_type==0)))) {
+      summary=summarize_environment(p,sparse,local);
+      if(keep_env) {
+        NumericMatrix env=environments[band];
+        for(int j=0;j<env_columns;++j) env(i,j)=summary[j];
+      }
+    }
     if(!indices || mass[i]<=0) return;
     if(local<=0) {empty[band]=true;return;}
     if(multigroup) {
@@ -317,36 +372,45 @@ struct Model {
         }
       }
     }
-    if(flags[0]) {
-      std::vector<double> local_group(groups,0), focal_group(groups,0);
+    std::vector<double> local_group, focal_group;
+    if(flags[0] || (pairwise && synchronized)) {
+      local_group.assign(groups,0); focal_group.assign(groups,0);
       // Observed continuous rows stay sparse; count input already has K columns.
-      if(type==3) {
+      if(synchronized && env_type==0) {
+        local_group=summary;
+      } else if(type==3) {
         for(const auto& item:sparse) {
-          int g=exposure_map[item.first]; if(g>=0) local_group[g]+=item.second;
+          add_group_mass(local_group,item.first,item.second);
         }
-      } else for(int g=0;g<k;++g) local_group[exposure_map[g]]+=p[g];
+      } else for(int g=0;g<k;++g) add_group_mass(local_group,g,p[g]);
       if(counts.n_rows) {
-        for(int g=0;g<k;++g) if(exposure_map[g]>=0)
-          focal_group[exposure_map[g]]+=counts(i,g);
-      } else if(code[i]>=0 && exposure_map[code[i]]>=0)
-        focal_group[exposure_map[code[i]]]=mass[i];
+        for(int g=0;g<k;++g) add_group_mass(focal_group,g,counts(i,g));
+      } else if(code[i]>=0) add_group_mass(focal_group,code[i],mass[i]);
       // Group totals are precomputed in finish(); accumulate population counts here.
-      for(int a=0;a<groups;++a) if(focal_group[a]>0)
-        for(int b=0;b<groups;++b) exposure_acc(a,b,band)+=focal_group[a]*local_group[b];
+      if(flags[0]) for(int a=0;a<groups;++a) if(focal_group[a]>0) {
+        if(synchronized && env_type==1) {
+          for(int j=0;j<env_columns;++j) rank_acc(a,j,band)+=focal_group[a]*summary[j];
+        } else {
+          for(int b=0;b<groups;++b) exposure_acc(a,b,band)+=
+            focal_group[a]*(synchronized ? summary[b] : local_group[b]);
+        }
+      }
     }
     if(pairwise) for(std::size_t index=0;index<pairs.size();++index) {
       int a=pairs[index].first,b=pairs[index].second;
-      double weight=focal(i,a)+focal(i,b), local_pair=p[a]+p[b];
+      double weight=synchronized ? focal_group[a]+focal_group[b] : focal(i,a)+focal(i,b);
+      double local_pair=synchronized ? local_group[a]+local_group[b] : p[a]+p[b];
       if(weight<=0 || local_pair<=0) continue;
-      double v=p[a]/local_pair;
+      double v=(synchronized ? local_group[a] : p[a])/local_pair;
       for(int f:{1,2,4}) if(flags[f]) pair_acc(index,f,band)+=weight*variation(v,f);
-      double q0=shares[a]/(shares[a]+shares[b]);
+      double q0=synchronized ? group_shares[a]/(group_shares[a]+group_shares[b]) :
+                                shares[a]/(shares[a]+shares[b]);
       if(flags[3]) pair_acc(index,3,band)+=weight*std::abs(v-q0);
     }
   }
 
   List finish() {
-    List multigroup, pairwise_out;
+    List multigroup, pairwise_out, rank_summary;
     const char* names[5]={"p","h","r","d","s"};
     CharacterVector status(bands);
     const bool constant=type==2 ? false : active<2;
@@ -360,11 +424,19 @@ struct Model {
       }
       multigroup[names[f]]=out;
     }
-    if(indices && flags[0]) {
+    if(indices && flags[0] && synchronized && env_type==1) {
+      rank_summary=List(bands);
+      for(int b=0;b<bands;++b) {
+        NumericMatrix out(groups,env_columns);
+        for(int a=0;a<groups;++a) for(int j=0;j<env_columns;++j)
+          out(a,j)=!empty[b] && group_shares[a]>0 ?
+            rank_acc(a,j,b)/(total*group_shares[a]) : NA_REAL;
+        rank_summary[b]=out;
+      }
+    } else if(indices && flags[0]) {
       List matrices(bands);
       std::vector<double> totals(groups,0);
-      for(int g=0;g<k;++g) if(exposure_map[g]>=0)
-        totals[exposure_map[g]]+=shares[g]*total;
+      for(int a=0;a<groups;++a) totals[a]=group_shares[a]*total;
       for(int b=0;b<bands;++b) {
         NumericMatrix out(groups,groups);
         for(int a=0;a<groups;++a) for(int c=0;c<groups;++c)
@@ -376,12 +448,15 @@ struct Model {
     if(indices && pairwise) for(int f:{3,2,1,4}) if(flags[f]) {
       List matrices(bands);
       for(int b=0;b<bands;++b) {
-        NumericMatrix out(k,k); std::fill(out.begin(),out.end(),NA_REAL);
+        const int pair_groups=synchronized ? groups : k;
+        NumericMatrix out(pair_groups,pair_groups); std::fill(out.begin(),out.end(),NA_REAL);
         for(std::size_t index=0;index<pairs.size();++index) {
           int a=pairs[index].first,c=pairs[index].second;
-          if(shares[a]<=0 || shares[c]<=0 || empty[b]) continue;
-          const double t=total*(shares[a]+shares[c]);
-          const double q0=shares[a]/(shares[a]+shares[c]);
+          const double pa=synchronized ? group_shares[a] : shares[a];
+          const double pc=synchronized ? group_shares[c] : shares[c];
+          if(pa<=0 || pc<=0 || empty[b]) continue;
+          const double t=total*(pa+pc);
+          const double q0=pa/(pa+pc);
           const double denominator=f==3 ? 2*variation(q0,2) : variation(q0,f);
           const double v=pair_acc(index,f,b)/(t*denominator);
           out(a,c)=out(c,a)=f==3 ? v : 1-v;
@@ -399,6 +474,8 @@ struct Model {
     return List::create(_["indices"]=List::create(_["multigroup"]=multigroup,
                         _["pairwise"]=pairwise_out),
                         _["env"]=keep_env ? static_cast<SEXP>(environments) : R_NilValue,
+                        _["rank_summary"]=rank_summary,
+                        _["interpolation"]=interpolation,
                         _["status"]=status,_["normalizers"]=refs,
                         _["knn"]=has_knn ? static_cast<SEXP>(knn_summary) : R_NilValue);
   }

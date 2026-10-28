@@ -8,6 +8,11 @@ canonical checkout, assessed 2026-10-26. Existing tracked edits: `.Rbuildignore`
 `project/`. No existing package-source edits were present. Only this report is
 owned and edited by this assignment.
 
+Final documentation check: `e2b8acac868cdca8d0119f79c5439557e6a41dff`,
+2026-10-26. No changes to `src/`, `R/`, or `tools/` since the assessed revision.
+Existing edits to management records and T002/T005 were preserved. The report
+remains in review; this check adds no executable performance evidence.
+
 ## Brief
 
 - Read `AGENTS.md`, `project/GOALS.md`, and `project/TEAM.md`; reconcile prior
@@ -281,10 +286,11 @@ driver/logs. No fresh build, package test, timed suite, memory profile, vignette
 render or `R CMD check` was run. No code, cache API, shared benchmark artifact,
 central record or colleague-owned document was edited.
 
-Management: review ranking and budget proposals, then coordinate timing with
-Validation after T002. Developer: scope a geometry-only reusable representation
-and exact population-dependent selection contract before implementation; estimate
-memory and invalidation costs. Optimization's next executable deliverable should
-be a pinned, full-output baseline for W1/W2 and the agreed network cases, followed
-by separately measured candidate changes. Validation and Science retain ownership
-of independent correctness and scientific interpretation, respectively.
+Management: retain this as a deferred performance backlog behind the current
+getting-started vignette, transparent income/network examples, and network error
+repair. When optimization is scheduled, review ranking/budgets and coordinate
+timing with Validation after T002. Developer should then scope geometry reuse and
+exact population-dependent selection, including memory and invalidation costs.
+Optimization's next executable deliverable would be a pinned full-output baseline
+for W1/W2 and agreed network cases, followed by separately measured candidates.
+Validation and Science retain independent correctness and scientific interpretation.

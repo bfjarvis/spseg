@@ -11,6 +11,7 @@ vignette: >
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(collapse=TRUE, comment="#>")
 library(spseg)
+library(dplyr)
 ```
 
 `spseg()` can measure several attributes in one call. It discovers neighbors
@@ -74,9 +75,16 @@ The three specifications in this example make different claims about the
 exact values. A single area mean does not recover its residents' distribution.
 Exact-value count input is never expanded into individual records.
 Interval input uses linear CDF interpolation in global percentile space and
-does not impute individual incomes or use bin midpoints. Its exposure uses the
-supplied intervals. `scores` and custom `exposure` cuts apply only to exact
-input; `levels` and `interpolation` apply only to interval input.
+does not impute individual incomes or use bin midpoints. In the new continuous
+summary interface, categories are proportionally apportioned across the requested
+global groups when needed, preserving the requested probability grid. The same
+fractions apply to original focal counts and local target shares at every location.
+This assumes a common within-category rank distribution across locations, without
+requiring monetary lower/upper tail bounds. A brief warning flags interpolation;
+neighborhood diagnostics and global allocation fractions are retained. `scores`
+and absolute summary `cuts`
+apply only to exact input; `levels` and `interpolation` apply only to interval
+input.
 
 Each specification can override `measures`. The common selectors are
 `"information"`, `"diversity"`, `"dissimilarity"`, `"square_root"`, and `"exposure"`.
@@ -284,83 +292,173 @@ integrals of the overall CDF, avoiding a full regional scan per neighborhood.
 
 # Exposure and isolation
 
-Exposure is **unnormalized**, following the local-composition interpretation
-of @reardon2004. For focal group $a$ and target group $b$,
-$P^*_{ab}=\sum_i(n_{ia}/N_a)p_{ib}$. Diagonals describe isolation;
-off-diagonals describe exposure to other groups. This is distinct from the
-normalized exposure index also denoted $P$ in @reardon2002.
+For categorical variables, exposure is **unnormalized**, following the
+local-composition interpretation of @reardon2004. For focal group $a$ and
+target group $b$, $P^*_{ab}=\\sum_i(n_{ia}/N_a)p_{ib}$. Diagonals describe
+isolation; off-diagonals describe exposure to other groups. This differs from
+the normalized exposure index also denoted $P$ in @reardon2002.
 
-Categorical and ordinal variables use their supplied categories. Grouped
-continuous variables use the supplied intervals directly, without CDF
-interpolation. Observed continuous variables use global weighted deciles by
-default. Alternative `probs` must increase from zero to one; `breaks` must
-increase and cover the observed values. Cuts use right-closed intervals with
-the lowest boundary included. Quantile cut values are weighted inverse-CDF
-quantiles, with equal values kept together and empty exposure groups removed.
-Requested cuts, value boundaries, retained labels, and achieved shares are
-stored in `definition$exposure`. Group membership is reused across bands.
+Continuous variables use one summary specification. Shares are the default;
+the default interior probabilities `.25`, `.5`, and `.75` define four global
+focal/target income groups. Exact tied values stay together, so achieved group
+sizes need not be equal. For interval input, the requested grid is preserved.
+If the highest category contains 15% of the regional population, a top-decile
+group receives `10/15` of that category's population in every unit. This is an
+explicit model-based allocation, not observed membership within that category.
+The allocation is fixed before surface construction and used for both focal and
+neighbor populations. A warning flags interpolation, while retained environment
+rows report `bottom_category_share`, `top_category_share`, and
+`interpolated_share`, by location and band. The latter is the weighted local share
+in categories split across groups, not a statistical error estimate. Allocation
+fractions are in `definition$summary$groups$allocation`. Choosing probabilities
+on supplied interval cumulative boundaries avoids interpolation of membership.
 
 ```{r exposure}
-custom <- spseg(people, coords=c("x", "y"), bands=3,
-  variables=list(income=spseg_continuous(values="income",
-    exposure=list(probs=c(0, .2, .8, 1)))), measures=c("information", "exposure"))
-custom$analyses$income$definition$exposure
-as.data.frame(custom, what="exposure")
+income_units <- data.frame(
+  unit = c("U", "V"),
+  x = c(0, 1),
+  y = 0,
+  income_10 = c(2, 0),
+  income_20 = c(1, 1),
+  income_30 = c(0, 2),
+  income_40 = c(1, 1)
+)
+income_columns <- paste0("income_", c(10, 20, 30, 40))
+
+share_result <- spseg(
+  income_units,
+  coords = c("x", "y"),
+  variables = list(income = spseg_continuous(
+    counts = income_columns,
+    scores = c(10, 20, 30, 40),
+    summary = list(type = "shares", probs = 0.5)
+  )),
+  bands = 0,
+  weighting = "unweighted",
+  measures = "all",
+  scope = "both",
+  output = "full"
+)
+
+as.data.frame(share_result, what = "exposure") |>
+  filter(summary == "shares", band == 0) |>
+  select(from_group, to_group, exposure)
 ```
 
-These exposure cuts do not coarsen the continuous segregation indices.
+There are eight people, two in each income category. Their global weighted
+midranks are `1/8`, `3/8`, `5/8`, and `7/8`. The median cut at income 20 gives
+the local low/high shares `(3/4, 1/4)` at U and `(1/4, 3/4)` at V. Low-income
+focal people weight U and V by `(3/4, 1/4)`; high-income focal people weight
+them by `(1/4, 3/4)`. The resulting exposure rows are low `(5/8, 3/8)` and
+high `(3/8, 5/8)`. These are average local shares, not shares from pooling all
+neighbor counts first.
+
+With `type = "quantiles"`, the same `probs` vector defines global focal groups
+and within-neighborhood quantile positions. The grouped result is the
+focal-population-weighted average of each person's local rank quantile; it is
+not the quantile of a pooled neighborhood distribution. `mean_rank = TRUE`
+adds a distinct mean of the full local rank distribution, not a mean of the
+reported quantiles.
+
+```{r rank-summaries}
+rank_result <- spseg(
+  income_units,
+  coords = c("x", "y"),
+  variables = list(income = spseg_continuous(
+    counts = income_columns,
+    scores = c(10, 20, 30, 40),
+    summary = list(type = "quantiles", probs = 0.5, mean_rank = TRUE)
+  )),
+  bands = 0,
+  weighting = "unweighted",
+  measures = "exposure",
+  output = "full"
+)
+
+rank_profiles <- as.data.frame(rank_result, what = "exposure")
+rank_profiles |>
+  filter(summary == "quantiles", band == 0) |>
+  select(from_group, statistic, prob, rank)
+```
+
+At U and V the local mean ranks are `3/8` and `5/8`; local median ranks are
+`1/8` and `5/8`. Averaging by focal income gives low/high mean ranks `7/16`
+and `9/16`, and low/high median ranks `1/4` and `1/2`. `what = "exposure"`
+keeps the familiar request but labels rows with `summary` and `statistic`;
+share rows contain `from_group`, `to_group`, and `exposure`, while quantile
+rows contain `from_group`, `prob`, and `rank`. Mean-rank rows use
+`statistic = "mean_rank"` and a missing `prob`. Rank profiles are descriptive,
+not classic exposure matrices or segregation indices.
+
+Use `scope = "pairwise"` (or `"both"`) for binary indices between the resolved
+continuous groups. These comparisons renormalize local shares within each
+selected pair and use neighborhoods selected from the full eligible income
+population. With the two median-defined groups above, the binary dissimilarity
+is `.5`. Pairwise indices are separate from both the continuous scalar indices
+and the directional exposure matrix.
+
+For exact income, `cuts` can replace `probs` in shares mode, for example
+`summary = list(type = "shares", cuts = c(30, 60))`; the cut groups include
+implicit open-ended tails. Absolute cuts are not accepted for interval input,
+whose labels do not establish monetary thresholds. Explicit legacy continuous
+`localenv` and `exposure` specifications still run with a deprecation warning
+for migration, but cannot be combined with `summary`. Summary settings leave
+the full-resolution continuous scalar indices and their normalizers unchanged.
 
 # Results and properties
 
-`result$analyses[[name]]` contains scalar and optional categorical pairwise
-indices, exposure matrices, method metadata, actual normalizers, and per-band
-status. `as.data.frame()` adds variable type and method to each result.
-`output="full"` or `"localenv"` retains compact matrices. Categorical and ordinal
-variables default to category shares. Continuous variables, with either exact
-or interval input, default to local weighted deciles of **global population ranks**,
-not original values. Ordinal variables can opt into rank quantiles with
-`localenv="quantiles"`.
-For example, a local median rank of .8 places the weighted median neighbor at
-the population's 80th percentile. Kernel weights, population weights, and kNN
-boundary fractions are included in these summaries.
+`result$analyses[[name]]` contains scalar and optional pairwise indices,
+exposure summaries, method metadata, actual normalizers, and per-band status.
+`as.data.frame()` adds variable type and method to each result.
+`output="full"` or `"localenv"` retains compact local summaries. Categorical
+and ordinal variables default to category shares. Continuous variables use one
+`summary` setting for local output and focal-group summaries. The default
+shares mode groups exact values at global quartiles; interval input preserves
+the requested grid by proportionally allocating categories that cross group
+boundaries in global-percentile space. Explicit
+`summary = list(type = "quantiles")` returns local quantiles of **global
+population ranks**, not original income units, and their focal-group averages.
+A local median rank of `.8` locates the weighted median neighbor at the
+population's 80th percentile. Kernel weights, population weights, and kNN
+boundary fractions enter local summaries.
 
 For ordinal categories and exact observations, ties have global weighted
-midranks and quantiles select the first rank at which cumulative local weight
-reaches the requested probability. They do not interpolate between observed
-ranks. For grouped intervals, quantiles invert the piecewise-linear local CDF
-in global percentile space. Probabilities zero and one select local support
-limits; an empty local environment has missing summaries.
+midranks and local quantiles select the first rank at which cumulative local
+weight reaches the requested probability. They do not interpolate between
+observed ranks. For grouped intervals, local quantile values invert the
+piecewise-linear local CDF in global percentile space, using the requested
+probability grid. Fractional category allocation assumes a common
+within-category rank distribution across locations. The implicit global
+endpoints do not add local minimum or maximum rows. An empty local environment
+has missing summaries.
 
-The `localenv` setting is independent of `exposure` and of all scalar indices.
-It is available in `spseg_ordinal()` and both representations of `spseg_continuous()`.
-For instance, request quartiles or category shares:
+Continuous summary choices do not change the full-resolution scalar indices.
+The explicit legacy continuous `localenv`/`exposure` pair remains temporarily
+available with a deprecation warning; it cannot be combined with `summary`.
+Ordinal summaries retain their existing `localenv` control. For example,
+request local rank quantiles for exact income and education together:
 
 ```{r compact-environments}
-environments <- spseg(people, coords=c("x", "y"), bands=3, output="localenv",
+environments <- spseg(people, coords=c("x", "y"), bands=3, output="full",
   variables=list(
     income=spseg_continuous(values="income",
-      localenv=list(type="quantiles", probs=c(.25, .5, .75))),
-    education=spseg_ordinal(values="education"),
-    income_groups=spseg_continuous(values="income",
-      localenv=list(type="shares", breaks=c(-Inf, 30, Inf)))
+      summary=list(type="quantiles", probs=c(.25, .5, .75), mean_rank=TRUE)),
+    education=spseg_ordinal(values="education", localenv="quantiles")
   ))
 head(as.data.frame(environments, what="env", variables="income"))
-head(as.data.frame(environments, what="env", variables="income_groups"))
+as.data.frame(environments, what="exposure", variables="income")
 ```
 
-Share summaries use the supplied ordinal categories or intervals by default;
-exact continuous variables use their exposure groups, even when no exposure
-index is requested. Custom share `probs` run from zero to one and define
-global quantile bins, with equal observed values kept together. For grouped
-intervals, such bins use CDF interpolation. Original-value `breaks` are available
-only for exact continuous input. Changing local-environment cuts does not
-change the exposure matrix or any segregation index.
-
-Use `as.data.frame(result, what="env")` or `sf::st_as_sf(result)` to obtain long
-tables. Quantile rows have `summary="quantiles"`, `prob`, and `rank`; category
-rows have `summary="shares"`, `category`, and `share`. Unused fields are missing.
-`definition$localenv` records the representation and its settings. The detailed
-local distributions are used transiently for calculation and are not retained.
+Use `as.data.frame(result, what="env")` or `sf::st_as_sf(result)` to obtain
+long local tables. Quantile rows have `summary="quantiles"`, `statistic`,
+`prob`, and `rank`; category rows have `summary="shares"`, `category`, and
+`share`. Continuous grouped rows from `what="exposure"` are also long-form
+and typed: `summary="shares"` rows use `statistic="share"`, `from_group`,
+`to_group`, and `exposure`; `summary="quantiles"` rows use `from_group`,
+`statistic`, `prob`, and `rank`. Mean-rank rows use `statistic="mean_rank"`
+and have no quantile probability. `definition$summary` records the requested
+and effective global grid, resolved groups, interval allocation, and interpolation
+reasons. Detailed local distributions are used transiently and not retained.
 
 An exact constant variable has undefined scalar indices (`NA`, status
 `"constant"`), but its exposure can be one. A single populated *interval*

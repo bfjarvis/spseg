@@ -37,7 +37,8 @@ spseg_continuous(
   na.action = c("fail", "omit"),
   exposure = NULL,
   localenv = "quantiles",
-  interpolation = NULL
+  interpolation = NULL,
+  summary = NULL
 )
 }
 \arguments{
@@ -58,10 +59,13 @@ Defaults to the `population` supplied to [spseg()], or its inferred default.}
 only to this variable, including its kNN stopping population. Other
 variables and radius bandwidths are unaffected.}
 
-\item{localenv}{Retained local-environment summary: ordinal variables default
-to `"shares"`; continuous variables default to `"quantiles"` for either
-input representation. Select either summary, or a list with `type` and
-optional `probs`/`breaks`. Quantiles default to `seq(.1, .9, .1)` and report local
+\item{localenv}{Deprecated for continuous variables in favor of `summary`;
+explicit legacy calls retain independent local/exposure summaries. For
+ordinal variables, the current retained summary defaults to `"shares"`.
+Only the deprecated explicit continuous path defaults to `"quantiles"`
+(including when only legacy `exposure` is supplied). Select either summary,
+or a list with `type` and optional `probs`/`breaks`. Legacy continuous and
+ordinal quantiles default to `seq(.1, .9, .1)` and report local
 weighted quantiles of global population ranks. Ordinal and exact continuous
 observations use weighted midranks and the inverse weighted empirical CDF;
 grouped intervals use the inverse linearly interpolated CDF. Probabilities
@@ -83,7 +87,9 @@ ordered factor or explicit `levels`; count columns supply interval order.}
 columns with `representation = "exact"`. These are observed values, not
 interval midpoints. Interval input does not accept scores.}
 
-\item{exposure}{For exact continuous variables, a list with either
+\item{exposure}{Deprecated for continuous variables: use `summary` instead.
+Explicit legacy calls retain the previous behavior with a warning and cannot
+be combined with `summary`. For exact continuous variables, a list with either
 `probs` (global weighted quantile boundaries, including 0 and 1) or `breaks`
 (value boundaries covering the observations). Defaults to deciles.
 Equal values stay together; empty groups are removed. These cuts do not
@@ -95,6 +101,30 @@ this option; custom local presentation cuts belong in `localenv`.}
 \item{interpolation}{For `representation = "intervals"`, CDF interpolation.
 `NULL` selects `"linear"` in overall percentile space, not in the original
 measurement units. Exact input does not accept this option.}
+
+\item{summary}{Continuous summary specification, defaulting to
+`list(type = "shares", probs = c(.25, .5, .75))`. Shares use the same
+global groups for retained local shares and group-averaged exposure.
+`type = "quantiles"` returns local global-rank quantiles and their
+focal-group averages instead; `mean_rank = TRUE` additionally reports the
+mean of the full local rank distribution. `probs` is one strictly increasing
+vector in [0, 1]; optional 0/1 delimiters define tails but are not evaluated
+as local extrema. Exact shares may use finite absolute `cuts` instead of
+`probs`, with implicit infinite tails. Cuts require exact values and shares
+mode. Tied values remain together, so achieved group sizes may differ.
+Interval input retains the requested grid. Categories crossing requested
+boundaries are proportionally apportioned in global-percentile space, using
+the same fractions for original focal populations and local target shares.
+This assumes the same within-category rank distribution at every location;
+it does not require monetary tail bounds. Allocation is resolved once before
+surface construction and recorded in `definition$summary$groups$allocation`.
+One warning identifies when interpolation is required. Retained neighborhoods
+report `bottom_category_share`, `top_category_share`, and `interpolated_share`
+rather than printing numerical details in the warning. The last is the local
+population share in input categories split across requested groups, not an
+uncertainty estimate. Choose probabilities on actual cumulative interval
+boundaries to avoid apportionment. Summary choices do not change continuous
+scalar indices.}
 }
 \value{
 A `spseg_variable` specification for `spseg(variables = ...)`.
@@ -111,9 +141,9 @@ values are not imputed.
 spseg_categorical(values = "ethnicity")
 spseg_ordinal(counts = c("primary", "secondary", "tertiary"))
 spseg_continuous(counts = c("low", "middle", "high"), representation = "intervals")
-spseg_continuous(values = "income", exposure = list(probs = c(0, .2, .8, 1)))
+spseg_continuous(values = "income", summary = list(probs = c(.2, .8)))
 spseg_continuous(values = "income",
-                 localenv = list(type = "quantiles", probs = c(.25, .5, .75)))
+                 summary = list(type = "quantiles", mean_rank = TRUE))
 spseg_ordinal(values = "education", localenv = "quantiles")
 }
 \seealso{

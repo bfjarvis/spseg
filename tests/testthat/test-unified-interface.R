@@ -35,12 +35,13 @@ test_that("interval membership and counts give the same continuous calculation",
   columns <- c("low","middle","high")
   for(label in columns) d[[label]] <- ifelse(d$band==label,d$w,0)
   variables <- list(
-    members=spseg_continuous(values="band",weights="w",representation="intervals"),
-    counts=spseg_continuous(counts=columns,representation="intervals"))
+    members=spseg_continuous(values="band",weights="w",representation="intervals",
+      summary=list(probs=c(.2,.5))),
+    counts=spseg_continuous(counts=columns,representation="intervals",
+      summary=list(probs=c(.2,.5))))
   for(mode in c("radius","knn")) for(summary in c("quantiles","shares")) {
     specs <- lapply(variables,function(s) {
-      s$localenv <- list(type=summary)
-      if(summary=="quantiles") s$localenv$probs <- c(.25,.5,.75)
+      s$summary$type <- summary
       s
     })
     r <- spseg(d,coords=c("x","y"),variables=specs,neighbors=mode,
@@ -63,7 +64,8 @@ test_that("interval membership and counts give the same continuous calculation",
   expect_error(spseg(d,coords=c("x","y"),variables=list(v=variables$members),bands=1),
                "ordered")
   explicit <- spseg(d,coords=c("x","y"),variables=list(
-    v=spseg_continuous(values="band",weights="w",representation="intervals",levels=columns)),
+    v=spseg_continuous(values="band",weights="w",representation="intervals",levels=columns,
+      summary=list(probs=c(.2,.5)))),
     bands=1)
   expect_identical(explicit$analyses$v$definition$representation,"intervals")
 })
@@ -103,7 +105,8 @@ test_that("all count variable types share grid surfaces and neighborhood discove
     age1=c(1,2,1,3),age2=c(2,1,2,1),age3=c(2,3,4,2),geometry=geom)
   vars <- list(race=spseg_categorical(counts=c("a","b")),
                 education=spseg_ordinal(counts=c("low","middle","high")),
-                income=spseg_continuous(representation = "intervals", counts=c("inc0","inc1")),
+                income=spseg_continuous(representation = "intervals", counts=c("inc0","inc1"),
+                  summary=list(probs=6/17)),
                 age=spseg_continuous(counts=c("age1","age2","age3"),scores=c(20,20,40)))
   totals <- vapply(vars, function(z) sum(as.matrix(sf::st_drop_geometry(areas)[z$counts])),numeric(1))
   for (surface in c("grid","pycno")) for (neighbors in c("radius","knn")) {

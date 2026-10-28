@@ -3,6 +3,29 @@ R package 'spseg' for measuring and visualising population segregation
 
 Pre-1.0 development: the interface may change before the first stable release.
 
+## Installing Local Changes
+
+Install from the repository root in a fresh R session, before loading spseg or
+opening its installed help:
+
+```r
+pak::pak(".")
+```
+
+If spseg was loaded in an analysis session during installation, restart that
+session before continuing. In RStudio, use **Session > Restart R**. Calling
+`library(spseg)` again does not reload the existing namespace or compiled code.
+The restart is also needed when installation ran in a separate terminal or R
+process while the analysis session still had spseg loaded.
+
+Reinstalling a loaded package can leave the session's lazy-load state or cached
+help inconsistent with the replacement files. A later help request or function
+call can then report `internal error 1 in R_decompress1 with libdeflate`, even
+when the new installation is healthy. Restart R and retry before reinstalling
+packages or changing compression settings. If the warning persists in a fresh
+session, record the warning and the installation path from `find.package("spseg")`
+so that the affected installation can be investigated.
+
 Start with `vignette("spseg-getting-started")` for a reproducible synthetic-population
 example covering individual data, regular and Voronoi aggregation, and
 count-preserving population surfaces. The older `spseg-overview` vignette is
@@ -41,15 +64,37 @@ With `neighbors = "knn"`, each variable selects its own eligible population:
 `bands = 100` includes 100 eligible people before distance weighting, even
 when the variables cover different populations. Neighbor discovery is shared.
 
-For neighborhood construction, use `output = "localenv"` (or `"full"` to also
-calculate indices). Categorical and ordinal variables retain category shares by
-default. Continuous variables retain local deciles of global ranks for either
-input representation. For quartiles, specify
-`localenv = list(type = "quantiles", probs = c(.25, .5, .75))` in
-`spseg_ordinal()` or `spseg_continuous()` (either representation). Use
-`localenv = "shares"` for local category shares. These presentation settings
-do not coarsen the index calculations. Extract summaries with
+Continuous variables default to synchronized shares of four global income
+groups, using interior quartile probabilities `.25`, `.5`, and `.75`. Set
+`summary = list(type = "quantiles")` for local quantiles of global income
+ranks and their focal-group averages; optionally add `mean_rank = TRUE` for
+the distinct mean-rank statistic. The same probability grid defines global
+focal groups and local quantile positions. Shares and quantile summaries can
+be extracted with `as.data.frame(result, what = "exposure")`; inspect its
+`summary`, `statistic`, `from_group`, `prob`, `exposure`, and `rank` columns
+to distinguish share rows from rank profiles. Local summaries are retained
+with `output = "full"` or `"localenv"` and extracted with
 `as.data.frame(result, what = "env")` or `sf::st_as_sf(result)`.
+
+For exact income, `summary = list(type = "shares", cuts = c(...))` uses
+absolute value thresholds instead of probabilities. For interval input,
+the requested probabilities are retained. Categories crossing a requested boundary
+are proportionally split in global-percentile space, with the same allocation
+applied to focal populations and local target shares. This assumes locations share
+the same within-category rank distribution; no monetary maximum is needed.
+A brief warning flags interpolation. Retained neighborhood output includes
+`bottom_category_share`, `top_category_share`, and `interpolated_share` (the local
+share in split categories). Allocation fractions are recorded in
+`result$analyses$income$definition$summary$groups$allocation`. Probabilities aligned
+with actual interval boundaries avoid apportionment. Interval labels alone do not
+identify absolute income cuts. Changing summaries does not change the
+full-resolution continuous scalar indices. The explicit legacy continuous
+`localenv` and `exposure` arguments remain temporarily supported with a
+deprecation warning; do not combine them with `summary`.
+
+Use `scope = "pairwise"` to obtain binary segregation indices between resolved
+income groups. These group-pair indices use the original variable neighborhoods
+and do not replace continuous scalar indices.
 
 See `vignette("spseg-multiple-variables")` for definitions, sources, deterministic
 tie handling, population-count kNN neighborhoods, and exposure cuts. Polygon count specifications also support shared grid and pycnophylactic
