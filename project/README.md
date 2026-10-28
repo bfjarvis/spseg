@@ -83,12 +83,20 @@ release; a separate deployment tree is unnecessary.
 
 ## Branding
 
-From the repository root in RStudio, run `source("project/create-logo.R")`, or
-use `Rscript project/create-logo.R` in a terminal. The script writes the current
+From the repository root in Positron or RStudio, run
+`source("project/create-logo.R")`, or use `Rscript project/create-logo.R` in a
+terminal. The script writes the current
 dot design directly to `man/figures/logo.png`, which the GitHub README references.
 Commit and push that PNG to publish a change. The script preserves the resource
-sorting recipe; edit its point count, noise, utility weights, and color settings
-to adjust the design.
+sorting recipe. Its design parameters are grouped at the top; set
+`point_layout` to `"random"` or `"hexagonal"`. The regular hexagonal layout uses
+approximately `point_count` locations, with six equally spaced nearest neighbors
+in the interior. Both layouts assign the same kind of continuous resources using
+noisy utilities and the letter mask. Adjust `point_size`, noise, utility weights,
+and color settings there. Design coordinates are centered on `(0, 0)`; only the
+hexSticker export frame uses its native `(1, 1)` center. In an interactive session
+the script also prints `logo` in the plot pane; the intermediate objects remain
+available for inspection.
 
 Drawing uses ggplot2, dplyr, sf, terra, hexSticker, and png. Install missing drawing
 packages separately; they are not installed by the script. The branding script
