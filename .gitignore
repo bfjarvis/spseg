@@ -12,5 +12,6 @@ figure
 .vscode/settings.json
 air.toml
 /project/references
-# Local agent identities and chat routing; never publish.
+# Local agent guidance and chat routing; never publish.
+/AGENTS.md
 /project/TEAM.local.md

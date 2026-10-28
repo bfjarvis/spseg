@@ -286,3 +286,11 @@ spseg builds on methods developed by Reardon and colleagues and originated as a
 fork of [seg](https://github.com/syunhong/seg) by Seong-Yun Hong and David
 O'Sullivan. Attribution for reused code, example data, and other materials is
 retained in the package.
+
+## AI assistance disclosure
+
+I used ChatGPT Codex, especially GPT-6 and GPT-6.1 Sol, extensively in developing
+this package. Its contributions spanned software design and implementation,
+refactoring, debugging, test development, documentation, examples, performance
+exploration, and visual design. All errors, omissions, and misinterpretations
+remain my responsibility.
