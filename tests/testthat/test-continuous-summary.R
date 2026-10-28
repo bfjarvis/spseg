@@ -18,7 +18,8 @@ test_that("continuous summaries default to synchronized quartile shares", {
   expect_equal(result$analyses$income$env[[1]],
                as.matrix(d[c("a", "b", "c", "d")]) / 4, ignore_attr = TRUE)
   expect_equal(result$diagnostics$focal_searches, 2L)
-  expect_true(all(as.data.frame(result, what = "exposure")$statistic == "share"))
+  expect_identical(names(as.data.frame(result, what = "exposure")),
+    c("variable", "band", "from_group", "to_group", "value"))
 })
 
 test_that("local and grouped rank statistics use the same focal-weighted quantities", {
@@ -32,12 +33,11 @@ test_that("local and grouped rank statistics use the same focal-weighted quantit
   expect_null(analysis$indices$multigroup$p)
   out <- as.data.frame(result, what = "exposure")
   expect_setequal(out$statistic, c("quantile_rank", "mean_rank"))
-  expect_true(all(is.na(out$to_group)))
-  expect_true(all(is.na(out$exposure)))
+  expect_false(any(c("to_group", "exposure", "rank") %in% names(out)))
   expect_true(all(is.na(out$prob[out$statistic == "mean_rank"])))
-  expect_equal(out$value, out$rank)
+  expect_equal(out$value, c(1/4, 1/2, 7/16, 9/16))
   env <- as.data.frame(result, what = "env")
-  expect_equal(env$rank[env$statistic == "mean_rank"], c(3/8, 5/8))
+  expect_equal(env$value[env$statistic == "mean_rank"], c(3/8, 5/8))
 })
 
 test_that("continuous pairwise groups and scalar calculations are independent of presentation", {
@@ -128,11 +128,11 @@ test_that("open upper categories apportion deciles and report neighborhood diagn
                cbind(c(.7, 1), c(.3, 0), c(1, 1)))
   expect_equal(unname(analysis$interpolation[[2]]),
                cbind(c(.85, .85), c(.15, .15), c(1, 1)))
-  env <- as.data.frame(result, what = "env", bands = 0)
+  env <- as.data.frame(result, what = "interpolation", bands = 0)
   expect_equal(unique(env$top_category_share[env$location == 1]), .3)
   expect_true(all(env$interpolated_share == 1))
   mapped <- sf::st_as_sf(result, bands = 0)
-  expect_equal(mapped$interpolated_share, env$interpolated_share)
+  expect_false("interpolated_share" %in% names(mapped))
   aligned <- spseg_continuous(counts = c("bottom", "top"), representation = "intervals",
     summary = list(probs = .85))
   expect_no_warning(unsplit <- spseg(d, list(income = aligned), coords = c("x", "y"),

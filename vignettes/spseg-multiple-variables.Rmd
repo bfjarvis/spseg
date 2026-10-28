@@ -306,8 +306,8 @@ If the highest category contains 15% of the regional population, a top-decile
 group receives `10/15` of that category's population in every unit. This is an
 explicit model-based allocation, not observed membership within that category.
 The allocation is fixed before surface construction and used for both focal and
-neighbor populations. A warning flags interpolation, while retained environment
-rows report `bottom_category_share`, `top_category_share`, and
+neighbor populations. A warning flags interpolation, while extraction with
+`what = "interpolation"` reports `bottom_category_share`, `top_category_share`, and
 `interpolated_share`, by location and band. The latter is the weighted local share
 in categories split across groups, not a statistical error estimate. Allocation
 fractions are in `definition$summary$groups$allocation`. Choosing probabilities
@@ -341,8 +341,8 @@ share_result <- spseg(
 )
 
 as.data.frame(share_result, what = "exposure") |>
-  filter(summary == "shares", band == 0) |>
-  select(from_group, to_group, exposure)
+  filter(band == 0) |>
+  select(from_group, to_group, value)
 ```
 
 There are eight people, two in each income category. Their global weighted
@@ -377,16 +377,16 @@ rank_result <- spseg(
 
 rank_profiles <- as.data.frame(rank_result, what = "exposure")
 rank_profiles |>
-  filter(summary == "quantiles", band == 0) |>
-  select(from_group, statistic, prob, rank)
+  filter(band == 0) |>
+  select(from_group, statistic, prob, value)
 ```
 
 At U and V the local mean ranks are `3/8` and `5/8`; local median ranks are
 `1/8` and `5/8`. Averaging by focal income gives low/high mean ranks `7/16`
 and `9/16`, and low/high median ranks `1/4` and `1/2`. `what = "exposure"`
-keeps the familiar request but labels rows with `summary` and `statistic`;
-share rows contain `from_group`, `to_group`, and `exposure`, while quantile
-rows contain `from_group`, `prob`, and `rank`. Mean-rank rows use
+keeps the familiar request: share tables contain `from_group`, `to_group`, and
+`value`, while quantile tables contain `from_group`, `statistic`, `prob`, and
+`value`. Mean-rank rows use
 `statistic = "mean_rank"` and a missing `prob`. Rank profiles are descriptive,
 not classic exposure matrices or segregation indices.
 
@@ -408,7 +408,9 @@ the full-resolution continuous scalar indices and their normalizers unchanged.
 
 `result$analyses[[name]]` contains scalar and optional pairwise indices,
 exposure summaries, method metadata, actual normalizers, and per-band status.
-`as.data.frame()` adds variable type and method to each result.
+`as.data.frame()` returns compact identifiers and a single `value` column.
+Type, method, and representation remain in `analyses[[name]]$definition`;
+`what = "diagnostics"` extracts per-band status and kNN diagnostics.
 `output="full"` or `"localenv"` retains compact local summaries. Categorical
 and ordinal variables default to category shares. Continuous variables use one
 `summary` setting for local output and focal-group summaries. The default
@@ -448,12 +450,12 @@ as.data.frame(environments, what="exposure", variables="income")
 ```
 
 Use `as.data.frame(result, what="env")` or `sf::st_as_sf(result)` to obtain
-long local tables. Quantile rows have `summary="quantiles"`, `statistic`,
-`prob`, and `rank`; category rows have `summary="shares"`, `category`, and
-`share`. Continuous grouped rows from `what="exposure"` are also long-form
-and typed: `summary="shares"` rows use `statistic="share"`, `from_group`,
-`to_group`, and `exposure`; `summary="quantiles"` rows use `from_group`,
-`statistic`, `prob`, and `rank`. Mean-rank rows use `statistic="mean_rank"`
+long local tables. Quantile tables have `statistic`, `prob`, and `value`;
+category-share tables have `category` and `value`. Grouped tables from
+`what="exposure"` use `from_group`, `to_group`, and `value` for share
+probabilities; rank profiles use `from_group`, `statistic`, `prob`, and `value`.
+Columns follow the selected summary types; mixed tables contain their union,
+with `statistic="share"` identifying share rows. Mean-rank rows use `statistic="mean_rank"`
 and have no quantile probability. `definition$summary` records the requested
 and effective global grid, resolved groups, interval allocation, and interpolation
 reasons. Detailed local distributions are used transiently and not retained.

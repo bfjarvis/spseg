@@ -128,8 +128,8 @@
     warning("Interval summary interpolation",
       if (!is.null(variable)) paste0(" for '", variable, "'"),
       ": requested groups proportionally split income categories in global-rank space. ",
-      "The same fractions apply at every location; see neighborhood interpolation ",
-      "shares and definition$summary$groups$allocation.", call. = FALSE)
+      "The same fractions apply at every location; see what = 'interpolation' ",
+      "and definition$summary$groups$allocation.", call. = FALSE)
   }
   list(map = as.integer(map), fractions = fractions, labels = group_labels,
        definition = definition)

@@ -115,7 +115,7 @@ And we can view the indices in  a `data.frame`
 ```{r localenv-map}
 auck_poly_env <- sf::st_as_sf(auck_poly_spseg) |>
   dplyr::filter(category == "Korean") |>
-  dplyr::mutate(Korean_Share = share)
+  dplyr::mutate(Korean_Share = value)
 
 ggplot(auck_poly_env) +
   geom_sf(aes(geometry = geometry, fill = Korean_Share + 0.001), color = NA) +
@@ -157,7 +157,7 @@ The same `spseg()` call also produces segregation indices and local environments
 
 auck_grid_env <- sf::st_as_sf(auck_grid_spseg) |>
   dplyr::filter(category == "Korean") |>
-  dplyr::mutate(Korean_Share = share)
+  dplyr::mutate(Korean_Share = value)
 ```
 
 The `surface="pycno"` option also constructs a grid, then applies groupwise pycnophylactic interpolation. Each group is smoothed separately, then rescaled within each area unit after every iteration so the known group totals are preserved.
@@ -181,7 +181,7 @@ The segregation indices and local environments can be extracted in the same way.
 
 auck_pycno_env <- sf::st_as_sf(auck_pycno_spseg) |>
   dplyr::filter(category == "Korean") |>
-  dplyr::mutate(Korean_Share = share)
+  dplyr::mutate(Korean_Share = value)
 ```
 
 We can view all of the local environments based on the two approaches
@@ -299,7 +299,7 @@ The exposure/isolation values are a bit more complicated, but can be returned in
 head(auck_poly_exp <- as.data.frame(auck_spseg_bw, what = "exposure"))
 
 auck_poly_exp |>
-  ggplot(aes(x = band, y = exposure, color = from_group)) +
+  ggplot(aes(x = band, y = value, color = from_group)) +
   geom_line() +
   geom_point(size = 1.5) +
   scale_y_continuous(labels = function(x) {

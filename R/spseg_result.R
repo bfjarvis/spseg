@@ -18,37 +18,54 @@
 #'
 #' @param x A `spseg_result`.
 #' @param variables Optional names of analyses to extract.
-#' @param what Extract scalar `"indices"`, categorical `"pairwise"` indices,
-#'   `"exposure"` group summaries, or stored `"env"` distributions. Continuous
-#'   pairwise results compare resolved global groups using binary categorical
-#'   formulas within the original full-variable neighborhoods.
+#' @param what Table to extract: `"indices"` for multigroup scalar indices,
+#'   `"pairwise"` for two-group indices, `"exposure"` for focal-group summaries,
+#'   `"env"` for stored local summaries, `"diagnostics"` for per-band status and
+#'   kNN diagnostics, or `"interpolation"` for stored neighborhood interpolation
+#'   diagnostics. Continuous pairwise indices compare resolved global groups.
 #' @param bands Optional subset of neighborhood bands.
 #' @param row.names,optional Standard data-frame generic arguments.
 #' @param ... Reserved for generic methods. Extraction rejects unused arguments.
-#' @return Printing returns `x` invisibly. Data-frame extraction returns a long
-#'   table with the analysis name, type, continuous input `representation`
-#'   (`NA` for other types), method, and band. Environment tables
-#'   identify the input row as `location`. Spatial extraction returns this
-#'   environment table with the corresponding input geometry attached. Quantile
-#'   rows have `summary = "quantiles"`, `prob`, and `rank`; share rows have
-#'   `summary = "shares"`, `category`, and `share`. Unused columns are `NA`.
-#'   Empty environments retain rows with missing summaries.
-#'   Network environments also identify `node`. Network-only results support
-#'   ordinary extraction; spatial extraction requires stored geometry or coordinates.
-#'   Grouped extraction is explicitly typed: shares have `statistic = "share"`
-#'   and retain the `exposure` column. Quantile profiles have `summary = "quantiles"`,
-#'   `statistic = "quantile_rank"` or `"mean_rank"`, `rank`, and no target group.
-#'   Both have `value`; mean-rank rows have missing `prob`. Rank profiles are stored
-#'   in `analyses[[name]]$rank_summary`, separately from the share-valued P matrix.
-#'   Local extraction also identifies `statistic`. For interval input, retained
-#'   environments include `bottom_category_share`, `top_category_share`, and
-#'   `interpolated_share`, stored by band in `analyses[[name]]$interpolation`.
-#'   These are shares of the weighted local population in the first category,
-#'   last category, and any category apportioned across requested groups. They
-#'   are missing for other input types or empty local environments, and repeated
-#'   across summary rows for the same location/band. Group allocation fractions
-#'   are recorded in `definition$summary$groups$allocation`. A single positive
-#'   interval can provide interpolated rank summaries under this stated model.
+#' @return Printing returns `x` invisibly. Extraction returns a long data frame
+#'   with identifiers and one numeric `value` column for results:
+#'   \itemize{
+#'     \item Indices: `variable`, `band`, `measure`, `value`.
+#'     \item Pairwise indices additionally identify `group_a` and `group_b`.
+#'     \item Share exposure: `variable`, `band`, `from_group`, `to_group`, `value`.
+#'     \item Quantile exposure: `variable`, `band`, `from_group`, `statistic`,
+#'       `prob`, `value`.
+#'     \item Local shares: `variable`, `band`, `location`, `category`, `value`.
+#'     \item Local ranks: `variable`, `band`, `location`, `statistic`, `prob`, `value`.
+#'   }
+#'   Columns are chosen from the selected analyses' summary specifications, not
+#'   observed missingness. Mixed share/rank tables contain the union of their
+#'   required columns; `statistic = "share"` identifies share rows in those tables.
+#'   Quantile rows use `statistic = "quantile_rank"`; optional mean ranks use
+#'   `"mean_rank"` and have no quantile probability. Undefined results retain
+#'   their rows and missing `value`; empty tables retain their typed schema.
+#'
+#'   With `what = "exposure"`, shares are exposure/isolation probabilities, but
+#'   quantiles are focal-population-weighted averages of local global-rank
+#'   statistics, not probabilities of encountering a target group. Mean ranks
+#'   summarize the full local rank distribution. These rank profiles are stored
+#'   separately in `analyses[[name]]$rank_summary`, not in the P matrix. The
+#'   summary specification remains in `analyses[[name]]$definition`.
+#'
+#'   Type, representation, method, normalizers, and calculation settings remain
+#'   in the result object rather than being repeated in result tables.
+#'   `what = "diagnostics"` returns one row per variable/band with `status` and
+#'   any kNN population/radius diagnostics. `what = "interpolation"` returns
+#'   one row per stored interval neighborhood/band with `location`,
+#'   `bottom_category_share`, `top_category_share`, and `interpolated_share`.
+#'   These are weighted local population shares in the first category, last
+#'   category, and categories split across requested groups. They are not
+#'   uncertainty estimates; allocation fractions remain in
+#'   `definition$summary$groups$allocation`. Non-interval analyses contribute
+#'   no interpolation rows. Interpolation diagnostics require retained environments.
+#'
+#'   Network local and interpolation tables also identify `node`. Spatial
+#'   extraction returns the compact local table with corresponding geometry.
+#'   Network-only results require stored geometry or coordinates for mapping.
 #' @name spseg_result
 NULL
 
@@ -62,6 +79,12 @@ print.spseg_result <- function(x, ...) {
   for (name in names(x$analyses)) {
     a <- x$analyses[[name]]
     cat(" ", name, ": ", a$definition$type, " (", a$definition$method, ")\n", sep = "")
+    if (a$definition$type == "continuous") {
+      interpretation <- if (a$definition$localenv$type == "quantiles") {
+        "focal-group averages of local global-rank statistics, not exposure probabilities"
+      } else "exposure/isolation probabilities"
+      cat("    Summary:", a$definition$localenv$type, "-", interpretation, "\n")
+    }
     bad <- unique(a$status[a$status != "ok"])
     if (length(bad)) cat("    Status:", paste(bad, collapse = ", "), "\n")
   }
@@ -82,61 +105,93 @@ print.spseg_result <- function(x, ...) {
 #' @method as.data.frame spseg_result
 #' @export
 as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
-    ..., what = c("indices", "pairwise", "exposure", "env"), variables = NULL,
-    bands = NULL) {
+    ..., what = c("indices", "pairwise", "exposure", "env", "diagnostics",
+                 "interpolation"), variables = NULL, bands = NULL) {
   .spseg_unused_arguments(list(...))
   what <- match.arg(what)
   extract <- switch(what, indices = .spseg_indices_rows,
     pairwise = .spseg_pairwise_rows, exposure = .spseg_exposure_rows,
-    env = .spseg_env_rows)
+    env = .spseg_env_rows, diagnostics = .spseg_diagnostic_rows,
+    interpolation = .spseg_interpolation_rows)
   selected <- .spseg_analysis_subset(x, variables, bands)
+  analyses <- x$analyses[selected$variables]
+  schema <- .spseg_result_schema(analyses, what)
   rows <- list()
   keys <- c(d = "dissimilarity", h = "information", r = "diversity", s = "square_root")
   for (name in selected$variables) {
     analysis <- x$analyses[[name]]
-    definition <- analysis$definition
-    if (what != "env" && x$output == "localenv")
+    if (what %in% c("indices", "pairwise", "exposure") && x$output == "localenv") {
       stop("Indices were not calculated; use output = 'indices' or 'full'", call. = FALSE)
-    if (what == "env" && is.null(analysis$env))
-      stop("Local environments were not stored; use output = 'full' or 'localenv'", call. = FALSE)
+    }
+    if (what == "env" && is.null(analysis$env)) {
+      stop("Local environments were not stored; use output = 'full' or 'localenv'",
+           call. = FALSE)
+    }
+    if (what == "interpolation" &&
+        identical(analysis$definition$representation, "intervals") &&
+        is.null(analysis$env)) {
+      stop("Interpolation diagnostics were not stored; use output = 'full' or 'localenv'",
+           call. = FALSE)
+    }
     for (b in selected$bands) {
-      base <- list(variable = name, type = definition$type,
-                   representation = definition$representation %||% NA_character_,
-                   method = definition$method,
-                   band = x$bands[b])
+      base <- list(variable = name, band = x$bands[b])
       rows <- c(rows, extract(analysis, base, b, keys))
     }
   }
-  out <- if (length(rows)) do.call(rbind, rows) else data.frame()
-  if (!length(rows) && what == "env") {
-    out <- data.frame(variable = character(), type = character(),
-      representation = character(), method = character(), band = numeric(),
-      location = integer(), summary = character(), statistic = character(),
-      prob = numeric(), rank = numeric(), category = character(), share = numeric(),
-      bottom_category_share = numeric(), top_category_share = numeric(),
-      interpolated_share = numeric())
-  }
-  if (!length(rows) && what == "exposure") {
-    out <- data.frame(variable = character(), type = character(),
-      representation = character(), method = character(), band = numeric(),
-      from_group = character(), to_group = character(), summary = character(),
-      statistic = character(), prob = numeric(), exposure = numeric(),
-      rank = numeric(), value = numeric())
-  }
-  if (what == "env" && nrow(out) && !is.null(x$node_id))
+  # Fill only structurally inapplicable fields when combining different summaries.
+  rows <- lapply(rows, function(block) {
+    for (column in setdiff(names(schema), names(block))) {
+      block[[column]] <- schema[[column]][rep(NA_integer_, nrow(block))]
+    }
+    block[names(schema)]
+  })
+  out <- if (length(rows)) do.call(rbind, rows) else schema
+  if (what %in% c("env", "interpolation") && !is.null(x$node_id)) {
     out$node <- x$node_id[out$location]
+  }
   rownames(out) <- row.names
   out
 }
 
+.spseg_result_schema <- function(analyses, what) {
+  base <- list(variable = character(), band = numeric())
+  schema <- switch(what,
+    indices = c(base, list(measure = character(), value = numeric())),
+    pairwise = c(base, list(measure = character(), group_a = character(),
+      group_b = character(), value = numeric())),
+    exposure = {
+      ranks <- vapply(analyses, function(a) {
+        a$definition$type == "continuous" && a$definition$localenv$type == "quantiles"
+      }, logical(1))
+      c(base, list(from_group = character()),
+        if (any(!ranks)) list(to_group = character()),
+        if (any(ranks)) list(statistic = character(), prob = numeric()),
+        list(value = numeric()))
+    },
+    env = {
+      ranks <- vapply(analyses, function(a) a$definition$localenv$type == "quantiles",
+                      logical(1))
+      c(base, list(location = integer()),
+        if (any(!ranks)) list(category = character()),
+        if (any(ranks)) list(statistic = character(), prob = numeric()),
+        list(value = numeric()))
+    },
+    diagnostics = {
+      knn <- unique(unlist(lapply(analyses, function(a) setdiff(names(a$knn), "band"))))
+      c(base, list(status = character()), setNames(rep(list(numeric()), length(knn)), knn))
+    },
+    interpolation = c(base, list(location = integer(),
+      bottom_category_share = numeric(), top_category_share = numeric(),
+      interpolated_share = numeric()))
+  )
+  as.data.frame(schema, stringsAsFactors = FALSE)
+}
+
 .spseg_indices_rows <- function(analysis, base, b, keys) {
-  rows <- list()
-  for (key in intersect(names(keys), names(analysis$indices$multigroup))) {
-    rows[[length(rows) + 1L]] <- data.frame(base, measure = unname(keys[key]),
-      value = analysis$indices$multigroup[[key]][b], status = analysis$status[b],
-      row.names = NULL)
-  }
-  rows
+  lapply(intersect(names(keys), names(analysis$indices$multigroup)), function(key) {
+    data.frame(base, measure = unname(keys[key]),
+      value = unname(analysis$indices$multigroup[[key]][b]), row.names = NULL)
+  })
 }
 
 .spseg_pairwise_rows <- function(analysis, base, b, keys) {
@@ -144,69 +199,63 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
   for (key in intersect(names(keys), names(analysis$indices$pairwise))) {
     mat <- analysis$indices$pairwise[[key]][[b]]
     index <- which(upper.tri(mat), arr.ind = TRUE)
-    if (nrow(index)) rows[[length(rows) + 1L]] <- data.frame(base,
-      measure = unname(keys[key]), group_a = rownames(mat)[index[, 1]],
-      group_b = colnames(mat)[index[, 2]], value = mat[index], row.names = NULL)
+    if (nrow(index)) {
+      rows[[length(rows) + 1L]] <- data.frame(base,
+        measure = unname(keys[key]), group_a = rownames(mat)[index[, 1]],
+        group_b = colnames(mat)[index[, 2]], value = mat[index], row.names = NULL)
+    }
   }
   rows
 }
 
 .spseg_exposure_rows <- function(analysis, base, b, keys) {
-  rows <- list()
-  definition <- analysis$definition
   if (length(analysis$rank_summary)) {
     mat <- analysis$rank_summary[[b]]
-    stats <- definition$localenv$statistics
-    if (length(mat)) {
-      column <- rep(seq_len(ncol(mat)), each = nrow(mat))
-      rows[[length(rows) + 1L]] <- data.frame(base,
-        from_group = rep(rownames(mat), times = ncol(mat)),
-        to_group = NA_character_, summary = "quantiles",
-        statistic = stats$statistic[column], prob = stats$prob[column],
-        exposure = NA_real_, rank = as.vector(mat), value = as.vector(mat))
-    }
-  } else {
-    mat <- analysis$indices$multigroup$p[[b]]
-    if (!is.null(mat) && length(mat)) {
-      rows[[length(rows) + 1L]] <- data.frame(base,
-        expand.grid(from_group = rownames(mat), to_group = colnames(mat),
-                    stringsAsFactors = FALSE), summary = "shares",
-        statistic = "share", prob = NA_real_, exposure = as.vector(mat),
-        rank = NA_real_, value = as.vector(mat))
-    }
+    if (!length(mat)) return(list())
+    stats <- analysis$definition$localenv$statistics
+    column <- rep(seq_len(ncol(mat)), each = nrow(mat))
+    return(list(data.frame(base,
+      from_group = rep(rownames(mat), times = ncol(mat)),
+      statistic = stats$statistic[column], prob = stats$prob[column],
+      value = as.vector(mat))))
   }
-  rows
+  mat <- analysis$indices$multigroup$p[[b]]
+  if (is.null(mat) || !length(mat)) return(list())
+  list(data.frame(base,
+    expand.grid(from_group = rownames(mat), to_group = colnames(mat),
+                stringsAsFactors = FALSE), statistic = "share", value = as.vector(mat)))
 }
 
 .spseg_env_rows <- function(analysis, base, b, keys) {
-  rows <- list()
-  definition <- analysis$definition
   env <- analysis$env[[b]]
+  if (!length(env)) return(list())
+  definition <- analysis$definition$localenv
   location <- rep(seq_len(nrow(env)), times = ncol(env))
   column <- rep(seq_len(ncol(env)), each = nrow(env))
-  quantiles <- definition$localenv$type == "quantiles"
-  stats <- definition$localenv$statistics
-  if (length(location)) {
-    block <- data.frame(base,
-    location = location, summary = definition$localenv$type,
-    statistic = if (!is.null(stats)) stats$statistic[column] else
-      if (quantiles) "quantile_rank" else "share",
-    prob = if (!is.null(stats)) stats$prob[column] else
-      if (quantiles) definition$localenv$probs[column] else NA_real_,
-    rank = if (quantiles) as.vector(env) else NA_real_,
-    category = if (quantiles) NA_character_ else colnames(env)[column],
-    share = if (quantiles) NA_real_ else as.vector(env))
-    for (key in c("bottom_category_share", "top_category_share",
-                   "interpolated_share")) {
-      block[[key]] <- NA_real_
-    }
-    if (length(analysis$interpolation)) {
-      diagnostic <- as.data.frame(analysis$interpolation[[b]][location, , drop = FALSE])
-      block[names(diagnostic)] <- diagnostic
-    }
-    rows[[length(rows) + 1L]] <- block
+  if (definition$type == "quantiles") {
+    stats <- definition$statistics
+    return(list(data.frame(base, location = location,
+      statistic = if (is.null(stats)) "quantile_rank" else stats$statistic[column],
+      prob = if (is.null(stats)) definition$probs[column] else stats$prob[column],
+      value = as.vector(env))))
   }
-  rows
+  list(data.frame(base, location = location, category = colnames(env)[column],
+    statistic = "share", value = as.vector(env)))
+}
+
+.spseg_diagnostic_rows <- function(analysis, base, b, keys) {
+  block <- data.frame(base, status = unname(analysis$status[b]))
+  if (!is.null(analysis$knn)) {
+    block <- cbind(block, analysis$knn[b, setdiff(names(analysis$knn), "band"), drop = FALSE])
+  }
+  list(block)
+}
+
+.spseg_interpolation_rows <- function(analysis, base, b, keys) {
+  if (!length(analysis$interpolation)) return(list())
+  mat <- analysis$interpolation[[b]]
+  if (!nrow(mat)) return(list())
+  list(data.frame(base, location = seq_len(nrow(mat)), mat))
 }
 
 #' @rdname spseg_result

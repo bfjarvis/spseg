@@ -185,7 +185,7 @@ Extract local Hispanic shares with their geometry for mapping.
 local_maps <- st_as_sf(providence_spseg) |>
   filter(category == "Hispanic") |>
   st_join(select(providence, PLACEA, Raw = Total), join = st_equals) |>
-  mutate(Hispanic_Share = share)
+  mutate(Hispanic_Share = value)
 
 ```
 

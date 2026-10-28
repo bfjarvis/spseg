@@ -551,8 +551,7 @@ head(pycno_result$surface_info$audit$cells)
 pycno_result$surface_info$audit$fallback
 
 as.data.frame(income_surface, what = "exposure") |>
-  filter(summary == "quantiles") |>
-  select(from_group, band, statistic, prob, rank)
+  select(from_group, band, statistic, prob, value)
 income_surface$analyses$income$definition$summary[c(
   "requested_probs", "effective_probs", "groups", "interpolation"
 )]

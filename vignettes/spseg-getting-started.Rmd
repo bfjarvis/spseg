@@ -241,7 +241,7 @@ localenvs <- result |>
 
 localenvs |>
   st_drop_geometry() |>
-  select(location, variable, band, category, share) |>
+  select(location, variable, band, category, value) |>
   slice_head(n = 6) |>
   knitr::kable(digits = 3)
 ```
@@ -251,7 +251,7 @@ We can extract and plot spatially weighted group shares from the local environme
 ```{r group-local-environments}
 localenvs |>
   filter(variable == "group", category == "A") |>
-  ggplot(aes(colour = share)) +
+  ggplot(aes(colour = value)) +
   geom_sf(size = 0.3) +
   facet_wrap(~band, labeller = label_both) +
   scale_colour_gradient2(
@@ -273,7 +273,7 @@ resource_groups <- result$analyses$resources$definition$summary$groups$labels
 
 localenvs |>
   filter(variable == "resources", category == resource_groups[[1]]) |>
-  ggplot(aes(colour = share)) +
+  ggplot(aes(colour = value)) +
   geom_sf(size = 0.3) +
   facet_wrap(~band, labeller = label_both) +
   scale_colour_viridis_c(limits = c(0, 1), name = "Local share Q1") +
@@ -296,8 +296,8 @@ exposures <- result |>
 
 exposures |>
   filter(variable == "group", band == 100) |>
-  select(from_group, to_group, exposure) |>
-  pivot_wider(names_from = to_group, values_from = exposure) |>
+  select(from_group, to_group, value) |>
+  pivot_wider(names_from = to_group, values_from = value) |>
   knitr::kable(digits = 3)
 ```
 
@@ -308,7 +308,7 @@ exposures |>
     from_group = factor(from_group, levels = resource_groups, labels = paste0("Q", 1:4)),
     to_group = factor(to_group, levels = resource_groups, labels = paste0("Q", 1:4))
   ) |>
-  ggplot(aes(to_group, from_group, fill = exposure)) +
+  ggplot(aes(to_group, from_group, fill = value)) +
   geom_tile() +
   facet_wrap(~band, labeller = label_both) +
   scale_fill_viridis_c(limits = c(0, 1)) +
@@ -477,7 +477,7 @@ calculated_shares <- nonspatial |>
   as.data.frame(what = "env", variables = "group") |>
   filter(category == "group_A") |>
   arrange(location) |>
-  pull(share)
+  pull(value)
 
 stopifnot(isTRUE(all.equal(calculated_shares, observed_shares)))
 ```
@@ -681,7 +681,7 @@ pattern_local <- pattern_results |>
   mutate(pattern = factor(pattern, levels = names(patterns)))
 
 pattern_local |>
-  ggplot(aes(colour = share)) +
+  ggplot(aes(colour = value)) +
   geom_sf(size = 0.25) +
   facet_grid(rows = vars(band), cols = vars(pattern)) +
   scale_colour_gradient2(
@@ -707,7 +707,7 @@ pattern_exposure <- pattern_results |>
 
 pattern_exposure |>
   filter(to_group == "A") |>
-  ggplot(aes(band, exposure, colour = pattern)) +
+  ggplot(aes(band, value, colour = pattern)) +
   geom_line() +
   facet_wrap(~from_group, labeller = label_both) +
   scale_y_continuous(limits = c(0, 1)) +

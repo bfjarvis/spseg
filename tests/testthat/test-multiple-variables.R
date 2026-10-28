@@ -233,7 +233,7 @@ test_that("mixed SF results, compact output, and search backends work together",
     expect_equal(a$analyses,b$analyses,tolerance=1e-12)
     expect_equal(a$diagnostics$focal_searches,nrow(d))
     expect_s3_class(sf::st_as_sf(a,variables="v",bands=3),"sf")
-    expect_true(all(c("variable","method","location","rank","share") %in%
+    expect_true(all(c("variable","location","category","value") %in%
                       names(as.data.frame(a,what="env"))))
     expect_true(all(c("from_group","to_group") %in% names(as.data.frame(a,what="exposure"))))
     expect_true(all(c("group_a","group_b") %in% names(as.data.frame(a,what="pairwise"))))

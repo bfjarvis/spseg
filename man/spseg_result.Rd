@@ -15,7 +15,7 @@
   row.names = NULL,
   optional = FALSE,
   ...,
-  what = c("indices", "pairwise", "exposure", "env"),
+  what = c("indices", "pairwise", "exposure", "env", "diagnostics", "interpolation"),
   variables = NULL,
   bands = NULL
 )
@@ -31,40 +31,57 @@
 
 \item{row.names, optional}{Standard data-frame generic arguments.}
 
-\item{what}{Extract scalar `"indices"`, categorical `"pairwise"` indices,
-`"exposure"` group summaries, or stored `"env"` distributions. Continuous
-pairwise results compare resolved global groups using binary categorical
-formulas within the original full-variable neighborhoods.}
+\item{what}{Table to extract: `"indices"` for multigroup scalar indices,
+`"pairwise"` for two-group indices, `"exposure"` for focal-group summaries,
+`"env"` for stored local summaries, `"diagnostics"` for per-band status and
+kNN diagnostics, or `"interpolation"` for stored neighborhood interpolation
+diagnostics. Continuous pairwise indices compare resolved global groups.}
 
 \item{variables}{Optional names of analyses to extract.}
 
 \item{bands}{Optional subset of neighborhood bands.}
 }
 \value{
-Printing returns `x` invisibly. Data-frame extraction returns a long
-  table with the analysis name, type, continuous input `representation`
-  (`NA` for other types), method, and band. Environment tables
-  identify the input row as `location`. Spatial extraction returns this
-  environment table with the corresponding input geometry attached. Quantile
-  rows have `summary = "quantiles"`, `prob`, and `rank`; share rows have
-  `summary = "shares"`, `category`, and `share`. Unused columns are `NA`.
-  Empty environments retain rows with missing summaries.
-  Network environments also identify `node`. Network-only results support
-  ordinary extraction; spatial extraction requires stored geometry or coordinates.
-  Grouped extraction is explicitly typed: shares have `statistic = "share"`
-  and retain the `exposure` column. Quantile profiles have `summary = "quantiles"`,
-  `statistic = "quantile_rank"` or `"mean_rank"`, `rank`, and no target group.
-  Both have `value`; mean-rank rows have missing `prob`. Rank profiles are stored
-  in `analyses[[name]]$rank_summary`, separately from the share-valued P matrix.
-  Local extraction also identifies `statistic`. For interval input, retained
-  environments include `bottom_category_share`, `top_category_share`, and
-  `interpolated_share`, stored by band in `analyses[[name]]$interpolation`.
-  These are shares of the weighted local population in the first category,
-  last category, and any category apportioned across requested groups. They
-  are missing for other input types or empty local environments, and repeated
-  across summary rows for the same location/band. Group allocation fractions
-  are recorded in `definition$summary$groups$allocation`. A single positive
-  interval can provide interpolated rank summaries under this stated model.
+Printing returns `x` invisibly. Extraction returns a long data frame
+  with identifiers and one numeric `value` column for results:
+  \itemize{
+    \item Indices: `variable`, `band`, `measure`, `value`.
+    \item Pairwise indices additionally identify `group_a` and `group_b`.
+    \item Share exposure: `variable`, `band`, `from_group`, `to_group`, `value`.
+    \item Quantile exposure: `variable`, `band`, `from_group`, `statistic`,
+      `prob`, `value`.
+    \item Local shares: `variable`, `band`, `location`, `category`, `value`.
+    \item Local ranks: `variable`, `band`, `location`, `statistic`, `prob`, `value`.
+  }
+  Columns are chosen from the selected analyses' summary specifications, not
+  observed missingness. Mixed share/rank tables contain the union of their
+  required columns; `statistic = "share"` identifies share rows in those tables.
+  Quantile rows use `statistic = "quantile_rank"`; optional mean ranks use
+  `"mean_rank"` and have no quantile probability. Undefined results retain
+  their rows and missing `value`; empty tables retain their typed schema.
+
+  With `what = "exposure"`, shares are exposure/isolation probabilities, but
+  quantiles are focal-population-weighted averages of local global-rank
+  statistics, not probabilities of encountering a target group. Mean ranks
+  summarize the full local rank distribution. These rank profiles are stored
+  separately in `analyses[[name]]$rank_summary`, not in the P matrix. The
+  summary specification remains in `analyses[[name]]$definition`.
+
+  Type, representation, method, normalizers, and calculation settings remain
+  in the result object rather than being repeated in result tables.
+  `what = "diagnostics"` returns one row per variable/band with `status` and
+  any kNN population/radius diagnostics. `what = "interpolation"` returns
+  one row per stored interval neighborhood/band with `location`,
+  `bottom_category_share`, `top_category_share`, and `interpolated_share`.
+  These are weighted local population shares in the first category, last
+  category, and categories split across requested groups. They are not
+  uncertainty estimates; allocation fractions remain in
+  `definition$summary$groups$allocation`. Non-interval analyses contribute
+  no interpolation rows. Interpolation diagnostics require retained environments.
+
+  Network local and interpolation tables also identify `node`. Spatial
+  extraction returns the compact local table with corresponding geometry.
+  Network-only results require stored geometry or coordinates for mapping.
 }
 \description{
 [spseg()] returns a `spseg_result`. Each element of `analyses` contains `indices`, optional

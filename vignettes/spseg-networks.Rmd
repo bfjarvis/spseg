@@ -75,8 +75,7 @@ network_income <- spseg(
 )
 
 as.data.frame(network_income, what = "exposure") |>
-  filter(summary == "quantiles") |>
-  select(from_group, band, statistic, prob, rank)
+  select(from_group, band, statistic, prob, value)
 network_income$analyses$income$definition$summary[c(
   "requested_probs", "effective_probs", "groups", "interpolation"
 )]

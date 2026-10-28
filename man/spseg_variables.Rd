@@ -96,8 +96,8 @@ the same fractions for original focal populations and local target shares.
 This assumes the same within-category rank distribution at every location;
 it does not require monetary tail bounds. Allocation is resolved once before
 surface construction and recorded in `definition$summary$groups$allocation`.
-One warning identifies when interpolation is required. Retained neighborhoods
-report `bottom_category_share`, `top_category_share`, and `interpolated_share`
+One warning identifies when interpolation is required. Extraction with
+`what = "interpolation"` reports `bottom_category_share`, `top_category_share`, and `interpolated_share`
 rather than printing numerical details in the warning. The last is the local
 population share in input categories split across requested groups, not an
 uncertainty estimate. Choose probabilities on actual cumulative interval

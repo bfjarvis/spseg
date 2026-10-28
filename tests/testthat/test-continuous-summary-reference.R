@@ -40,9 +40,8 @@ test_that("continuous shares and ranks match independent two-unit references", {
   grouped <- as.data.frame(ranks, what = "exposure")
   expect_equal(grouped$statistic,
     rep(c("quantile_rank", "mean_rank"), each = 2))
-  expect_equal(grouped$rank, c(0.25, 0.5, 0.4375, 0.5625))
-  expect_true(all(is.na(grouped$to_group)))
-  expect_true(all(is.na(grouped$exposure)))
+  expect_equal(grouped$value, c(0.25, 0.5, 0.4375, 0.5625))
+  expect_false(any(c("to_group", "exposure", "rank") %in% names(grouped)))
 
   # Direct pair-conditioned categorical formula, using the two unit tables.
   expect_equal(unname(shares$analyses$income$indices$pairwise$d[[1]][1, 2]),

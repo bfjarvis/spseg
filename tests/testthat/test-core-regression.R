@@ -190,7 +190,7 @@ test_that("as.data.frame compiles local environments", {
                   output = "localenv")
 
   out <- as.data.frame(result, what = "env", variables = "groups", bands = c(0, 2))
-  expect_true(all(c("variable", "location", "band", "category", "share") %in% names(out)))
+  expect_identical(names(out), c("variable", "band", "location", "category", "value"))
   expect_equal(nrow(out), nrow(toy$coords) * 2 * 2)
   expect_equal(sort(unique(out$band)), c(0, 2))
   expect_equal(sort(unique(out$category)), c("C1", "C2"))

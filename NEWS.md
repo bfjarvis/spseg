@@ -1,5 +1,14 @@
 # spseg 0.9.0.9000
 
+- Data-frame and sf extraction now returns compact identifier/result tables
+  with one `value` column, omitting repeated calculation metadata and parallel
+  share/rank/exposure columns. Columns follow selected summary specifications,
+  not observed missingness. `what = "exposure"` continues to return either
+  share exposure probabilities or grouped rank profiles, with explicit
+  `statistic`/`prob` fields for ranks. Inspect calculation status and kNN
+  diagnostics with `what = "diagnostics"`, and retained neighborhood interpolation
+  diagnostics with `what = "interpolation"`.
+
 - Rewrote the README as a first-use guide with GitHub installation, runnable
   examples, result extraction, count data, and network neighborhoods.
 

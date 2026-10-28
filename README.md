@@ -120,10 +120,13 @@ Extract exposure to each group, averaged over members of each focal group:
 ```r
 result |>
   as.data.frame(what = "exposure", variables = "group", bands = 2) |>
-  select(from_group, to_group, exposure)
+  select(from_group, to_group, value)
 ```
 
 The diagonal entries are isolation: a group's average exposure to itself.
+Result tables use one numeric `value` column. Calculation metadata remains in
+`result$analyses[[name]]$definition`; inspect status and kNN information separately
+with `as.data.frame(result, what = "diagnostics")`.
 For local environments, extract each location's neighborhood composition:
 
 ```r
@@ -183,7 +186,8 @@ spseg_continuous(
 This reports global income ranks at each neighborhood's quartiles, plus its mean
 rank. The same probabilities define the focal groups used to average those local
 summaries. Extract the grouped profiles with `what = "exposure"`; the `statistic`,
-`prob`, and `rank` columns identify their meaning.
+`prob`, and `value` columns identify their meaning. These are averages of local
+rank statistics, not exposure probabilities of encountering a target group.
 
 For absolute income thresholds, use
 `summary = list(type = "shares", cuts = c(30000, 60000))`.
@@ -225,6 +229,7 @@ in global-rank space and proportionally allocates interval populations to the
 requested summary groups. A warning identifies when groups split supplied
 intervals. The model assumes the same within-interval rank distribution at each
 location; allocation fractions and local diagnostics are available in the result.
+Extract the neighborhood diagnostics with `as.data.frame(result, what = "interpolation")`.
 
 For polygon `sf` count data, `surface = "grid"` distributes population across a
 fine grid before measuring neighborhoods. `surface = "pycno"` adds

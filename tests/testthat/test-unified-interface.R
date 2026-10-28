@@ -101,9 +101,10 @@ test_that("interval membership and counts give the same continuous calculation",
     expect_identical(r$analyses$members$definition$method,"linear_cdf")
     expect_equal(r$analyses$members$normalizers$information,.5)
     expect_equal(r$diagnostics$focal_searches,nrow(d))
-    expect_true(all(as.data.frame(r)$representation=="intervals"))
-    expect_true(all(as.data.frame(r,what="exposure")$representation=="intervals"))
-    expect_true(all(as.data.frame(r,what="env")$representation=="intervals"))
+    for (what in c("indices", "exposure", "env")) {
+      expect_false(any(c("representation", "type", "method") %in%
+        names(as.data.frame(r, what = what))))
+    }
   }
   d$band <- as.character(d$band)
   expect_error(spseg(d,coords=c("x","y"),variables=list(v=variables$members),bands=1),
@@ -123,8 +124,9 @@ test_that("exact defaults and explicit representation agree", {
     ordinal=spseg_ordinal(values="v",levels=c(0,2,5))),bands=c(0,2),output="full")
   expect_equal(r$analyses$default,r$analyses$exact)
   table <- as.data.frame(r)
-  expect_true(all(table$representation[table$type=="continuous"]=="exact"))
-  expect_true(all(is.na(table$representation[table$type=="ordinal"])))
+  expect_false(any(c("representation", "type", "method") %in% names(table)))
+  expect_identical(r$analyses$exact$definition$representation, "exact")
+  expect_null(r$analyses$ordinal$definition$representation)
 })
 
 test_that("continuous representation options reject incompatible interpretations", {
