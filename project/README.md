@@ -60,6 +60,7 @@ published definitions; passing tests alone do not establish scientific validity.
 - README.md: project context, roles, and lasting conventions.
 - AGENTS.md: concise working rules; root AGENTS.md points here for discovery.
 - TEAM.local.md: Git-ignored private routing; never publish or force-add.
+- create-logo.R: development-only dot-logo generator for the GitHub README.
 - references/: original sources, retained separately from package documentation.
 - papers/: research drafts and supporting material; proposals are not automatically
   validated package methods.
@@ -79,3 +80,17 @@ untouched unless assigned. Preserve other human edits as well.
 separate: tracked development records appear in a source checkout. Keep user help
 in man/ and vignettes/. Build/check a package artifact from a known revision for
 release; a separate deployment tree is unnecessary.
+
+## Branding
+
+From the repository root in RStudio, run `source("project/create-logo.R")`, or
+use `Rscript project/create-logo.R` in a terminal. The script writes the current
+dot design directly to `man/figures/logo.png`, which the GitHub README references.
+Commit and push that PNG to publish a change. The script preserves the resource
+sorting recipe; edit its point count, noise, utility weights, and color settings
+to adjust the design.
+
+Drawing uses ggplot2, dplyr, sf, terra, hexSticker, and png. Install missing drawing
+packages separately; they are not installed by the script. The branding script
+does not run during package installation, checking, or vignette building, so
+hexSticker and png are not package dependencies.

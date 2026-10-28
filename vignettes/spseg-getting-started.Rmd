@@ -187,15 +187,19 @@ print(result)
 names(result)
 ```
 
-We can use `as.data.frame` methods to extract different pieces of information from `result`. For example, to get segregation statistics, we can do as follows
+We can use `as.data.frame` methods to extract different pieces of information from `result`. For example, to get the overall segregation statistics, we can do as follows
 
 ```{r segstats-result}
-result_seg_stats <- result |>
+result_overall <- result |>
   as.data.frame(what = "indices") |>
   as_tibble()
 
 result_pairwise <- result |>
   as.data.frame(what = "pairwise") |>
+  as_tibble()
+
+result_exposure <- result |>
+  as.data.frame(what = "exposure") |>
   as_tibble()
 
 result_seg_stats |>
@@ -255,8 +259,12 @@ localenvs |>
   geom_sf(size = 0.3) +
   facet_wrap(~band, labeller = label_both) +
   scale_colour_gradient2(
-    low = "#b2182b", mid = "white", high = "#2166ac",
-    midpoint = 0.5, limits = c(0, 1), name = "Local share A"
+    low = "#b2182b",
+    mid = "white",
+    high = "#2166ac",
+    midpoint = 0.5,
+    limits = c(0, 1),
+    name = "Local share A"
   ) +
   coord_sf(datum = NA) +
   theme_void()
@@ -305,8 +313,16 @@ exposures |>
 exposures |>
   filter(variable == "resources", band %in% c(100, 500)) |>
   mutate(
-    from_group = factor(from_group, levels = resource_groups, labels = paste0("Q", 1:4)),
-    to_group = factor(to_group, levels = resource_groups, labels = paste0("Q", 1:4))
+    from_group = factor(
+      from_group,
+      levels = resource_groups,
+      labels = paste0("Q", 1:4)
+    ),
+    to_group = factor(
+      to_group,
+      levels = resource_groups,
+      labels = paste0("Q", 1:4)
+    )
   ) |>
   ggplot(aes(to_group, from_group, fill = value)) +
   geom_tile() +
@@ -335,7 +351,10 @@ people <- patterns[[1]] |>
   st_as_sf(coords = c("x", "y"), remove = FALSE)
 
 domain <- st_as_sfc(st_bbox(c(
-  xmin = 0, ymin = 0, xmax = side, ymax = side
+  xmin = 0,
+  ymin = 0,
+  xmax = side,
+  ymax = side
 )))
 
 set.seed(2027)
@@ -410,8 +429,12 @@ voronoi_counts |>
   geom_sf(aes(fill = share_A), colour = "white", linewidth = 0.2) +
   geom_sf(data = seed_points, size = 0.5) +
   scale_fill_gradient2(
-    low = "#b2182b", mid = "white", high = "#2166ac",
-    midpoint = 0.5, limits = c(0, 1), name = "Zone share A"
+    low = "#b2182b",
+    mid = "white",
+    high = "#2166ac",
+    midpoint = 0.5,
+    limits = c(0, 1),
+    name = "Zone share A"
   ) +
   coord_sf(datum = NA) +
   theme_void()
@@ -546,14 +569,18 @@ aggregate_curves |>
   filter(measure == "information") |>
   ggplot(aes(band, value, colour = support)) +
   geom_hline(
-    data = nonspatial_indices, aes(yintercept = value),
-    inherit.aes = FALSE, linetype = "dashed", colour = "grey40"
+    data = nonspatial_indices,
+    aes(yintercept = value),
+    inherit.aes = FALSE,
+    linetype = "dashed",
+    colour = "grey40"
   ) +
   geom_line() +
   facet_wrap(~variable) +
   labs(
     x = "Neighborhood radius (coordinate units)",
-    y = "Information index", colour = "Population support"
+    y = "Information index",
+    colour = "Population support"
   ) +
   theme(legend.position = "bottom")
 ```
@@ -586,7 +613,8 @@ run_patterns <- function(patterns, variables, bands, workers = 2L) {
   on.exit(parallel::stopCluster(cluster), add = TRUE)
 
   parallel::parLapply(
-    cluster, patterns,
+    cluster,
+    patterns,
     function(city, variables, bands) {
       spseg::spseg(
         city,
@@ -613,17 +641,19 @@ sequential run, the equivalent tidyverse call is:
 
 ```{r sequential-patterns, eval=FALSE}
 pattern_results <- patterns |>
-  map(\(city) spseg(
-    city,
-    coords = c("x", "y"),
-    variables = micro_variables,
-    bands = radius_bands,
-    neighbors = "radius",
-    weighting = "biweight",
-    measures = "all",
-    scope = "both",
-    output = "full"
-  ))
+  map(\(city) {
+    spseg(
+      city,
+      coords = c("x", "y"),
+      variables = micro_variables,
+      bands = radius_bands,
+      neighbors = "radius",
+      weighting = "biweight",
+      measures = "all",
+      scope = "both",
+      output = "full"
+    )
+  })
 ```
 
 `output = "full"` is useful here because we will map selected environments.
@@ -660,7 +690,8 @@ curves |>
   facet_grid(variable ~ measure, scales = "free_y") +
   labs(
     x = "Neighborhood radius (coordinate units)",
-    y = "Segregation index", colour = NULL
+    y = "Segregation index",
+    colour = NULL
   ) +
   theme(legend.position = "bottom") +
   guides(colour = guide_legend(ncol = 2))
@@ -674,8 +705,10 @@ panels; otherwise similar colors could represent different local compositions.
 
 ```{r pattern-local-environments, fig.width=9, fig.height=4.5}
 pattern_local <- pattern_results |>
-  map(\(x) st_as_sf(x, variables = "group", bands = c(100, 300)) |>
-        filter(category == "A")) |>
+  map(\(x) {
+    st_as_sf(x, variables = "group", bands = c(100, 300)) |>
+      filter(category == "A")
+  }) |>
   list_rbind(names_to = "pattern") |>
   st_as_sf() |>
   mutate(pattern = factor(pattern, levels = names(patterns)))
@@ -685,8 +718,12 @@ pattern_local |>
   geom_sf(size = 0.25) +
   facet_grid(rows = vars(band), cols = vars(pattern)) +
   scale_colour_gradient2(
-    low = "#b2182b", mid = "white", high = "#2166ac",
-    midpoint = 0.5, limits = c(0, 1), name = "Local share A"
+    low = "#b2182b",
+    mid = "white",
+    high = "#2166ac",
+    midpoint = 0.5,
+    limits = c(0, 1),
+    name = "Local share A"
   ) +
   coord_sf(datum = NA) +
   theme_void() +
@@ -713,7 +750,8 @@ pattern_exposure |>
   scale_y_continuous(limits = c(0, 1)) +
   labs(
     x = "Neighborhood radius (coordinate units)",
-    y = "Exposure to A", colour = NULL
+    y = "Exposure to A",
+    colour = NULL
   ) +
   theme(legend.position = "bottom") +
   guides(colour = guide_legend(ncol = 2))

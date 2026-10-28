@@ -1,7 +1,9 @@
 # spseg 0.9.0.9000
 
 - Added an R/hexSticker logo recipe that spells `spseg` through spatial sorting
-  of continuous resources, with viridis colors and a reproducible design vignette.
+  of continuous resources with viridis colors. Run `project/create-logo.R` to
+  regenerate `man/figures/logo.png` for the GitHub README; this development-only
+  script is excluded from package builds.
 
 - Data-frame and sf extraction now returns compact identifier/result tables
   with one `value` column, omitting repeated calculation metadata and parallel

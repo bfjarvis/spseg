@@ -1,4 +1,6 @@
-# spseg <img src="man/figures/logo.png" align="right" width="150" alt="spseg hex logo: yellow dot-pattern lettering on a viridis population surface" />
+# spseg
+
+<img src="man/figures/logo.png" align="right" width="240" alt="spseg hex logo: yellow dot-pattern lettering on a viridis population surface" />
 
 **spseg** is an R package for measuring segregation in individual records,
 small-area population counts, and networks. It implements categorical, ordinal,
@@ -20,6 +22,8 @@ spseg provides:
   spatial outputs for plotting.
 - Polygon population surfaces and neighborhoods defined by network hops or
   travel costs.
+
+<br clear="right" />
 
 ## Installation
 
