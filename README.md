@@ -1,120 +1,279 @@
 # spseg
-R package 'spseg' for measuring and visualising population segregation
 
-Pre-1.0 development: the interface may change before the first stable release.
+**spseg** is an R package for measuring segregation in individual records,
+small-area population counts, and networks. It implements categorical, ordinal,
+and continuous segregation measures based on the work of Reardon and colleagues,
+with a common interface for geographic and network neighborhoods.
 
-## Installing Local Changes
+Use it to study how segregation changes with neighborhood scale, describe the
+population surrounding each location, and calculate groups' exposure to one
+another. Examples include segregation by ethnicity, education, and income.
 
-Install from the repository root in a fresh R session, before loading spseg or
-opening its installed help:
+spseg provides:
+
+- Dissimilarity, information theory, relative diversity, and square-root indices,
+  plus exposure and isolation summaries.
+- Fixed-distance and population nearest-neighbor neighborhoods, with spatial
+  weighting options.
+- Analysis of several variables in one call, sharing neighborhood searches.
+- Local population compositions and income-rank summaries, with tabular and
+  spatial outputs for plotting.
+- Polygon population surfaces and neighborhoods defined by network hops or
+  travel costs.
+
+## Installation
+
+Install the development version from GitHub:
 
 ```r
-pak::pak(".")
+install.packages("pak")
+pak::pak("bfjarvis/spseg")
 ```
 
-If spseg was loaded in an analysis session during installation, restart that
-session before continuing. In RStudio, use **Session > Restart R**. Calling
-`library(spseg)` again does not reload the existing namespace or compiled code.
-The restart is also needed when installation ran in a separate terminal or R
-process while the analysis session still had spseg loaded.
+spseg requires R 4.2 or later. The GitHub installation compiles C++ code and
+installs dependencies, including `sf` and `terra`. When updating an installation,
+restart R before loading the updated package.
 
-Reinstalling a loaded package can leave the session's lazy-load state or cached
-help inconsistent with the replacement files. A later help request or function
-call can then report `internal error 1 in R_decompress1 with libdeflate`, even
-when the new installation is healthy. Restart R and retry before reinstalling
-packages or changing compression settings. If the warning persists in a fresh
-session, record the warning and the installation path from `find.package("spseg")`
-so that the affected installation can be investigated.
+The package is in pre-1.0 development. Once a CRAN release is available, its
+installation command will be:
 
-Start with `vignette("spseg-getting-started")` for a reproducible synthetic-population
-example covering individual data, regular and Voronoi aggregation, and
-count-preserving population surfaces. The older `spseg-overview` vignette is
-retained as a legacy guide to the bundled population patterns.
+```r
+install.packages("spseg")
+```
 
-The development interface measures several attributes with shared spatial
-neighborhood searches. Euclidean distance is the default:
+The examples below use tidyverse for data preparation and extraction:
+
+```r
+install.packages("tidyverse")
+```
+
+## A first analysis
+
+Each row in this small example represents a person, with coordinates, a group,
+an ordered education category, and an income. The coordinates are synthetic
+planar units. For real geographic data, use a suitable projected coordinate system
+so distances have a meaningful unit, such as meters.
 
 ```r
 library(spseg)
+library(tidyverse)
 
-spseg(
-  people_sf,
-  variables = list(
-    ethnicity = spseg_categorical(values = "ethnicity"),
-    education = spseg_ordinal(
-      values = "education",
-      levels = c("primary", "secondary", "tertiary")
-    ),
-    income = spseg_continuous(values = "income"),
-    age = spseg_continuous(values = "age")
+people <- tibble(
+  x = c(0, 0, 1, 1, 2, 2, 3, 3),
+  y = 0,
+  group = c("A", "A", "A", "B", "B", "B", "A", "B"),
+  education = ordered(
+    c("basic", "basic", "middle", "middle", "higher", "higher", "middle", "higher"),
+    levels = c("basic", "middle", "higher")
   ),
+  income = c(10, 15, 20, 30, 40, 60, 80, 100)
+)
+
+variables <- list(
+  group = spseg_categorical(values = "group"),
+  education = spseg_ordinal(values = "education"),
+  income = spseg_continuous(values = "income")
+)
+
+result <- spseg(
+  people,
+  coords = c("x", "y"),
+  variables = variables,
+  neighbors = "radius",
+  bands = c(1, 2),
+  weighting = "biweight",
   measures = "all",
-  bands = c(250, 500, 1000),
-  scope = "multigroup"
+  output = "full"
+)
+
+result
+```
+
+`variables` names the analyses and describes their inputs. Each `values` argument
+selects one column. `bands` sets the neighborhood radii; the biweight kernel gives
+nearer residents more weight. `measures = "all"` requests the scalar indices and
+exposure summaries. `output = "full"` also retains local environments for inspection
+and mapping.
+
+For an `sf` object, pass it directly as the first argument; its active geometry
+supplies the locations. Points use their coordinates and raw polygons use their
+centroids.
+
+### Explore the results
+
+Extract segregation indices as a tidy table:
+
+```r
+indices <- result |>
+  as.data.frame(what = "indices") |>
+  as_tibble()
+
+indices |>
+  select(variable, band, measure, value)
+```
+
+Compare values across scales within each variable and measure. The categorical,
+ordinal, and continuous indices describe their respective kinds of variation.
+
+Extract exposure to each group, averaged over members of each focal group:
+
+```r
+result |>
+  as.data.frame(what = "exposure", variables = "group", bands = 2) |>
+  select(from_group, to_group, exposure)
+```
+
+The diagonal entries are isolation: a group's average exposure to itself.
+For local environments, extract each location's neighborhood composition:
+
+```r
+result |>
+  as.data.frame(what = "env", variables = "group", bands = 2) |>
+  as_tibble()
+```
+
+Use `sf::st_as_sf(result, variables = "group", bands = 2)` to obtain the same
+local summaries with geometry, ready for mapping. `what = "pairwise"` extracts
+binary segregation indices between categorical groups or resolved income groups.
+
+For larger analyses, the default `output = "indices"` retains indices and grouped
+exposures. Use `output = "localenv"` when the local environments are the desired
+result.
+
+### Choose a neighborhood
+
+Use `neighbors = "radius"` for physical distance bands. For adaptive neighborhoods,
+use `neighbors = "knn"` and give population thresholds:
+
+```r
+nearest <- spseg(
+  people,
+  coords = c("x", "y"),
+  variables = variables,
+  neighbors = "knn",
+  bands = c(4, 8),
+  weighting = "unweighted"
 )
 ```
 
-For a plain data frame, add `coords = c("x", "y")`. For aggregate tables, use
-`counts` selectors. The three variable constructors are `spseg_categorical()`,
-`spseg_ordinal()`, and `spseg_continuous()`. Continuous input defaults to
-`representation = "exact"`; select `representation = "intervals"` for interval
-membership or ordered interval counts. Exact-value count tables also require
-`scores`; interval input uses CDF interpolation without imputing individual values.
-With `neighbors = "knn"`, each variable selects its own eligible population:
-`bands = 100` includes 100 eligible people before distance weighting, even
-when the variables cover different populations. Neighbor discovery is shared.
+These thresholds count eligible people, including the focal population. With
+aggregate count data, they count residents represented by the rows. Each variable
+uses its own eligible population.
 
-Continuous variables default to synchronized shares of four global income
-groups, using interior quartile probabilities `.25`, `.5`, and `.75`. Set
-`summary = list(type = "quantiles")` for local quantiles of global income
-ranks and their focal-group averages; optionally add `mean_rank = TRUE` for
-the distinct mean-rank statistic. The same probability grid defines global
-focal groups and local quantile positions. Shares and quantile summaries can
-be extracted with `as.data.frame(result, what = "exposure")`; inspect its
-`summary`, `statistic`, `from_group`, `prob`, `exposure`, and `rank` columns
-to distinguish share rows from rank profiles. Local summaries are retained
-with `output = "full"` or `"localenv"` and extracted with
-`as.data.frame(result, what = "env")` or `sf::st_as_sf(result)`.
+## Income and other continuous variables
 
-For exact income, `summary = list(type = "shares", cuts = c(...))` uses
-absolute value thresholds instead of probabilities. For interval input,
-the requested probabilities are retained. Categories crossing a requested boundary
-are proportionally split in global-percentile space, with the same allocation
-applied to focal populations and local target shares. This assumes locations share
-the same within-category rank distribution; no monetary maximum is needed.
-A brief warning flags interpolation. Retained neighborhood output includes
-`bottom_category_share`, `top_category_share`, and `interpolated_share` (the local
-share in split categories). Allocation fractions are recorded in
-`result$analyses$income$definition$summary$groups$allocation`. Probabilities aligned
-with actual interval boundaries avoid apportionment. Interval labels alone do not
-identify absolute income cuts. Changing summaries does not change the
-full-resolution continuous scalar indices. Continuous summaries use only
-`summary`; the former `localenv` and `exposure` arguments have been removed.
-
-Use `scope = "pairwise"` to obtain binary segregation indices between resolved
-income groups. These group-pair indices use the original variable neighborhoods
-and do not replace continuous scalar indices.
-
-See `vignette("spseg-multiple-variables")` for definitions, sources, deterministic
-tie handling, population-count kNN neighborhoods, and exposure cuts. Polygon count specifications also support shared grid and pycnophylactic
-surface construction through the same interface.
-
-For network neighborhoods, supply an edge list and map observation rows to nodes:
+Continuous indices use the underlying income distribution. The `summary` option
+chooses how to describe local environments and groups' experiences. The default
+reports shares of four global quartile groups. For a different grouping, supply
+interior probabilities:
 
 ```r
-network <- spseg_network(edges, from="source", to="destination",
-                         cost="minutes", units="minutes", directed=FALSE)
-spseg(nodes, variables, network=network, node_id="node",
-      bands=c(5,10), weighting="unweighted")
+spseg_continuous(values = "income", summary = list(probs = c(.2, .4, .6, .8)))
 ```
 
-Omit `cost` for hop distances. Geometry is optional and never determines network
-relationships. Users prepare adjacency, road networks, and population allocation
-outside spseg. See `vignette("spseg-networks")` for examples, including preparation
-with sfnetworks. Boost.Geometry and Boost.Graph are supplied through BH; the
-measurement engine remains single-threaded.
+To describe the income ranks found at local quantiles, select quantile summaries:
 
-spseg originated as a fork of the [seg package](https://github.com/syunhong/seg)
-by Seong-Yun Hong and David O'Sullivan. It now provides its own interface and
-implementation while retaining attribution for reused code, example data, and
-other materials.
+```r
+spseg_continuous(
+  values = "income",
+  summary = list(type = "quantiles", probs = c(.25, .5, .75), mean_rank = TRUE)
+)
+```
+
+This reports global income ranks at each neighborhood's quartiles, plus its mean
+rank. The same probabilities define the focal groups used to average those local
+summaries. Extract the grouped profiles with `what = "exposure"`; the `statistic`,
+`prob`, and `rank` columns identify their meaning.
+
+For absolute income thresholds, use
+`summary = list(type = "shares", cuts = c(30000, 60000))`.
+
+## Aggregated population counts
+
+For small-area tables, select category-count columns with `counts`. This example
+has two areas and three ordered income intervals:
+
+```r
+areas <- tibble(
+  x = c(0, 1), y = 0,
+  group_A = c(40, 10), group_B = c(10, 40),
+  income_low = c(30, 10), income_middle = c(15, 20), income_high = c(5, 20)
+)
+
+area_result <- spseg(
+  areas,
+  coords = c("x", "y"),
+  variables = list(
+    group = spseg_categorical(counts = c("group_A", "group_B")),
+    income = spseg_continuous(
+      counts = c("income_low", "income_middle", "income_high"),
+      representation = "intervals"
+    )
+  ),
+  bands = 0,
+  weighting = "unweighted"
+)
+```
+
+With these distinct area locations, `bands = 0` treats each area's own residents
+as its local environment, giving non-spatial segregation across areas. Positive
+distance bands combine nearby areas into spatial neighborhoods. Ordered-category
+counts use `spseg_ordinal(counts = c(...))` in the same way.
+
+For interval income, column order defines the income ordering. spseg interpolates
+in global-rank space and proportionally allocates interval populations to the
+requested summary groups. A warning identifies when groups split supplied
+intervals. The model assumes the same within-interval rank distribution at each
+location; allocation fractions and local diagnostics are available in the result.
+
+For polygon `sf` count data, `surface = "grid"` distributes population across a
+fine grid before measuring neighborhoods. `surface = "pycno"` adds
+pycnophylactic smoothing, preserving source-zone category totals through
+rescaling. See the [surface guide](vignettes/spseg-surface-construction.Rmd) for
+resolution choices and count-conservation audits.
+
+## Network neighborhoods
+
+Supply an edge list to define proximity by shortest-path hops or travel costs.
+Map each population record to a node with `node_id`. Here the people from the
+first example occupy four nodes connected by travel-time edges:
+
+```r
+edges <- tibble(
+  from = c("0", "1", "2"),
+  to = c("1", "2", "3"),
+  minutes = c(2, 3, 1)
+)
+
+network <- spseg_network(edges, cost = "minutes", units = "minutes")
+nodes <- people |> mutate(node = as.character(x))
+
+network_result <- spseg(
+  nodes,
+  variables = variables,
+  network = network,
+  node_id = "node",
+  bands = c(2, 5),
+  weighting = "unweighted"
+)
+```
+
+The bands here are minutes of shortest-path travel. Omit `cost` for hop-count
+distance, or use `directed = TRUE` for outward travel along directed edges.
+The [network guide](vignettes/spseg-networks.Rmd) includes adjacency and road-network
+preparation with `sfnetworks`.
+
+## Learn more
+
+- [Getting started](vignettes/spseg-getting-started.Rmd): a complete workflow from
+  simulated people to polygon counts and parallel comparisons across patterns.
+- [Multiple variables and methods](vignettes/spseg-multiple-variables.Rmd): measure
+  definitions, sources, input choices, and interpretation.
+- Installed help: `?spseg`, `?spseg_variables`, and `?spseg_result`.
+- [GitHub Issues](https://github.com/bfjarvis/spseg/issues): bug reports, feature
+  requests, and questions about methods or workflows.
+
+spseg builds on methods developed by Reardon and colleagues and originated as a
+fork of [seg](https://github.com/syunhong/seg) by Seong-Yun Hong and David
+O'Sullivan. Attribution for reused code, example data, and other materials is
+retained in the package.

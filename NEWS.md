@@ -1,5 +1,12 @@
 # spseg 0.9.0.9000
 
+- Rewrote the README as a first-use guide with GitHub installation, runnable
+  examples, result extraction, count data, and network neighborhoods.
+
+- Revised the getting-started vignette around a single microdata pattern,
+  count-preserving Voronoi aggregation, non-spatial and spatial analyses, and
+  portable parallel comparisons across patterns using tidyverse workflows.
+
 - Simplified calculation orchestration, surface construction, and result
   extraction. Continuous variables now accept only `summary`; removed the
   deprecated `localenv`/`exposure` interface and its separate calculation paths.
