@@ -95,7 +95,7 @@
       source_shares = shares, allocation = fractions,
       method = "linear_global_rank")
   } else {
-    exposure <- .spseg_exposure(scores, totals,
+    exposure <- .spseg_rank_groups(scores, totals,
       if (is.null(options$cuts)) list(probs = c(0, requested, 1)) else
         list(breaks = c(-Inf, options$cuts, Inf)))
     map <- exposure$map

@@ -1,5 +1,19 @@
 # spseg 0.9.0.9000
 
+- Simplified calculation orchestration, surface construction, and result
+  extraction. Continuous variables now accept only `summary`; removed the
+  deprecated `localenv`/`exposure` interface and its separate calculation paths.
+  Ordinal `localenv` remains supported. Surface options no longer accept
+  `keep_geometry` or singular geometry aliases; use `surface_geometry` with
+  `"none"`, `"points"`, or `"polygons"`.
+- Count columns are prepared once for population inference and compilation.
+  C++ configuration codes now have descriptive names. Pycnophylactic smoothing
+  reuses iteration buffers and precomputes fixed zone cell counts.
+
+- `spseg(variables = ...)` now accepts column-name shorthand for a categorical
+  variable. One column selects observed memberships; multiple columns select
+  category counts. A message states the assumption and the result name.
+
 - Continuous variables now default to synchronized quartile shares through one
   `summary` specification. Explicit quantiles use the same probability grid for
   focal groups and local rank evaluations, with optional full-distribution mean
@@ -11,8 +25,8 @@
   Grouped extraction remains `what = "exposure"` with typed share/rank rows;
   rank profiles are stored separately from P. Continuous binary pairwise indices
   compare resolved global groups within original neighborhoods, while scalar
-  continuous indices remain full-resolution. Explicit old `localenv`/`exposure`
-  settings retain a deprecated compatibility path and cannot mix with `summary`.
+  continuous indices remain full-resolution. Continuous presentation uses only
+  `summary`, replacing the former `localenv`/`exposure` settings.
 
 - Documented a fresh-session workflow for local installation and restarting after
   replacing a loaded package, avoiding stale lazy-load and installed-help state.

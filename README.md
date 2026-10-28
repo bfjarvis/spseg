@@ -88,9 +88,8 @@ share in split categories). Allocation fractions are recorded in
 `result$analyses$income$definition$summary$groups$allocation`. Probabilities aligned
 with actual interval boundaries avoid apportionment. Interval labels alone do not
 identify absolute income cuts. Changing summaries does not change the
-full-resolution continuous scalar indices. The explicit legacy continuous
-`localenv` and `exposure` arguments remain temporarily supported with a
-deprecation warning; do not combine them with `summary`.
+full-resolution continuous scalar indices. Continuous summaries use only
+`summary`; the former `localenv` and `exposure` arguments have been removed.
 
 Use `scope = "pairwise"` to obtain binary segregation indices between resolved
 income groups. These group-pair indices use the original variable neighborhoods

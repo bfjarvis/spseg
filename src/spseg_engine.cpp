@@ -19,8 +19,8 @@ constexpr double pi = 3.1415926535897932384626433832795;
 double variation(double p, int family) {
   p = std::max(0.0, std::min(1.0, p));
   if (p == 0.0 || p == 1.0) return 0.0;
-  if (family == 1) return -p * std::log(p) - (1.0-p) * std::log1p(-p);
-  if (family == 2) return p * (1.0-p);
+  if (family == Information) return -p * std::log(p) - (1.0-p) * std::log1p(-p);
+  if (family == Diversity) return p * (1.0-p);
   return 2.0 * std::sqrt(p * (1.0-p));
 }
 
@@ -46,7 +46,7 @@ double segment_mean(double a, double b, int family) {
   a = std::max(0.0, std::min(1.0, a));
   b = std::max(a, std::min(1.0, b));
   if (a == b) return variation(a, family);
-  if (family == 2) return (a+b)/2 - (a*a+a*b+b*b)/3;
+  if (family == Diversity) return (a+b)/2 - (a*a+a*b+b*b)/3;
   if (a+b > 1.0) { const double old=a; a=1-b; b=1-old; }
   const double width = b-a;
   if (width < 1e-6 * std::max(a, 1e-300)) {
@@ -55,7 +55,7 @@ double segment_mean(double a, double b, int family) {
     return (5*variation(mid-d,family)+8*variation(mid,family)+
             5*variation(mid+d,family))/18;
   }
-  if (family == 1) return (entropy_primitive(b)-entropy_primitive(a))/width;
+  if (family == Information) return (entropy_primitive(b)-entropy_primitive(a))/width;
   const double ta=std::atan2(std::sqrt(a),std::sqrt(1-a));
   const double tb=std::atan2(std::sqrt(b),std::sqrt(1-b));
   const double dt=std::atan2(std::sqrt(b)*std::sqrt(1-a)-
@@ -81,12 +81,12 @@ struct Model {
   arma::mat counts;
   IntegerVector code, exposure_map, flags, env_map;
   IntegerVector split_intervals;
-  NumericVector mass, shares, scores, z, env_probs, env_breaks;
+  NumericVector mass, shares, z, env_probs;
   int env_type, env_columns;
-  bool synchronized, env_mean;
+  bool continuous, env_mean;
   CharacterVector labels;
   std::vector<double> q, prefix;
-  double total, reference[5] = {0,0,0,0,0};
+  double total, reference[MeasureCount] = {0,0,0,0,0};
   int active=0;
   std::vector<int> active_groups;
   arma::mat accum;
@@ -109,20 +109,19 @@ struct Model {
       counts(input.begin(), input.nrow(), input.ncol(), false),
       code(config["code"]), exposure_map(config["exposure_map"]),
       flags(config["flags"]), mass(config["mass"]), shares(config["shares"]),
-      scores(config["scores"]), z(config["z"]), labels(config["exposure_labels"]),
-      accum(b,5,arma::fill::zeros), environments(store ? b : 0),
+      z(config["z"]), continuous(type==Interval || type==Exact),
+      labels(config["exposure_labels"]),
+      accum(b,MeasureCount,arma::fill::zeros), environments(store ? b : 0),
       interpolation(store && group_fractions.nrow()>0 ? b : 0),
-      keep_env(store), indices(calculate), multigroup(multi || type!=0),
-      pairwise(pair && (type==0 || as<bool>(config["synchronized"]))), empty(b,false),
+      keep_env(store), indices(calculate), multigroup(multi || type!=Categorical),
+      pairwise(pair && (type==Categorical || continuous)), empty(b,false),
       knn_target(b), knn_min(b,R_PosInf), knn_max(b,0.0),
       radius_min(b,R_PosInf), radius_max(b,0.0)
   {
     env_map = as<IntegerVector>(config["env_map"]);
     env_probs = as<NumericVector>(config["env_probs"]);
-    env_breaks = as<NumericVector>(config["env_breaks"]);
     env_type = as<int>(config["env_type"]);
     env_columns = as<int>(config["env_columns"]);
-    synchronized = as<bool>(config["synchronized"]);
     env_mean = as<bool>(config["env_mean"]);
     split_intervals = as<IntegerVector>(config["split_intervals"]);
     k=shares.size(); groups=labels.size();
@@ -139,33 +138,33 @@ struct Model {
     if(k) q.back()=1.0;
     prefix.assign(k,0.0);
     for(int g=1;g<k;++g) prefix[g]=prefix[g-1]+(z[g]-z[g-1])*q[g-1];
-    if(type==0) {
+    if(type==Categorical) {
       double logroot=0;
       for(int g:active_groups) {
-        reference[1]-=shares[g]*std::log(shares[g]);
-        reference[2]+=shares[g]*(1-shares[g]);
+        reference[Information]-=shares[g]*std::log(shares[g]);
+        reference[Diversity]+=shares[g]*(1-shares[g]);
         logroot+=std::log(shares[g]);
       }
-      reference[4]=active>1 ? std::exp(logroot/active) : 0;
-    } else if(type==2) {
-      reference[1]=0.5; reference[2]=1.0/6; reference[4]=pi/4;
+      reference[SquareRoot]=active>1 ? std::exp(logroot/active) : 0;
+    } else if(type==Interval) {
+      reference[Information]=0.5; reference[Diversity]=1.0/6; reference[SquareRoot]=pi/4;
       // A single populated interval still represents unobserved variation.
     } else {
       for(int g=0;g<k-1;++g) {
-        const double width=type==1 ? 1.0 : z[g+1]-z[g];
-        for(int f:{1,2,4}) reference[f]+=width*variation(q[g],f);
+        const double width=type==Ordinal ? 1.0 : z[g+1]-z[g];
+        for(int f:{Information,Diversity,SquareRoot}) reference[f]+=width*variation(q[g],f);
       }
     }
-    reference[3]=2*reference[2];
-    if(indices && flags[0]) {
-      if(synchronized && env_type==1) rank_acc.zeros(groups,env_columns,b);
+    reference[Dissimilarity]=2*reference[Diversity];
+    if(indices && flags[Exposure]) {
+      if(continuous && env_type==Quantiles) rank_acc.zeros(groups,env_columns,b);
       else exposure_acc.zeros(groups,groups,b);
     }
     if(indices && pairwise) {
-      const int pair_groups=synchronized ? groups : k;
+      const int pair_groups=continuous ? groups : k;
       for(int a=0;a<pair_groups-1;++a)
         for(int c=a+1;c<pair_groups;++c) pairs.push_back({a,c});
-      pair_acc.zeros(pairs.size(),5,b);
+      pair_acc.zeros(pairs.size(),MeasureCount,b);
     }
     if(keep_env) for(int band=0;band<b;++band) {
       environments[band]=NumericMatrix(n,env_columns);
@@ -221,7 +220,7 @@ struct Model {
       std::fill(summary.begin(),summary.end(),NA_REAL);
       return summary;
     }
-    if(env_type == 1) {
+    if(env_type==Quantiles) {
       int target=0;
       double cumulative=0, last=NA_REAL;
       const double tolerance=8*std::numeric_limits<double>::epsilon();
@@ -229,10 +228,10 @@ struct Model {
         if(share <= 0) return;
         const double previous=cumulative;
         cumulative+=share;
-        last=type==2 ? q[g] : z[g];
+        last=type==Interval ? q[g] : z[g];
         while(target<env_probs.size() && env_probs[target]<1 &&
               env_probs[target]<=cumulative+tolerance) {
-          if(type==2) {
+          if(type==Interval) {
             const double lower=g==0 ? 0 : q[g-1];
             const double fraction=std::max(0.0,std::min(1.0,
               (env_probs[target]-previous)/share));
@@ -241,31 +240,19 @@ struct Model {
           ++target;
         }
       };
-      if(type==3) for(const auto& item:sparse) add(item.first,item.second);
+      if(type==Exact) for(const auto& item:sparse) add(item.first,item.second);
       else for(int g=0;g<k;++g) add(g,p[g]);
       while(target<env_probs.size()) summary[target++]=last;
       if(env_mean) {
         double mean=0;
-        if(type==3) for(const auto& item:sparse) mean+=item.second*z[item.first];
+        if(type==Exact) for(const auto& item:sparse) mean+=item.second*z[item.first];
         else for(int g=0;g<k;++g) mean+=p[g]*z[g];
         summary.back()=mean;
-      }
-    } else if(env_type == 2) {
-      // Apportion grouped intervals to requested global-rank bins using the
-      // same linear interpolant as the grouped segregation indices.
-      for(int g=0;g<k;++g) {
-        const double lower=g==0 ? 0 : q[g-1], width=q[g]-lower;
-        if(width<=0 || p[g]<=0) continue;
-        for(int j=0;j<env_columns;++j) {
-          const double overlap=std::min(q[g],env_breaks[j+1])-
-                               std::max(lower,env_breaks[j]);
-          if(overlap>0) summary[j]+=p[g]*overlap/width;
-        }
       }
     } else {
       if(group_fractions.nrow()>0) {
         for(int g=0;g<k;++g) add_group_mass(summary,g,p[g]);
-      } else if(type==3) {
+      } else if(type==Exact) {
         for(const auto& item:sparse) {
           const int g=env_map[item.first];
           if(g>=0) summary[g]+=item.second;
@@ -288,7 +275,7 @@ struct Model {
     std::vector<double> p;
     std::vector<std::pair<int,double>> sparse;
     double local=0;
-    if(type==3 && counts.n_rows==0) {
+    if(type==Exact && counts.n_rows==0) {
       sparse.reserve(c.ids.size());
       for(std::size_t a=0;a<c.ids.size();++a) {
         int id=c.ids[a], g=code[id];
@@ -314,7 +301,7 @@ struct Model {
       }
       local=std::accumulate(p.begin(),p.end(),0.0);
       if(local>0) for(double& v:p) v/=local;
-      if(type==3) for(int g=0;g<k;++g) if(p[g]>0) sparse.push_back({g,p[g]});
+      if(type==Exact) for(int g=0;g<k;++g) if(p[g]>0) sparse.push_back({g,p[g]});
     }
     std::vector<double> summary;
     if(keep_env && group_fractions.nrow()>0) {
@@ -325,8 +312,8 @@ struct Model {
       diagnostic(i,1)=local>0 ? p.back() : NA_REAL;
       diagnostic(i,2)=local>0 ? apportioned : NA_REAL;
     }
-    if(keep_env || (indices && synchronized &&
-                    (flags[0] || (pairwise && env_type==0)))) {
+    if(keep_env || (indices && continuous &&
+                    (flags[Exposure] || (pairwise && env_type==Shares)))) {
       summary=summarize_environment(p,sparse,local);
       if(keep_env) {
         NumericMatrix env=environments[band];
@@ -336,36 +323,36 @@ struct Model {
     if(!indices || mass[i]<=0) return;
     if(local<=0) {empty[band]=true;return;}
     if(multigroup) {
-      if(type==0) {
+      if(type==Categorical) {
         for(int g=0;g<k;++g) {
-          if(flags[1] && p[g]>0) accum(band,1)-=mass[i]*p[g]*std::log(p[g]);
-          if(flags[2]) accum(band,2)+=mass[i]*p[g]*(1-p[g]);
-          if(flags[3]) accum(band,3)+=mass[i]*std::abs(p[g]-shares[g]);
+          if(flags[Information] && p[g]>0) accum(band,Information)-=mass[i]*p[g]*std::log(p[g]);
+          if(flags[Diversity]) accum(band,Diversity)+=mass[i]*p[g]*(1-p[g]);
+          if(flags[Dissimilarity]) accum(band,Dissimilarity)+=mass[i]*std::abs(p[g]-shares[g]);
         }
-        if(flags[4]) accum(band,4)+=mass[i]*root(p);
-      } else if(type==3) {
+        if(flags[SquareRoot]) accum(band,SquareRoot)+=mass[i]*root(p);
+      } else if(type==Exact) {
         double cumulative=0,previous=0;
         for(std::size_t a=0;a<sparse.size();++a) {
           double next=z[sparse[a].first];
-          if(flags[3]) accum(band,3)+=mass[i]*integral_abs(previous,next,cumulative);
-          for(int f:{1,2,4}) if(flags[f])
+          if(flags[Dissimilarity]) accum(band,Dissimilarity)+=mass[i]*integral_abs(previous,next,cumulative);
+          for(int f:{Information,Diversity,SquareRoot}) if(flags[f])
             accum(band,f)+=mass[i]*(next-previous)*variation(cumulative,f);
           cumulative=std::min(1.0,cumulative+sparse[a].second);
           previous=next;
         }
-        if(flags[3]) accum(band,3)+=mass[i]*integral_abs(previous,1.0,1.0);
+        if(flags[Dissimilarity]) accum(band,Dissimilarity)+=mass[i]*integral_abs(previous,1.0,1.0);
       } else {
         double cumulative=0,previous=0,global_previous=0;
         for(int g=0;g<k;++g) {
           cumulative=std::min(1.0,cumulative+p[g]);
-          if(type==1 && g<k-1) {
-            for(int f:{1,2,4}) if(flags[f]) accum(band,f)+=mass[i]*variation(cumulative,f);
-            if(flags[3]) accum(band,3)+=mass[i]*std::abs(cumulative-q[g]);
-          } else if(type==2) {
+          if(type==Ordinal && g<k-1) {
+            for(int f:{Information,Diversity,SquareRoot}) if(flags[f]) accum(band,f)+=mass[i]*variation(cumulative,f);
+            if(flags[Dissimilarity]) accum(band,Dissimilarity)+=mass[i]*std::abs(cumulative-q[g]);
+          } else if(type==Interval) {
             const double width=q[g]-global_previous;
-            for(int f:{1,2,4}) if(flags[f] && width>0)
+            for(int f:{Information,Diversity,SquareRoot}) if(flags[f] && width>0)
               accum(band,f)+=mass[i]*width*segment_mean(previous,cumulative,f);
-            if(flags[3]) accum(band,3)+=mass[i]*width*
+            if(flags[Dissimilarity]) accum(band,Dissimilarity)+=mass[i]*width*
               abs_segment(previous-global_previous,cumulative-q[g]);
             previous=cumulative; global_previous=q[g];
           }
@@ -373,12 +360,12 @@ struct Model {
       }
     }
     std::vector<double> local_group, focal_group;
-    if(flags[0] || (pairwise && synchronized)) {
+    if(flags[Exposure] || (pairwise && continuous)) {
       local_group.assign(groups,0); focal_group.assign(groups,0);
       // Observed continuous rows stay sparse; count input already has K columns.
-      if(synchronized && env_type==0) {
+      if(continuous && env_type==Shares) {
         local_group=summary;
-      } else if(type==3) {
+      } else if(type==Exact) {
         for(const auto& item:sparse) {
           add_group_mass(local_group,item.first,item.second);
         }
@@ -387,44 +374,44 @@ struct Model {
         for(int g=0;g<k;++g) add_group_mass(focal_group,g,counts(i,g));
       } else if(code[i]>=0) add_group_mass(focal_group,code[i],mass[i]);
       // Group totals are precomputed in finish(); accumulate population counts here.
-      if(flags[0]) for(int a=0;a<groups;++a) if(focal_group[a]>0) {
-        if(synchronized && env_type==1) {
+      if(flags[Exposure]) for(int a=0;a<groups;++a) if(focal_group[a]>0) {
+        if(continuous && env_type==Quantiles) {
           for(int j=0;j<env_columns;++j) rank_acc(a,j,band)+=focal_group[a]*summary[j];
         } else {
           for(int b=0;b<groups;++b) exposure_acc(a,b,band)+=
-            focal_group[a]*(synchronized ? summary[b] : local_group[b]);
+            focal_group[a]*(continuous ? summary[b] : local_group[b]);
         }
       }
     }
     if(pairwise) for(std::size_t index=0;index<pairs.size();++index) {
       int a=pairs[index].first,b=pairs[index].second;
-      double weight=synchronized ? focal_group[a]+focal_group[b] : focal(i,a)+focal(i,b);
-      double local_pair=synchronized ? local_group[a]+local_group[b] : p[a]+p[b];
+      double weight=continuous ? focal_group[a]+focal_group[b] : focal(i,a)+focal(i,b);
+      double local_pair=continuous ? local_group[a]+local_group[b] : p[a]+p[b];
       if(weight<=0 || local_pair<=0) continue;
-      double v=(synchronized ? local_group[a] : p[a])/local_pair;
-      for(int f:{1,2,4}) if(flags[f]) pair_acc(index,f,band)+=weight*variation(v,f);
-      double q0=synchronized ? group_shares[a]/(group_shares[a]+group_shares[b]) :
+      double v=(continuous ? local_group[a] : p[a])/local_pair;
+      for(int f:{Information,Diversity,SquareRoot}) if(flags[f]) pair_acc(index,f,band)+=weight*variation(v,f);
+      double q0=continuous ? group_shares[a]/(group_shares[a]+group_shares[b]) :
                                 shares[a]/(shares[a]+shares[b]);
-      if(flags[3]) pair_acc(index,3,band)+=weight*std::abs(v-q0);
+      if(flags[Dissimilarity]) pair_acc(index,Dissimilarity,band)+=weight*std::abs(v-q0);
     }
   }
 
   List finish() {
     List multigroup, pairwise_out, rank_summary;
-    const char* names[5]={"p","h","r","d","s"};
+    const char* names[MeasureCount]={"p","h","r","d","s"};
     CharacterVector status(bands);
-    const bool constant=type==2 ? false : active<2;
+    const bool constant=type==Interval ? false : active<2;
     for(int b=0;b<bands;++b) status[b]=empty[b] ? "empty_environment" :
       (constant ? "constant" : "ok");
-    if(indices && multigroup) for(int f:{3,2,1,4}) if(flags[f]) {
+    if(indices && multigroup) for(int f:{Dissimilarity,Diversity,Information,SquareRoot}) if(flags[f]) {
       NumericVector out(bands,NA_REAL);
       for(int b=0;b<bands;++b) if(!empty[b] && !constant && reference[f]>0) {
         const double value=accum(b,f)/(total*reference[f]);
-        out[b]=f==3 ? value : 1-value;
+        out[b]=f==Dissimilarity ? value : 1-value;
       }
       multigroup[names[f]]=out;
     }
-    if(indices && flags[0] && synchronized && env_type==1) {
+    if(indices && flags[Exposure] && continuous && env_type==Quantiles) {
       rank_summary=List(bands);
       for(int b=0;b<bands;++b) {
         NumericMatrix out(groups,env_columns);
@@ -433,7 +420,7 @@ struct Model {
             rank_acc(a,j,b)/(total*group_shares[a]) : NA_REAL;
         rank_summary[b]=out;
       }
-    } else if(indices && flags[0]) {
+    } else if(indices && flags[Exposure]) {
       List matrices(bands);
       std::vector<double> totals(groups,0);
       for(int a=0;a<groups;++a) totals[a]=group_shares[a]*total;
@@ -445,28 +432,28 @@ struct Model {
       }
       multigroup["p"]=matrices;
     }
-    if(indices && pairwise) for(int f:{3,2,1,4}) if(flags[f]) {
+    if(indices && pairwise) for(int f:{Dissimilarity,Diversity,Information,SquareRoot}) if(flags[f]) {
       List matrices(bands);
       for(int b=0;b<bands;++b) {
-        const int pair_groups=synchronized ? groups : k;
+        const int pair_groups=continuous ? groups : k;
         NumericMatrix out(pair_groups,pair_groups); std::fill(out.begin(),out.end(),NA_REAL);
         for(std::size_t index=0;index<pairs.size();++index) {
           int a=pairs[index].first,c=pairs[index].second;
-          const double pa=synchronized ? group_shares[a] : shares[a];
-          const double pc=synchronized ? group_shares[c] : shares[c];
+          const double pa=continuous ? group_shares[a] : shares[a];
+          const double pc=continuous ? group_shares[c] : shares[c];
           if(pa<=0 || pc<=0 || empty[b]) continue;
           const double t=total*(pa+pc);
           const double q0=pa/(pa+pc);
-          const double denominator=f==3 ? 2*variation(q0,2) : variation(q0,f);
+          const double denominator=f==Dissimilarity ? 2*variation(q0,Diversity) : variation(q0,f);
           const double v=pair_acc(index,f,b)/(t*denominator);
-          out(a,c)=out(c,a)=f==3 ? v : 1-v;
+          out(a,c)=out(c,a)=f==Dissimilarity ? v : 1-v;
         }
         matrices[b]=out;
       }
       pairwise_out[names[f]]=matrices;
     }
-    List refs=List::create(_["information"]=reference[1],_["diversity"]=reference[2],
-                          _["dissimilarity"]=reference[3],_["square_root"]=reference[4]);
+    List refs=List::create(_["information"]=reference[Information],_["diversity"]=reference[Diversity],
+                          _["dissimilarity"]=reference[Dissimilarity],_["square_root"]=reference[SquareRoot]);
     List knn_summary;
     if(has_knn) knn_summary=List::create(_["requested"]=knn_target,
       _["min_population"]=knn_min,_["max_population"]=knn_max,
@@ -494,12 +481,12 @@ List spseg_engine_cpp(NumericMatrix coords, List variables,
   std::unique_ptr<EuclideanSearch> euclidean;
   std::unique_ptr<GraphSearch> graph;
   if(relational) graph.reset(new GraphSearch(network));
-  else euclidean.reset(new EuclideanSearch(X,Y,search==0));
+  else euclidean.reset(new EuclideanSearch(X,Y,search==Indexed));
   const CharacterVector names=variables.names();
   std::vector<std::unique_ptr<Model>> models;
   for(int v=0;v<variables.size();++v)
     models.emplace_back(new Model(as<List>(variables[v]),n,B,keep_env,keep_indices,scope[0],scope[1]));
-  const bool knn = neighbors==1;
+  const bool knn = neighbors==PopulationNearest;
   // Identical eligible populations share both the stopping rule and kernels.
   // Views refer to Model-owned R vectors; no n-by-variable copy is needed.
   std::vector<const double*> eligible;

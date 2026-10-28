@@ -1,9 +1,4 @@
 # Independent nominal formulas applied to stored local compositions.
-legacy_continuous <- function(..., localenv = "quantiles") {
-  expect_warning(out <- spseg_continuous(..., localenv = localenv), "deprecated")
-  out
-}
-
 categorical_reference <- function(counts, local) {
   counts <- as.matrix(counts)
   local <- as.matrix(local)

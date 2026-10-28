@@ -1,6 +1,8 @@
 #ifndef SPSEG_NEIGHBORS_H
 #define SPSEG_NEIGHBORS_H
 
+#include "spseg_types.h"
+
 // Shared selection and weighting, independent of how distances were found.
 namespace spseg_spatial {
 struct Neighbor { int id; double d; };
@@ -22,10 +24,10 @@ inline void order_neighbors(std::vector<Neighbor>& neighbors, int focal,
 inline double spseg_weight(double d, double bw, double power, int weighting) {
   const double scaled = d / bw;
   switch (weighting) {
-  case 0: return 1.0;
-  case 1: return d > bw ? 0.0 :
+  case Unweighted: return 1.0;
+  case Biweight: return d > bw ? 0.0 :
     std::max(0.0, std::pow(1.0 - std::pow(scaled, power), power));
-  case 2: return 1.0 / std::pow(scaled, power);
+  case Inverse: return 1.0 / std::pow(scaled, power);
   default: return std::exp(-scaled);
   }
 }
@@ -61,13 +63,13 @@ inline Contributions radius_contributions(const std::vector<Neighbor>& neighbors
   Contributions out;
   const double bw = normalized && band > 0 ? band : 1.0;
   double tolerance = bw;
-  if (weighting == 2) for (const auto& nb : neighbors) {
+  if (weighting == Inverse) for (const auto& nb : neighbors) {
     if (nb.d > band) break;
     if (nb.d > 0) { tolerance = nb.d / 2; break; }
   }
   for (const auto& nb : neighbors) {
     if (nb.d > band) break;
-    const double d = weighting == 2 && nb.d == 0 ? tolerance : nb.d;
+    const double d = weighting == Inverse && nb.d == 0 ? tolerance : nb.d;
     out.ids.push_back(nb.id);
     out.weights.push_back(spseg_weight(d, bw, power, weighting));
   }
@@ -117,7 +119,7 @@ inline Contributions knn_contributions(const std::vector<Neighbor>& neighbors,
     out.radius * (1 + std::sqrt(std::numeric_limits<double>::epsilon())) : 1.0;
   const double zero_distance = nearest_positive > 0 ? nearest_positive / 2 : bw;
   for (std::size_t j = 1; j < out.ids.size(); ++j) {
-    const double d = weighting == 2 && distances[j] == 0 ? zero_distance : distances[j];
+    const double d = weighting == Inverse && distances[j] == 0 ? zero_distance : distances[j];
     out.weights[j] *= spseg_weight(d, bw, power, weighting);
   }
   return out;

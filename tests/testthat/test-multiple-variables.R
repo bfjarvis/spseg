@@ -267,19 +267,20 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
                   income=as.numeric(seq_len(140)))
   d$income[89:100] <- NA_real_
   variables <- list(race=spseg_categorical(values="race"),
-                    income=legacy_continuous(values="income",na.action="omit",
-                      localenv=list(type="quantiles",probs=c(0,.1,.5,.9,1))))
+                    income=spseg_continuous(values="income",na.action="omit",
+                      summary=list(type="quantiles",probs=c(.1,.5,.9))))
   r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
              bands=100,weighting="unweighted",scope="multigroup",output="full")
   expect_equal(unname(r$analyses$income$env[[1]][1,]),
-               (c(1,10,50,90,100)-.5)/128)
+               (c(10,50,90)-.5)/128)
   for (name in names(variables)) {
     expect_equal(r$analyses[[name]]$knn$min_population,100)
     expect_equal(r$analyses[[name]]$knn$max_population,100)
   }
   adults <- d[!is.na(d$income),]
   income_only <- spseg(adults,coords=c("x","y"),neighbors="knn",bands=100,
-                       variables=list(income=legacy_continuous(values="income")),
+                       variables=list(income=spseg_continuous(values="income",
+                         summary=list(type="quantiles",probs=c(.1,.5,.9)))),
                        weighting="unweighted",scope="multigroup")
   expect_equal(r$analyses$income$indices,income_only$analyses$income$indices,
                tolerance=1e-12)
@@ -292,8 +293,8 @@ test_that("aggregate kNN populations and boundary fractions are variable-specifi
                   race_a=c(4,10,9,12,15),race_b=c(6,10,31,8,25),
                   income_low=c(0,4,2,8,6),income_high=c(0,6,2,16,4))
   vars <- list(race=spseg_categorical(counts=c("race_a","race_b")),
-                income=legacy_continuous(representation = "intervals", counts=c("income_low","income_high"),
-                                     localenv="shares"))
+                income=spseg_continuous(representation = "intervals", counts=c("income_low","income_high"),
+                                     summary=list(probs=5/12)))
   for (kernel in c("unweighted","biweight","inverse","exponential")) {
     r <- spseg(d,coords=c("x","y"),variables=vars,neighbors="knn",bands=c(7,20),
                weighting=kernel,output="full")

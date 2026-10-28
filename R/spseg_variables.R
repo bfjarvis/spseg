@@ -51,34 +51,15 @@
 #'   uncertainty estimate. Choose probabilities on actual cumulative interval
 #'   boundaries to avoid apportionment. Summary choices do not change continuous
 #'   scalar indices.
-#' @param exposure Deprecated for continuous variables: use `summary` instead.
-#'   Explicit legacy calls retain the previous behavior with a warning and cannot
-#'   be combined with `summary`. For exact continuous variables, a list with either
-#'   `probs` (global weighted quantile boundaries, including 0 and 1) or `breaks`
-#'   (value boundaries covering the observations). Defaults to deciles.
-#'   Equal values stay together; empty groups are removed. These cuts do not
-#'   affect the rank-order indices. They also supply the default groups for
-#'   `localenv = "shares"` when no local cuts are specified.
-#'   Interval input uses the supplied intervals for exposure and does not accept
-#'   this option; custom local presentation cuts belong in `localenv`.
-#' @param localenv Deprecated for continuous variables in favor of `summary`;
-#'   explicit legacy calls retain independent local/exposure summaries. For
-#'   ordinal variables, the current retained summary defaults to `"shares"`.
-#'   Only the deprecated explicit continuous path defaults to `"quantiles"`
-#'   (including when only legacy `exposure` is supplied). Select either summary,
-#'   or a list with `type` and optional `probs`/`breaks`. Legacy continuous and
-#'   ordinal quantiles default to `seq(.1, .9, .1)` and report local
-#'   weighted quantiles of global population ranks. Ordinal and exact continuous
-#'   observations use weighted midranks and the inverse weighted empirical CDF;
-#'   grouped intervals use the inverse linearly interpolated CDF. Probabilities
-#'   must increase strictly within [0, 1]; endpoints select the local support
-#'   limits. Shares default to the supplied ordinal categories or intervals,
-#'   or the continuous variable's exposure groups (deciles unless overridden).
-#'   For shares, `probs` must increase from 0 to 1 and define global quantile
-#'   groups; grouped intervals are apportioned using their interpolated CDF.
-#'   Only exact continuous variables accept original-value `breaks`.
-#'   These settings affect retained environments only, not indices or exposure.
-#'   Environments are stored by `output = "full"` or `"localenv"` in [spseg()].
+#' @param localenv Ordinal retained-environment summary: `"shares"` (default)
+#'   or `"quantiles"`, optionally supplied as a list with `type` and `probs`.
+#'   Quantiles default to `seq(.1, .9, .1)` and report weighted empirical
+#'   quantiles of global population midranks. Probabilities increase strictly
+#'   within [0, 1]; endpoints select local support limits. Shares default to
+#'   supplied categories; optional probabilities must run from 0 to 1 and group
+#'   categories by global population quantiles, keeping ties together.
+#'   These options affect retained environments only, not indices or exposure.
+#'   Continuous variables use `summary` instead.
 #' @return A `spseg_variable` specification for `spseg(variables = ...)`.
 #' @seealso [spseg()]
 #' @examples
@@ -94,7 +75,7 @@ NULL
 
 .spseg_variable <- function(type, values, counts, levels, measures, weights,
                           na.action, interpolation = NULL, scores = NULL,
-                          exposure = NULL, localenv = "shares", representation = NULL) {
+                          localenv = "shares", representation = NULL) {
   if (is.null(values) == is.null(counts)) {
     stop("Supply exactly one of 'values' and 'counts'", call. = FALSE)
   }
@@ -112,8 +93,9 @@ NULL
                  levels = levels, measures = measures, weights = weights,
                  na.action = match.arg(na.action, c("fail", "omit")),
                  interpolation = interpolation, scores = scores,
-                 exposure = exposure, representation = representation,
-                 localenv = .spseg_localenv_options(localenv)),
+                 representation = representation,
+                 localenv = if (type == "continuous") NULL else
+                   .spseg_localenv_options(localenv)),
             class = "spseg_variable")
 }
 
@@ -141,21 +123,12 @@ spseg_continuous <- function(values = NULL, counts = NULL,
                           representation = c("exact", "intervals"),
                           levels = NULL, scores = NULL,
                           measures = NULL, weights = NULL,
-                          na.action = c("fail", "omit"), exposure = NULL,
-                          localenv = "quantiles", interpolation = NULL,
+                          na.action = c("fail", "omit"), interpolation = NULL,
                           summary = NULL) {
-  legacy <- !missing(exposure) || !missing(localenv)
-  if (legacy && !missing(summary)) {
-    stop("Do not combine 'summary' with deprecated 'localenv' or 'exposure'",
-         call. = FALSE)
-  }
   representation <- match.arg(representation)
   if (representation == "intervals") {
     if (!is.null(scores))
       stop("'scores' applies only to representation = 'exact'", call. = FALSE)
-    if (!is.null(exposure))
-      stop("Interval exposure uses the supplied intervals; customize 'localenv' for presentation",
-           call. = FALSE)
     interpolation <- interpolation %||% "linear"
     if (!identical(interpolation, "linear"))
       stop("Only 'linear' interpolation is supported", call. = FALSE)
@@ -169,14 +142,10 @@ spseg_continuous <- function(values = NULL, counts = NULL,
     stop("'scores' applies only to continuous count columns", call. = FALSE)
   }
   out <- .spseg_variable("continuous", values, counts, levels, measures, weights,
-                match.arg(na.action), scores = scores, exposure = exposure,
-                localenv = localenv, representation = representation,
+                match.arg(na.action), scores = scores,
+                representation = representation,
                 interpolation = interpolation)
-  out$summary <- if (legacy) NULL else .spseg_summary_options(summary)
-  if (legacy) {
-    warning("Continuous 'localenv' and 'exposure' are deprecated; use 'summary'. ",
-            "Explicit legacy settings retain their previous behavior.", call. = FALSE)
-  }
+  out$summary <- .spseg_summary_options(summary)
   out
 }
 
@@ -184,16 +153,12 @@ spseg_continuous <- function(values = NULL, counts = NULL,
   if (is.character(options) && length(options) == 1L && !is.na(options))
     options <- list(type = options)
   if (!is.list(options) || is.null(names(options)) || anyDuplicated(names(options)) ||
-      any(!names(options) %in% c("type", "probs", "breaks")) ||
+      any(!names(options) %in% c("type", "probs")) ||
       !is.character(options$type) || length(options$type) != 1L ||
       is.na(options$type) || !options$type %in% c("quantiles", "shares"))
-    stop("'localenv' must select 'quantiles' or 'shares', optionally with probs or breaks",
+    stop("'localenv' must select 'quantiles' or 'shares', optionally with probs",
          call. = FALSE)
-  if (!is.null(options$probs) && !is.null(options$breaks))
-    stop("Supply only one of localenv 'probs' and 'breaks'", call. = FALSE)
   if (options$type == "quantiles") {
-    if (!is.null(options$breaks))
-      stop("Local quantiles accept 'probs', not 'breaks'", call. = FALSE)
     options$probs <- options$probs %||% seq(.1, .9, .1)
   }
   p <- options$probs
@@ -204,46 +169,27 @@ spseg_continuous <- function(values = NULL, counts = NULL,
   if (options$type == "shares" && !is.null(p) &&
       (length(p) < 2L || p[1L] != 0 || p[length(p)] != 1))
     stop("Local share probabilities must increase from 0 to 1", call. = FALSE)
-  b <- options$breaks
-  if (!is.null(b) && (!is.numeric(b) || length(b) < 2L || anyNA(b) ||
-      is.unsorted(b, strictly = TRUE)))
-    stop("Local share breaks must increase strictly", call. = FALSE)
   options
 }
 
-.spseg_localenv <- function(spec, labels, totals, scores) {
+.spseg_localenv <- function(spec, labels, totals) {
   options <- spec$localenv
-  intervals <- identical(spec$representation, "intervals")
-  exact <- spec$type == "continuous" && !intervals
-  if (!is.null(options$breaks) && !exact)
-    stop("Local share 'breaks' require exact continuous values; use 'probs' for intervals",
-         call. = FALSE)
   if (options$type == "quantiles") {
-    return(list(type = 1L, probs = as.numeric(options$probs), breaks = numeric(),
-      map = integer(), definition = list(type = "quantiles", probs = options$probs,
-        labels = paste0("q", format(options$probs, trim = TRUE)), scale = "global_rank",
-        method = if (intervals) "inverse_linear_cdf" else "inverse_midrank_cdf")))
+    return(list(type = 1L, probs = as.numeric(options$probs), map = integer(),
+      definition = list(type = "quantiles", probs = options$probs,
+        labels = paste0("q", format(options$probs, trim = TRUE)),
+        scale = "global_rank", method = "inverse_midrank_cdf")))
   }
-  if (intervals && !is.null(options$probs)) {
-    p <- options$probs
-    return(list(type = 2L, probs = numeric(), breaks = as.numeric(p), map = integer(),
-      definition = list(type = "shares", probs = p,
-        labels = paste0("(", p[-length(p)], ",", p[-1L], "]"),
-        scale = "global_rank", method = "linear_cdf")))
-  }
-  cuts <- options[intersect(names(options), c("probs", "breaks"))]
-  if (exact || length(cuts)) {
-    if (!length(cuts)) cuts <- spec$exposure
-    groups <- .spseg_exposure(if (exact) scores else seq_along(labels),
-                              totals, cuts)
+  if (!is.null(options$probs)) {
+    groups <- .spseg_rank_groups(seq_along(labels), totals,
+                                 list(probs = options$probs))
     definition <- c(list(type = "shares"), groups$definition)
     map <- groups$map
   } else {
     definition <- list(type = "shares", labels = labels, method = "supplied_categories")
     map <- seq_along(labels) - 1L
   }
-  list(type = 0L, probs = numeric(), breaks = numeric(), map = as.integer(map),
-       definition = definition)
+  list(type = 0L, probs = numeric(), map = as.integer(map), definition = definition)
 }
 
 .spseg_select <- function(data, columns) {
@@ -299,11 +245,10 @@ spseg_continuous <- function(values = NULL, counts = NULL,
   if ("all" %in% measures) valid else unique(measures)
 }
 
-.spseg_exposure <- function(scores, totals, options) {
-  if (is.null(options)) options <- list(probs = seq(0, 1, .1))
+.spseg_rank_groups <- function(scores, totals, options) {
   if (!is.list(options) || length(options) != 1L || is.null(names(options)) ||
       !all(names(options) %in% c("probs", "breaks")))
-    stop("'exposure' must contain exactly one of 'probs' or 'breaks'", call. = FALSE)
+    stop("Rank groups require exactly one of 'probs' or 'breaks'", call. = FALSE)
   present <- totals > 0
   v <- scores[present]
   mass <- totals[present]
@@ -313,7 +258,7 @@ spseg_continuous <- function(values = NULL, counts = NULL,
     p <- options$probs
     if (!is.numeric(p) || length(p) < 2L || any(!is.finite(p)) ||
         is.unsorted(p, strictly = TRUE) || p[1L] != 0 || p[length(p)] != 1)
-      stop("Exposure probabilities must increase strictly from 0 to 1", call. = FALSE)
+      stop("Group probabilities must increase strictly from 0 to 1", call. = FALSE)
     cumulative <- cumsum(mass) / sum(mass)
     inner <- v[vapply(p[-c(1L, length(p))],
                        function(q) which(cumulative >= q - 8*.Machine$double.eps)[1L], integer(1))]
@@ -323,7 +268,7 @@ spseg_continuous <- function(values = NULL, counts = NULL,
     if (!is.numeric(breaks) || length(breaks) < 2L || anyNA(breaks) ||
         is.unsorted(breaks, strictly = TRUE) ||
         breaks[1L] > min(v) || breaks[length(breaks)] < max(v))
-      stop("Exposure breaks must increase strictly and cover the observed values",
+      stop("Group breaks must increase strictly and cover the observed values",
            call. = FALSE)
   }
   groups <- cut(scores, breaks, include.lowest = TRUE, right = TRUE)
@@ -337,16 +282,15 @@ spseg_continuous <- function(values = NULL, counts = NULL,
 }
 
 .spseg_compile <- function(spec, data, population, measures, resolution = NULL,
-                           variable = NULL) {
+                           variable = NULL, counts = NULL) {
   n <- nrow(data)
   intervals <- identical(spec$representation, "intervals")
   exact <- spec$type == "continuous" && !intervals
   selected <- .spseg_measures(spec$measures %||% measures)
-  counts <- matrix(numeric(), 0L, 0L)
   code <- rep(-1L, n)
   scores <- numeric()
   if (!is.null(spec$counts)) {
-    counts <- .spseg_counts(spec, data)
+    if (is.null(counts)) counts <- .spseg_counts(spec, data)
     labels <- colnames(counts)
     mass <- rowSums(counts)
     totals <- colSums(counts)
@@ -371,6 +315,7 @@ spseg_continuous <- function(values = NULL, counts = NULL,
       labels <- as.character(scores)
     }
   } else {
+    counts <- matrix(numeric(), 0L, 0L)
     values <- .spseg_select(data, spec$values)[[1L]]
     mass <- .spseg_mass(spec$weights, data, n, population)
     bad <- is.na(values)
@@ -412,38 +357,35 @@ spseg_continuous <- function(values = NULL, counts = NULL,
   type <- switch(spec$type, categorical = 0L, ordinal = 1L,
                  continuous = if (intervals) 2L else 3L)
   method <- c("categorical", "ordinal_cutoffs", "linear_cdf", "empirical_midrank")[type + 1L]
-  synchronized <- !is.null(spec$summary)
+  continuous <- spec$type == "continuous"
   resolved <- NULL
-  exposure <- if (synchronized) {
+  exposure <- if (continuous) {
     resolved <- resolution %||% .spseg_resolve_summary(spec$summary, labels, totals,
                                                       scores, intervals, variable)
     list(map = resolved$map, labels = resolved$labels,
          definition = resolved$definition$groups)
-  } else if (type == 3L) {
-    if ("exposure" %in% selected) .spseg_exposure(scores, totals, spec$exposure) else
-      list(map = integer(), labels = character(), definition = NULL)
   } else list(map = seq_along(labels) - 1L, labels = labels, definition = NULL)
-  localenv <- if (synchronized) {
+  localenv <- if (continuous) {
     definition <- resolved$definition
     list(type = if (definition$type == "shares") 0L else 1L,
-      probs = definition$effective_probs %||% numeric(), breaks = numeric(),
+      probs = definition$effective_probs %||% numeric(),
       map = resolved$map,
       definition = list(type = definition$type, probs = definition$effective_probs,
         labels = definition$statistics$label, statistics = definition$statistics,
         scale = if (definition$type == "quantiles") "global_rank" else "group_share"))
-  } else .spseg_localenv(spec, labels, totals, scores)
+  } else .spseg_localenv(spec, labels, totals)
   list(type = type, counts = counts, code = as.integer(code), mass = mass,
-       synchronized = synchronized, summary_config = resolved,
-       group_fractions = if (synchronized) resolved$fractions else matrix(numeric(), 0, 0),
-       split_intervals = if (synchronized) {
+       summary_config = resolved,
+       group_fractions = if (continuous) resolved$fractions else matrix(numeric(), 0, 0),
+       split_intervals = if (continuous) {
          as.integer(resolved$definition$interpolation$split_intervals - 1L)
        } else integer(),
-       env_mean = synchronized && spec$summary$mean_rank,
-       pair_labels = if (synchronized) resolved$labels else labels,
+       env_mean = continuous && spec$summary$mean_rank,
+       pair_labels = if (continuous) resolved$labels else labels,
        totals = totals, shares = shares, scores = scores,
        z = cumsum(shares) - shares / 2,
        exposure_map = as.integer(exposure$map), exposure_labels = exposure$labels,
-       env_type = localenv$type, env_probs = localenv$probs, env_breaks = localenv$breaks,
+       env_type = localenv$type, env_probs = localenv$probs,
        env_map = localenv$map, env_columns = length(localenv$definition$labels),
        flags = as.integer(c("exposure", "information", "diversity", "dissimilarity",
                             "square_root") %in% selected),
@@ -454,6 +396,6 @@ spseg_continuous <- function(values = NULL, counts = NULL,
                        labels = labels, shares = shares, scores = scores,
                        ties = if (type == 3L) "weighted_midrank" else NULL,
                        na.action = spec$na.action,
-                       summary = if (synchronized) resolved$definition else NULL,
+                       summary = if (continuous) resolved$definition else NULL,
                        exposure = exposure$definition, localenv = localenv$definition))
 }

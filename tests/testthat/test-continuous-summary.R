@@ -149,11 +149,12 @@ test_that("open upper categories apportion deciles and report neighborhood diagn
   expect_null(compact$analyses$income$env)
 })
 
-test_that("explicit legacy continuous settings are retained with a warning", {
-  expect_warning(spec <- spseg_continuous(values = "v", localenv = "quantiles"),
-                 "deprecated")
-  expect_null(spec$summary)
+test_that("removed continuous arguments fail instead of selecting an old path", {
+  expect_error(spseg_continuous(values = "v", localenv = "quantiles"),
+               "unused argument")
+  expect_error(spseg_continuous(values = "v", exposure = list(probs = c(0, 1))),
+               "unused argument")
   expect_error(spseg_continuous(values = "v", localenv = "shares",
-                                summary = list(type = "shares")), "Do not combine")
+                                summary = list(type = "shares")), "unused argument")
   expect_no_warning(spseg_ordinal(values = "v", localenv = "quantiles"))
 })

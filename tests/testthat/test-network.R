@@ -78,7 +78,8 @@ test_that("weighted and unweighted neighborhoods match an independent reference"
   d <- data.frame(node=1:n,a=sample(0:4,n,TRUE),b=sample(1:3,n,TRUE),
     c=sample(0:2,n,TRUE),e=sample(1:2,n,TRUE))
   vars <- list(g=spseg_categorical(counts=c("a","b")),
-               h=legacy_continuous(representation = "intervals", counts=c("c","e"),localenv="shares"))
+               h=spseg_continuous(representation = "intervals", counts=c("c","e"),
+                 summary=list(probs=sum(d$c)/sum(d$c+d$e))))
   for (directed in c(FALSE,TRUE)) for (weighted in c(FALSE,TRUE)) {
     net <- spseg_network(edges,cost=if(weighted)"cost" else NULL,directed=directed)
     distance <- network_distances(as.character(1:n),edges,weighted,directed)
@@ -89,7 +90,8 @@ test_that("weighted and unweighted neighborhoods match an independent reference"
       for (v in names(vars)) for (b in seq_along(bands)) {
         counts <- as.matrix(d[vars[[v]]$counts])
         expected <- network_environment(counts,distance,bands[b],knn,kernel)
-        expect_equal(r$analyses[[v]]$env[[b]],expected,tolerance=1e-12)
+        # Continuous summaries label rank bins rather than original categories.
+        expect_equal(unname(r$analyses[[v]]$env[[b]]),unname(expected),tolerance=1e-12)
       }
       if(knn) for (v in names(vars)) {
         expect_equal(r$analyses[[v]]$knn$min_population,bands)

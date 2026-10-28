@@ -34,8 +34,13 @@ are used as the focal coordinates. With `variables`, a plain data frame
 may contain both attributes and the columns selected by `coords`.
 With `network`, supply an observation table; coordinates are optional.}
 
-\item{variables}{Required uniquely named list of [spseg_variables]
-specifications, including for a single segregation dimension. A count
+\item{variables}{Column names for a single categorical variable, or a uniquely
+named list of [spseg_variables] specifications. A single column name is
+interpreted as observed category memberships (microdata); two or more column
+names are interpreted as category counts (aggregated data). A message reports
+this assumption. The result is named after the single column, or `categorical`
+for multiple count columns. Use an explicit specification for other variable
+types, a custom result name, or a single category-count column. A count
 specification can select several columns. All variables share spatial
 discovery; kNN uses each variable's eligible population and adaptive
 distance weights. Each specification can override `measures`.
@@ -215,6 +220,10 @@ result <- spseg(xy, variables, data = spseg_data, bands = c(0, 2), output = "ful
 as.data.frame(result)
 head(as.data.frame(result, what = "env"))
 result$analyses$ethnicity$env[[1]]
+
+# Shorthand for one categorical variable stored as category counts:
+spseg(xy, c("A1", "A2"), data = spseg_data, bands = c(0, 2))
+# For microdata, use variables = "race" to select observed memberships.
 
 geom <- sf::st_polygon(list(rbind(c(0,0), c(10,0), c(10,10),
   c(0,10), c(0,0)))) |> sf::st_make_grid(cellsize = 1)

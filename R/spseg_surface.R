@@ -45,104 +45,42 @@
     ))
   }
   if (!inherits(x, "sf")) {
-    stop(
-      "surface = \"",
-      surface,
-      "\" requires 'x' to be an sf object",
-      call. = FALSE
-    )
+    stop("surface = '", surface, "' requires 'x' to be an sf object", call. = FALSE)
   }
-  if (surface == "grid") {
-    return(.spseg_surface_grid(x, data, args, audit, verbose))
+  allowed <- c("cellsize", "celldim", "nrow", "ncol", "max_iter", "converge",
+               "surface_geometry")
+  if (length(args) && (is.null(names(args)) || anyNA(names(args)) ||
+      any(!nzchar(names(args))) || anyDuplicated(names(args)) ||
+      any(!names(args) %in% allowed))) {
+    stop("Supply uniquely named surface options: ", paste(allowed, collapse = ", "),
+         call. = FALSE)
   }
-  .spseg_surface_pycno(x, data, args, audit, verbose)
-}
-
-#' Redistribute polygon counts to a square grid
-#'
-#' Builds the gridded population surface used by `surface = "grid"`. Counts are
-#' assigned to cells whose centroids fall within each source polygon, with a
-#' fallback assignment for non-empty polygons too small to contain a grid-cell
-#' centroid.
-#'
-#' @inheritParams .spseg_surface
-#'
-#' @return A compact surface list with grid-cell coordinates, redistributed group
-#'   counts, optional grid geometry, source polygon identifiers, and fallback
-#'   metadata.
-#'
-#' @noRd
-.spseg_surface_grid <- function(x, data, args, audit = FALSE, verbose = FALSE) {
   if (verbose) {
-    beg_time <- Sys.time()
-    message(".spseg_surface_grid: redistributing population data ...")
+    started <- Sys.time()
+    message("Constructing ", surface, " population surface ...")
   }
-
   grid <- .spseg_grid(x, data, args, audit)
-  .spseg_warn_fallback(grid$fallback, "grid")
-  out <- .spseg_compact_grid(
-    grid,
-    st_crs(x),
-    .spseg_geometry_type(args),
-    "grid"
-  )
-
-  if (verbose) {
-    elapsed <- as.numeric(difftime(Sys.time(), beg_time, units = "sec"))
-    message(".spseg_surface_grid: done! [", elapsed, " seconds]")
+  .spseg_warn_fallback(grid$fallback, surface)
+  if (surface == "pycno") {
+    max_iter <- args$max_iter %||% 1000L
+    converge <- args$converge %||% 3
+    if (!is.numeric(max_iter) || length(max_iter) != 1L ||
+        !is.finite(max_iter) || max_iter < 1 || max_iter != floor(max_iter)) {
+      stop("'max_iter' must be a positive integer", call. = FALSE)
+    }
+    if (!is.numeric(converge) || length(converge) != 1L || !is.finite(converge)) {
+      stop("'converge' must be a finite numeric scalar", call. = FALSE)
+    }
+    group_names <- colnames(grid$values)
+    grid$values <- spseg_pycno_cpp(grid$zone_ids, grid$values, grid$ncol,
+                                  grid$nrow, max_iter, converge)
+    colnames(grid$values) <- group_names
   }
-
-  out
-}
-
-#' Build a pycnophylactic population surface
-#'
-#' First constructs the same count-preserving grid as `.spseg_surface_grid()`,
-#' then applies the package's internal pycnophylactic smoother. The smoother
-#' iteratively averages neighboring cells and corrects each source zone so that
-#' group counts remain equal to the gridded counts supplied to the smoother.
-#'
-#' @inheritParams .spseg_surface
-#'
-#' @return A compact surface list with smoothed grid-cell coordinates, group
-#'   counts, optional grid geometry, source polygon identifiers, and fallback
-#'   metadata.
-#'
-#' @noRd
-.spseg_surface_pycno <- function(x, data, args, audit = FALSE, verbose = FALSE) {
-  max_iter <- args$max_iter %||% 1000
-  converge <- args$converge %||% 3
-
+  out <- .spseg_compact_grid(grid, st_crs(x), .spseg_geometry_type(args), surface)
   if (verbose) {
-    beg_time <- Sys.time()
-    message(".spseg_surface_pycno: pycnophylactic interpolation ...")
+    elapsed <- as.numeric(difftime(Sys.time(), started, units = "secs"))
+    message("Population surface done [", elapsed, " seconds]")
   }
-
-  grid <- .spseg_grid(x, data, args, audit)
-  .spseg_warn_fallback(grid$fallback, "pycno")
-  group_names <- colnames(grid$values)
-  grid$values <- spseg_pycno_cpp(
-    zone_ids = grid$zone_ids,
-    values = grid$values,
-    nx = grid$ncol,
-    ny = grid$nrow,
-    max_iter = max_iter,
-    converge = converge
-  )
-  grid$values[is.na(grid$values)] <- 0
-  colnames(grid$values) <- group_names
-  out <- .spseg_compact_grid(
-    grid,
-    st_crs(x),
-    .spseg_geometry_type(args),
-    "pycno"
-  )
-
-  if (verbose) {
-    elapsed <- as.numeric(difftime(Sys.time(), beg_time, units = "sec"))
-    message(".spseg_surface_pycno: done! [", elapsed, " seconds]")
-  }
-
   out
 }
 
@@ -164,8 +102,7 @@
 #'
 #' @noRd
 .spseg_grid <- function(x, data, args, audit = FALSE) {
-  grid_dims <- .spseg_grid_dims(x, args)
-  template <- .spseg_raster_template(x, grid_dims)
+  template <- .spseg_grid_template(x, args)
   zone_ids <- .spseg_rasterize_zones(x, template)
   fallback <- .spseg_fallback_counts(zone_ids, x, data, template)
   values <- .spseg_distribute_counts(zone_ids, data)
@@ -202,56 +139,38 @@
   out
 }
 
-#' Determine grid dimensions for a surface
+#' Construct a raster template from grid dimensions or cell size
 #'
-#' Uses explicit `nrow` and `ncol` values when supplied. Otherwise, derives grid
-#' dimensions from `celldim`/`cellsize` and the input bounding box.
-#'
-#' @param x Polygonal `sf` object.
-#' @param args Named list of surface options.
-#'
-#' @return A list with integer `nrow` and `ncol` entries.
-#'
+#' @param x Polygonal sf input.
+#' @param args Named surface options: nrow and ncol, or celldim/cellsize.
+#' @return A terra raster with the extent and CRS of x.
 #' @noRd
-.spseg_grid_dims <- function(x, args) {
-  if (!is.null(args$nrow) && !is.null(args$ncol)) {
-    return(list(nrow = args$nrow, ncol = args$ncol))
-  }
-  
+.spseg_grid_template <- function(x, args) {
   bbox <- st_bbox(x)
-  celldim <- args$celldim %||% args$cellsize
-  if (is.null(celldim)) {
-    celldim <- min(bbox$xmax - bbox$xmin, bbox$ymax - bbox$ymin) / 100
+  if (!is.null(args$nrow) || !is.null(args$ncol)) {
+    dimensions <- list(args$nrow, args$ncol)
+    valid <- vapply(dimensions, function(z) {
+      is.numeric(z) && length(z) == 1L && is.finite(z) &&
+        z >= 1 && z == floor(z)
+    }, logical(1))
+    if (!all(valid)) {
+      stop("Supply both 'nrow' and 'ncol' as positive integers", call. = FALSE)
+    }
+    rows <- args$nrow
+    columns <- args$ncol
+  } else {
+    celldim <- args$celldim %||% args$cellsize %||%
+      (min(bbox$xmax - bbox$xmin, bbox$ymax - bbox$ymin) / 100)
+    if (!is.numeric(celldim) || length(celldim) != 1L ||
+        !is.finite(celldim) || celldim <= 0) {
+      stop("'celldim' must be a positive finite numeric scalar", call. = FALSE)
+    }
+    rows <- max(1, ceiling((bbox$ymax - bbox$ymin) / celldim))
+    columns <- max(1, ceiling((bbox$xmax - bbox$xmin) / celldim))
   }
-  if (!is.numeric(celldim) || length(celldim) != 1 || celldim <= 0) {
-    stop("'celldim' must be a positive numeric scalar", call. = FALSE)
-  }
-  
-  list(
-    nrow = max(1, ceiling((bbox$ymax - bbox$ymin) / celldim)),
-    ncol = max(1, ceiling((bbox$xmax - bbox$xmin) / celldim))
-  )
-}
-
-#' Create a terra raster template for a surface grid
-#'
-#' @param x Polygonal `sf` object.
-#' @param grid_dims List with integer `nrow` and `ncol` entries.
-#'
-#' @return A terra raster with the extent and CRS of `x`.
-#'
-#' @noRd
-.spseg_raster_template <- function(x, grid_dims) {
-  bbox <- st_bbox(x)
-  terra::rast(
-    nrows = grid_dims$nrow,
-    ncols = grid_dims$ncol,
-    xmin = bbox$xmin,
-    xmax = bbox$xmax,
-    ymin = bbox$ymin,
-    ymax = bbox$ymax,
-    crs = st_crs(x)$wkt
-  )
+  terra::rast(nrows = rows, ncols = columns,
+    xmin = bbox$xmin, xmax = bbox$xmax, ymin = bbox$ymin, ymax = bbox$ymax,
+    crs = st_crs(x)$wkt)
 }
 
 #' Rasterize source polygon identifiers
@@ -520,8 +439,8 @@
 
 #' Normalize the requested surface geometry type
 #'
-#' Accepts logical and character inputs for `surface_geometry` and maps aliases
-#' to the internal geometry labels.
+#' Accepts logical and character inputs for `surface_geometry`; logical values
+#' select polygon geometry or no stored geometry.
 #'
 #' @param args Named list of surface options.
 #'
@@ -529,7 +448,7 @@
 #'
 #' @noRd
 .spseg_geometry_type <- function(args) {
-  geometry <- args$surface_geometry %||% args$keep_geometry %||% FALSE
+  geometry <- args$surface_geometry %||% FALSE
   if (is.logical(geometry)) {
     if (length(geometry) != 1 || is.na(geometry)) {
       stop(
@@ -540,16 +459,13 @@
     return(if (geometry) "polygons" else "none")
   }
 
-  geometry <- match.arg(
-    as.character(geometry),
-    c("none", "points", "polygons", "point", "polygon")
-  )
-  switch(
-    geometry,
-    point = "points",
-    polygon = "polygons",
-    geometry
-  )
+  geometry <- as.character(geometry)
+  if (length(geometry) != 1L || is.na(geometry) ||
+      !geometry %in% c("none", "points", "polygons")) {
+    stop("'surface_geometry' must be 'none', 'points', or 'polygons'",
+         call. = FALSE)
+  }
+  geometry
 }
 
 #' Build optional grid-cell geometry

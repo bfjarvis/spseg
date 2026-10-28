@@ -49,9 +49,9 @@ within-interval sorting information. This replaces earlier boundary matching.
 
 Binary pairwise indices compare resolved groups using pair-conditioned shares
 and focal mass within full-variable neighborhoods. Reporting grids do not change
-full-resolution continuous scalar indices or neighborhood selection. Explicit
-legacy localenv/exposure calls have a deprecated compatibility path. Proposed
-rank-pair innovations remain separate from established package functionality.
+full-resolution continuous scalar indices or neighborhood selection. Continuous
+presentation uses only `summary`; pre-1.0 syntax compatibility is not maintained.
+Proposed rank-pair innovations remain separate from established package functionality.
 Refer to source help/tests for the implemented contract and original papers for
 published definitions; passing tests alone do not establish scientific validity.
 

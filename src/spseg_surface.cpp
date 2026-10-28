@@ -26,15 +26,15 @@ arma::vec pycno_targets(const arma::ivec& zone_ids, const arma::vec& values)
   return targets;
 }
 
-arma::vec pycno_correct_zones(const arma::vec& values,
+void pycno_correct_zones(arma::vec& out,
                               const arma::ivec& zone_ids,
-                              const arma::vec& pops)
+                              const arma::vec& pops,
+                              const arma::ivec& counts,
+                              arma::vec& totals)
 {
-  arma::vec out = values;
   const int n = zone_ids.n_elem;
   const int Z = pops.n_elem;
-  arma::vec totals(Z, arma::fill::zeros);
-  arma::ivec counts(Z, arma::fill::zeros);
+  totals.zeros();
 
   for (int i = 0; i < n; ++i) {
     const int z = zone_ids[i];
@@ -42,7 +42,6 @@ arma::vec pycno_correct_zones(const arma::vec& values,
       continue;
     if (std::isfinite(out[i]))
       totals[z] += out[i];
-    counts[z] += 1;
   }
 
   for (int i = 0; i < n; ++i) {
@@ -62,20 +61,19 @@ arma::vec pycno_correct_zones(const arma::vec& values,
     }
   }
 
-  return out;
 }
 
-arma::vec pycno_neighbor_average(const arma::vec& values,
+void pycno_neighbor_average(const arma::vec& values,
                                  const arma::ivec& zone_ids,
-                                 int nx, int ny)
+                                 int nx, int ny, arma::vec& out)
 {
-  arma::vec out(values.n_elem, arma::fill::value(NA_REAL));
-
   for (int y = 0; y < ny; ++y) {
     for (int x = 0; x < nx; ++x) {
       const int id = x + y * nx;
-      if (zone_ids[id] < 0)
+      if (zone_ids[id] < 0) {
+        out[id] = NA_REAL;
         continue;
+      }
 
       double sum = 0.0;
       int count = 0;
@@ -100,14 +98,16 @@ arma::vec pycno_neighbor_average(const arma::vec& values,
     }
   }
 
-  return out;
 }
 
 arma::vec pycno_group(const arma::ivec& zone_ids, const arma::vec& initial,
+                      const arma::ivec& zone_counts,
                       int nx, int ny, int max_iter, double converge)
 {
   arma::vec values = initial;
+  arma::vec next(values.n_elem);
   const arma::vec targets = pycno_targets(zone_ids, initial);
+  arma::vec totals(targets.n_elem);
   for (arma::uword i = 0; i < values.n_elem; ++i) {
     if (zone_ids[i] < 0)
       values[i] = NA_REAL;
@@ -125,15 +125,15 @@ arma::vec pycno_group(const arma::ivec& zone_ids, const arma::vec& initial,
     stopper = std::numeric_limits<double>::epsilon();
 
   for (int iter = 0; iter < max_iter; ++iter) {
-    const arma::vec old = values;
-    values = pycno_neighbor_average(values, zone_ids, nx, ny);
-    values = pycno_correct_zones(values, zone_ids, targets);
+    pycno_neighbor_average(values, zone_ids, nx, ny, next);
+    pycno_correct_zones(next, zone_ids, targets, zone_counts, totals);
 
     double change = 0.0;
     for (arma::uword i = 0; i < values.n_elem; ++i) {
-      if (zone_ids[i] >= 0 && std::isfinite(old[i]) && std::isfinite(values[i]))
-        change = std::max(change, std::abs(old[i] - values[i]));
+      if (zone_ids[i] >= 0 && std::isfinite(values[i]) && std::isfinite(next[i]))
+        change = std::max(change, std::abs(values[i] - next[i]));
     }
+    values.swap(next);
     if (change < stopper)
       break;
   }
@@ -158,11 +158,17 @@ NumericMatrix spseg_pycno_cpp(IntegerVector zone_ids, NumericMatrix values,
   for (int i = 0; i < n; ++i)
     zones[i] = zone_ids[i] == NA_INTEGER ? -1 : zone_ids[i] - 1;
 
+  // Zone membership is fixed across groups and all smoothing iterations.
+  const int Z = n ? std::max(0, zones.max() + 1) : 0;
+  arma::ivec zone_counts(Z, arma::fill::zeros);
+  for (int i = 0; i < n; ++i)
+    if (zones[i] >= 0) ++zone_counts[zones[i]];
+
   arma::mat V(values.begin(), n, M, false);
   NumericMatrix out(n, M);
 
   for (int m = 0; m < M; ++m) {
-    const arma::vec smoothed = pycno_group(zones, V.col(m), nx, ny, max_iter,
+    const arma::vec smoothed = pycno_group(zones, V.col(m), zone_counts, nx, ny, max_iter,
                                            converge);
     for (int i = 0; i < n; ++i)
       out(i, m) = smoothed[i];

@@ -35,8 +35,6 @@ spseg_continuous(
   measures = NULL,
   weights = NULL,
   na.action = c("fail", "omit"),
-  exposure = NULL,
-  localenv = "quantiles",
   interpolation = NULL,
   summary = NULL
 )
@@ -59,24 +57,15 @@ Defaults to the `population` supplied to [spseg()], or its inferred default.}
 only to this variable, including its kNN stopping population. Other
 variables and radius bandwidths are unaffected.}
 
-\item{localenv}{Deprecated for continuous variables in favor of `summary`;
-explicit legacy calls retain independent local/exposure summaries. For
-ordinal variables, the current retained summary defaults to `"shares"`.
-Only the deprecated explicit continuous path defaults to `"quantiles"`
-(including when only legacy `exposure` is supplied). Select either summary,
-or a list with `type` and optional `probs`/`breaks`. Legacy continuous and
-ordinal quantiles default to `seq(.1, .9, .1)` and report local
-weighted quantiles of global population ranks. Ordinal and exact continuous
-observations use weighted midranks and the inverse weighted empirical CDF;
-grouped intervals use the inverse linearly interpolated CDF. Probabilities
-must increase strictly within [0, 1]; endpoints select the local support
-limits. Shares default to the supplied ordinal categories or intervals,
-or the continuous variable's exposure groups (deciles unless overridden).
-For shares, `probs` must increase from 0 to 1 and define global quantile
-groups; grouped intervals are apportioned using their interpolated CDF.
-Only exact continuous variables accept original-value `breaks`.
-These settings affect retained environments only, not indices or exposure.
-Environments are stored by `output = "full"` or `"localenv"` in [spseg()].}
+\item{localenv}{Ordinal retained-environment summary: `"shares"` (default)
+or `"quantiles"`, optionally supplied as a list with `type` and `probs`.
+Quantiles default to `seq(.1, .9, .1)` and report weighted empirical
+quantiles of global population midranks. Probabilities increase strictly
+within [0, 1]; endpoints select local support limits. Shares default to
+supplied categories; optional probabilities must run from 0 to 1 and group
+categories by global population quantiles, keeping ties together.
+These options affect retained environments only, not indices or exposure.
+Continuous variables use `summary` instead.}
 
 \item{representation}{Continuous input representation: `"exact"` (default)
 for observed numeric values or exact-value counts, or `"intervals"` for
@@ -86,17 +75,6 @@ ordered factor or explicit `levels`; count columns supply interval order.}
 \item{scores}{Exact numerical values corresponding to continuous count
 columns with `representation = "exact"`. These are observed values, not
 interval midpoints. Interval input does not accept scores.}
-
-\item{exposure}{Deprecated for continuous variables: use `summary` instead.
-Explicit legacy calls retain the previous behavior with a warning and cannot
-be combined with `summary`. For exact continuous variables, a list with either
-`probs` (global weighted quantile boundaries, including 0 and 1) or `breaks`
-(value boundaries covering the observations). Defaults to deciles.
-Equal values stay together; empty groups are removed. These cuts do not
-affect the rank-order indices. They also supply the default groups for
-`localenv = "shares"` when no local cuts are specified.
-Interval input uses the supplied intervals for exposure and does not accept
-this option; custom local presentation cuts belong in `localenv`.}
 
 \item{interpolation}{For `representation = "intervals"`, CDF interpolation.
 `NULL` selects `"linear"` in overall percentile space, not in the original

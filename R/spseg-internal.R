@@ -25,13 +25,13 @@
   list(coords = xy, data = source, geometry = geometry, crs = crs)
 }
 
-.spseg_population <- function(population, variables, data) {
+.spseg_population <- function(population, variables, data, count_data) {
   n <- nrow(data)
   if (!is.null(population)) return(.spseg_mass(population, data, n))
-  candidates <- lapply(variables, function(spec) {
-    if (!is.null(spec$counts)) rowSums(.spseg_counts(spec, data)) else
+  candidates <- Map(function(spec, counts) {
+    if (!is.null(counts)) rowSums(counts) else
       if (!is.null(spec$weights)) .spseg_mass(spec$weights, data, n) else NULL
-  })
+  }, variables, count_data)
   candidates <- Filter(Negate(is.null), candidates)
   if (!length(candidates)) return(rep(1, n))
   first <- candidates[[1L]]
@@ -42,7 +42,7 @@
   first
 }
 
-.spseg_restore_analysis <- function(result, config, bands, keep_env) {
+.spseg_prepare_result <- function(result, config, bands, keep_env) {
   for (group in c("multigroup", "pairwise")) {
     result$indices[[group]] <- lapply(result$indices[[group]], function(z) {
       names(z) <- as.character(bands)
@@ -89,120 +89,6 @@
   result
 }
 
-.spseg_compute <- function(x, data, variables, coords, population, measures,
-                            bands, weighting, power, normalize, neighbors,
-                            search, surface, surface_audit, scope, output,
-                            verbose, call, dots, network = NULL, node_id = NULL) {
-  if (!is.list(variables) || !length(variables) || is.null(names(variables)) ||
-      anyNA(names(variables)) || any(!nzchar(names(variables))) ||
-      anyDuplicated(names(variables)) ||
-      !all(vapply(variables, inherits, logical(1), "spseg_variable")))
-    stop("'variables' must be a uniquely named list of spseg_variable specifications",
-         call. = FALSE)
-  neighbors <- match.arg(neighbors, c("radius", "knn"))
-  search <- match.arg(search, c("boost", "brute"))
-  weighting <- match.arg(weighting, c("biweight", "unweighted", "inverse", "exponential"))
-  surface <- match.arg(surface, c("raw", "grid", "pycno"))
-  relational <- !is.null(network)
-  if (relational && surface != "raw")
-    stop("Network input requires surface = 'raw'", call. = FALSE)
-  scope <- match.arg(scope, c("both", "multigroup", "pairwise"))
-  output <- match.arg(output, c("indices", "full", "localenv"))
-  if (!is.logical(surface_audit) || length(surface_audit) != 1L || is.na(surface_audit))
-    stop("'surface_audit' must be TRUE or FALSE", call. = FALSE)
-  if (surface == "raw" && length(dots))
-    stop("Surface options require surface = 'grid' or 'pycno'", call. = FALSE)
-  if (surface != "raw" && any(vapply(variables, function(z) is.null(z$counts), logical(1))))
-    stop("Grid and pycnophylactic surfaces require 'counts' for every variable",
-         call. = FALSE)
-  if (length(power) != 1L || !is.numeric(power) || !is.finite(power) || power <= 0)
-    stop("'power' must be a positive finite number", call. = FALSE)
-  if (!is.logical(normalize) || length(normalize) != 1L || is.na(normalize))
-    stop("'normalize' must be TRUE or FALSE", call. = FALSE)
-  prepared_network <- NULL
-  if (relational) {
-    if (search != "boost") stop("Network input requires search = 'boost'", call. = FALSE)
-    if (is.null(bands)) stop("Supply explicit 'bands' for network neighborhoods", call. = FALSE)
-    prepared_network <- .spseg_network_input(x, data, coords, network, node_id)
-    checked <- prepared_network$checked
-  } else {
-    if (!is.null(node_id)) stop("'node_id' requires a network", call. = FALSE)
-    checked <- .spseg_geometry(x, data, coords)
-  }
-  supplied_population <- !is.null(population)
-  population <- if (neighbors == "knn" || relational) {
-    .spseg_mass(population, checked$data, nrow(checked$data))
-  } else .spseg_population(population, variables, checked$data)
-  if (neighbors == "radius" && (!is.finite(sum(population)) || sum(population) <= 0))
-    stop("The common population total must be positive and finite", call. = FALSE)
-  compiled <- Map(function(spec, name) {
-    .spseg_compile(spec, checked$data, population, measures, variable = name)
-  }, variables, names(variables))
-  surface_info <- list(type = "raw", fallback = list(count = 0L), audit = NULL)
-  if (surface != "raw") {
-    # Gridding transports all count tables in one surface-construction pass.
-    # The first eligible population is a sufficient reference for kNN because
-    # its thresholds use each descriptor's mass, not this reference vector.
-    if (neighbors == "knn" && !supplied_population) population <- compiled[[1L]]$mass
-    prepared <- .spseg_surface_variables(x, checked, variables, compiled, population,
-                                       measures, surface, dots, surface_audit, verbose)
-    checked <- prepared$checked
-    population <- prepared$population
-    compiled <- prepared$compiled
-    surface_info <- prepared$surface_info
-  }
-  if (is.null(bands)) {
-    if (neighbors == "knn") stop("Supply population-count 'bands' for kNN", call. = FALSE)
-    bands <- spseg_default_bands(checked$coords, population = population)
-  }
-  if (!is.numeric(bands) || !length(bands) || any(!is.finite(bands)) ||
-      any(bands < 0) || (neighbors == "knn" && any(bands <= 0)))
-    stop("Supply finite nonnegative radius bands or positive population-count kNN bands",
-         call. = FALSE)
-  if (neighbors == "knn") {
-    for (name in names(compiled)) {
-      available <- sum(compiled[[name]]$mass)
-      # Allow accumulated rounding of fractional weights in R's sum; the
-      # native selector separately verifies the population actually selected.
-      tolerance <- (length(compiled[[name]]$mass) + 16) *
-        .Machine$double.eps * max(bands)
-      if (max(bands) > available + tolerance)
-        stop("Variable '", name, "' has eligible population ", format(available),
-             ", below the requested kNN threshold ", format(max(bands)), call. = FALSE)
-    }
-  }
-  if (verbose) message("Calculating ", length(compiled), " variables with shared neighborhood searches")
-  engine <- spseg_engine_cpp(checked$coords %||% matrix(numeric(), 0L, 2L),
-                         compiled, as.numeric(bands),
-                         power, .spseg_weighting_id(weighting), normalize,
-                         match(neighbors, c("radius", "knn")) - 1L,
-                         match(search, c("boost", "brute")) - 1L,
-                         if (relational) prepared_network$graph else list(),
-                         as.integer(.spseg_scope_flags(scope)), output != "indices",
-                         output != "localenv")
-  analyses <- Map(.spseg_restore_analysis, engine$analyses, compiled,
-                  MoreArgs = list(bands = bands, keep_env = output != "indices"))
-  result <- list(analyses = analyses, bands = as.numeric(bands),
-                 coords = if (output != "indices") checked$coords else NULL,
-                 data = if (output != "indices") checked$data else NULL,
-                 geometry = if (output != "indices") checked$geometry else NULL,
-                 population = if (output != "indices") population else NULL,
-                 crs = checked$crs, weighting = weighting, power = power,
-                 normalize = normalize, surface = surface, output = output,
-                 surface_info = surface_info,
-                 network = if (relational) prepared_network$summary else NULL,
-                 node_id = if (relational && output != "indices") prepared_network$ids else NULL,
-                 neighbors = list(type = neighbors, values = bands,
-                                  space = if (relational) "network" else "euclidean",
-                                  units = if (neighbors == "knn") "population" else
-                                    if (relational) prepared_network$summary$units else "distance",
-                                  distance_units = if (relational) prepared_network$summary$units else "coordinate",
-                                  population = if (neighbors == "knn") "variable" else NULL,
-                                  engine = search, scope = scope),
-                 diagnostics = engine$diagnostics, call = call)
-  class(result) <- "spseg_result"
-  result
-}
 
 .spseg_surface_variables <- function(x, checked, variables, compiled, population,
                                     measures, surface, dots, audit, verbose) {

@@ -1,3 +1,48 @@
+test_that("categorical column shorthand agrees with explicit specifications", {
+  d <- data.frame(x = c(0, 1, 3, 4), y = 0,
+    race = c("a", "b", "a", "b"), residents = c(2, 3, 4, 1),
+    a = c(2, 0, 4, 0), b = c(0, 3, 0, 1))
+  expect_message(
+    micro <- spseg(d, "race", coords = c("x", "y"),
+      population = "residents", bands = c(0, 2), output = "full"),
+    "Assuming categorical microdata.*observed category memberships"
+  )
+  explicit <- spseg(d, list(race = spseg_categorical(values = "race")),
+    coords = c("x", "y"), population = "residents", bands = c(0, 2),
+    output = "full")
+  expect_identical(names(micro$analyses), "race")
+  expect_equal(micro$analyses, explicit$analyses)
+  expect_message(
+    counts <- spseg(d, c("a", "b"), coords = c("x", "y"),
+      bands = c(0, 2), output = "full"),
+    "Assuming aggregated categorical data.*category counts"
+  )
+  explicit_counts <- spseg(d,
+    list(categorical = spseg_categorical(counts = c("a", "b"))),
+    coords = c("x", "y"), bands = c(0, 2), output = "full")
+  expect_identical(names(counts$analyses), "categorical")
+  expect_equal(counts$analyses, explicit_counts$analyses)
+  expect_equal(micro$analyses$race$indices, counts$analyses$categorical$indices)
+
+  points <- sf::st_as_sf(d, coords = c("x", "y"))
+  expect_message(spatial <- spseg(points, c("a", "b"),
+    bands = c(0, 2), output = "full"), "Assuming aggregated")
+  expect_equal(spatial$analyses, counts$analyses)
+  expect_equal(spatial$geometry, sf::st_geometry(points))
+  expect_message(separate <- spseg(as.matrix(d[c("x", "y")]), c("a", "b"),
+    data = d, bands = c(0, 2), output = "full"), "Assuming aggregated")
+  expect_equal(separate$analyses, counts$analyses)
+  expect_error(expect_message(
+    spseg(d, "absent", coords = c("x", "y"), bands = 0),
+    "Assuming categorical"), "Unknown column")
+  for (columns in list(character(), NA_character_, "", c("a", "a"))) {
+    expect_error(spseg(d, columns, coords = c("x", "y"), bands = 0),
+      "non-empty, non-missing, and unique")
+  }
+  expect_message(spseg(d, list(race = spseg_categorical(values = "race")),
+    coords = c("x", "y"), bands = 0), NA)
+})
+
 test_that("the variable interface is required and returns one result class", {
   d <- data.frame(x=1:4,y=0,a=c(1,2,3,4),b=c(4,3,2,1))
   vars <- list(groups=spseg_categorical(counts=c("a","b")))
@@ -86,7 +131,7 @@ test_that("continuous representation options reject incompatible interpretations
   expect_error(spseg_continuous(values="v",representation="bins"),"exact.*intervals")
   expect_error(spseg_continuous(counts="a",representation="intervals",scores=1),"scores")
   expect_error(spseg_continuous(counts="a",representation="intervals",
-                               exposure=list(probs=c(0,1))),"Interval exposure")
+                               exposure=list(probs=c(0,1))),"unused argument")
   expect_error(spseg_continuous(counts="a",representation="intervals",
                                interpolation="polynomial"),"linear")
   expect_error(spseg_continuous(values="v",levels=c("a","b")),"levels")

@@ -400,9 +400,8 @@ and the directional exposure matrix.
 For exact income, `cuts` can replace `probs` in shares mode, for example
 `summary = list(type = "shares", cuts = c(30, 60))`; the cut groups include
 implicit open-ended tails. Absolute cuts are not accepted for interval input,
-whose labels do not establish monetary thresholds. Explicit legacy continuous
-`localenv` and `exposure` specifications still run with a deprecation warning
-for migration, but cannot be combined with `summary`. Summary settings leave
+whose labels do not establish monetary thresholds. Continuous variables use
+`summary`, not the removed `localenv` and `exposure` arguments. Summary settings leave
 the full-resolution continuous scalar indices and their normalizers unchanged.
 
 # Results and properties
@@ -433,8 +432,7 @@ endpoints do not add local minimum or maximum rows. An empty local environment
 has missing summaries.
 
 Continuous summary choices do not change the full-resolution scalar indices.
-The explicit legacy continuous `localenv`/`exposure` pair remains temporarily
-available with a deprecation warning; it cannot be combined with `summary`.
+The former continuous `localenv`/`exposure` arguments have been removed.
 Ordinal summaries retain their existing `localenv` control. For example,
 request local rank quantiles for exact income and education together:
 

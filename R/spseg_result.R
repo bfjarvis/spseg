@@ -86,6 +86,9 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     bands = NULL) {
   .spseg_unused_arguments(list(...))
   what <- match.arg(what)
+  extract <- switch(what, indices = .spseg_indices_rows,
+    pairwise = .spseg_pairwise_rows, exposure = .spseg_exposure_rows,
+    env = .spseg_env_rows)
   selected <- .spseg_analysis_subset(x, variables, bands)
   rows <- list()
   keys <- c(d = "dissimilarity", h = "information", r = "diversity", s = "square_root")
@@ -101,69 +104,7 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
                    representation = definition$representation %||% NA_character_,
                    method = definition$method,
                    band = x$bands[b])
-      if (what == "indices") {
-        for (key in intersect(names(keys), names(analysis$indices$multigroup))) {
-          rows[[length(rows) + 1L]] <- data.frame(base, measure = unname(keys[key]),
-            value = analysis$indices$multigroup[[key]][b], status = analysis$status[b],
-            row.names = NULL)
-        }
-      } else if (what == "pairwise") {
-        for (key in intersect(names(keys), names(analysis$indices$pairwise))) {
-          mat <- analysis$indices$pairwise[[key]][[b]]
-          index <- which(upper.tri(mat), arr.ind = TRUE)
-          if (nrow(index)) rows[[length(rows) + 1L]] <- data.frame(base,
-            measure = unname(keys[key]), group_a = rownames(mat)[index[, 1]],
-            group_b = colnames(mat)[index[, 2]], value = mat[index], row.names = NULL)
-        }
-      } else if (what == "exposure") {
-        if (length(analysis$rank_summary)) {
-          mat <- analysis$rank_summary[[b]]
-          stats <- definition$localenv$statistics
-          if (length(mat)) {
-            column <- rep(seq_len(ncol(mat)), each = nrow(mat))
-            rows[[length(rows) + 1L]] <- data.frame(base,
-              from_group = rep(rownames(mat), times = ncol(mat)),
-              to_group = NA_character_, summary = "quantiles",
-              statistic = stats$statistic[column], prob = stats$prob[column],
-              exposure = NA_real_, rank = as.vector(mat), value = as.vector(mat))
-          }
-        } else {
-          mat <- analysis$indices$multigroup$p[[b]]
-          if (!is.null(mat) && length(mat)) {
-            rows[[length(rows) + 1L]] <- data.frame(base,
-              expand.grid(from_group = rownames(mat), to_group = colnames(mat),
-                          stringsAsFactors = FALSE), summary = "shares",
-              statistic = "share", prob = NA_real_, exposure = as.vector(mat),
-              rank = NA_real_, value = as.vector(mat))
-          }
-        }
-      } else {
-        env <- analysis$env[[b]]
-        location <- rep(seq_len(nrow(env)), times = ncol(env))
-        column <- rep(seq_len(ncol(env)), each = nrow(env))
-        quantiles <- definition$localenv$type == "quantiles"
-        stats <- definition$localenv$statistics
-        if (length(location)) {
-          block <- data.frame(base,
-          location = location, summary = definition$localenv$type,
-          statistic = if (!is.null(stats)) stats$statistic[column] else
-            if (quantiles) "quantile_rank" else "share",
-          prob = if (!is.null(stats)) stats$prob[column] else
-            if (quantiles) definition$localenv$probs[column] else NA_real_,
-          rank = if (quantiles) as.vector(env) else NA_real_,
-          category = if (quantiles) NA_character_ else colnames(env)[column],
-          share = if (quantiles) NA_real_ else as.vector(env))
-          for (key in c("bottom_category_share", "top_category_share",
-                         "interpolated_share")) {
-            block[[key]] <- NA_real_
-          }
-          if (length(analysis$interpolation)) {
-            diagnostic <- as.data.frame(analysis$interpolation[[b]][location, , drop = FALSE])
-            block[names(diagnostic)] <- diagnostic
-          }
-          rows[[length(rows) + 1L]] <- block
-        }
-      }
+      rows <- c(rows, extract(analysis, base, b, keys))
     }
   }
   out <- if (length(rows)) do.call(rbind, rows) else data.frame()
@@ -186,6 +127,86 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     out$node <- x$node_id[out$location]
   rownames(out) <- row.names
   out
+}
+
+.spseg_indices_rows <- function(analysis, base, b, keys) {
+  rows <- list()
+  for (key in intersect(names(keys), names(analysis$indices$multigroup))) {
+    rows[[length(rows) + 1L]] <- data.frame(base, measure = unname(keys[key]),
+      value = analysis$indices$multigroup[[key]][b], status = analysis$status[b],
+      row.names = NULL)
+  }
+  rows
+}
+
+.spseg_pairwise_rows <- function(analysis, base, b, keys) {
+  rows <- list()
+  for (key in intersect(names(keys), names(analysis$indices$pairwise))) {
+    mat <- analysis$indices$pairwise[[key]][[b]]
+    index <- which(upper.tri(mat), arr.ind = TRUE)
+    if (nrow(index)) rows[[length(rows) + 1L]] <- data.frame(base,
+      measure = unname(keys[key]), group_a = rownames(mat)[index[, 1]],
+      group_b = colnames(mat)[index[, 2]], value = mat[index], row.names = NULL)
+  }
+  rows
+}
+
+.spseg_exposure_rows <- function(analysis, base, b, keys) {
+  rows <- list()
+  definition <- analysis$definition
+  if (length(analysis$rank_summary)) {
+    mat <- analysis$rank_summary[[b]]
+    stats <- definition$localenv$statistics
+    if (length(mat)) {
+      column <- rep(seq_len(ncol(mat)), each = nrow(mat))
+      rows[[length(rows) + 1L]] <- data.frame(base,
+        from_group = rep(rownames(mat), times = ncol(mat)),
+        to_group = NA_character_, summary = "quantiles",
+        statistic = stats$statistic[column], prob = stats$prob[column],
+        exposure = NA_real_, rank = as.vector(mat), value = as.vector(mat))
+    }
+  } else {
+    mat <- analysis$indices$multigroup$p[[b]]
+    if (!is.null(mat) && length(mat)) {
+      rows[[length(rows) + 1L]] <- data.frame(base,
+        expand.grid(from_group = rownames(mat), to_group = colnames(mat),
+                    stringsAsFactors = FALSE), summary = "shares",
+        statistic = "share", prob = NA_real_, exposure = as.vector(mat),
+        rank = NA_real_, value = as.vector(mat))
+    }
+  }
+  rows
+}
+
+.spseg_env_rows <- function(analysis, base, b, keys) {
+  rows <- list()
+  definition <- analysis$definition
+  env <- analysis$env[[b]]
+  location <- rep(seq_len(nrow(env)), times = ncol(env))
+  column <- rep(seq_len(ncol(env)), each = nrow(env))
+  quantiles <- definition$localenv$type == "quantiles"
+  stats <- definition$localenv$statistics
+  if (length(location)) {
+    block <- data.frame(base,
+    location = location, summary = definition$localenv$type,
+    statistic = if (!is.null(stats)) stats$statistic[column] else
+      if (quantiles) "quantile_rank" else "share",
+    prob = if (!is.null(stats)) stats$prob[column] else
+      if (quantiles) definition$localenv$probs[column] else NA_real_,
+    rank = if (quantiles) as.vector(env) else NA_real_,
+    category = if (quantiles) NA_character_ else colnames(env)[column],
+    share = if (quantiles) NA_real_ else as.vector(env))
+    for (key in c("bottom_category_share", "top_category_share",
+                   "interpolated_share")) {
+      block[[key]] <- NA_real_
+    }
+    if (length(analysis$interpolation)) {
+      diagnostic <- as.data.frame(analysis$interpolation[[b]][location, , drop = FALSE])
+      block[names(diagnostic)] <- diagnostic
+    }
+    rows[[length(rows) + 1L]] <- block
+  }
+  rows
 }
 
 #' @rdname spseg_result
