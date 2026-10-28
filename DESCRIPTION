@@ -9,7 +9,7 @@ Depends: R (>= 4.2.0)
 Imports: sf, stats, terra
 LinkingTo: Rcpp, RcppArmadillo, BH (>= 1.84.0-0)
 Suggests: ggplot2, knitr, dplyr, tidyr, tidyverse, nnet, parallel,
-        rmarkdown, roxygen2, sfnetworks, testthat (>= 3.0.0)
+        rmarkdown, roxygen2, sfnetworks, hexSticker, png, testthat (>= 3.0.0)
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 Encoding: UTF-8
