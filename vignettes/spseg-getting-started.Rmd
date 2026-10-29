@@ -26,9 +26,9 @@ library(tidyverse)
 theme_set(theme_minimal(base_size = 11))
 ```
 
-# A population with spatial clustering
+# Simulating a segregated population
 
-We start by generating 5,000 fictive housing units and 5,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a binary trait, `group`, an ordinal trait, `status`, and a continuous trait, `resource`. This is abstracted, but we could relate these to race/ethnicity, education, and income. The first two traits are categorical, but the last trait, resources, is intervally scaled. I use a log-normal distribution calibrated to match a given gini coefficient to generate the sample of resources. I establish the draws from this distribution first before assigning agents to attributes. Agents are assigned traits in the following order: start with group membership, then assign status conditional on group membership, and finally assign resources as a function of group membership and status. For later testing, we'll also cut the resources into deciles, which roughly corresponds to the way US Census income data are delivered.
+We start by generating 5,000 fictive housing units and 5,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a binary trait, `group`, an ordinal trait, `status`, and a continuous trait, `resource`. These are abstract, but we could relate these to, for example, race/ethnicity, education, and income. The first two traits are categorical, but the last trait, resources, is intervally scaled. I use a log-normal distribution calibrated to match a given gini coefficient to generate the sample of resources. I establish the draws from this distribution first before assigning agents to points in the distribution. Agents are assigned traits in the following order: start with group membership, then assign status conditional on group membership, and finally assign resources as a function of group membership and status. For later testing, we'll also cut the resources into deciles, which roughly corresponds to the way US Census income data are delivered.
 
 ```{r agents}
 set.seed(2026)
@@ -78,7 +78,7 @@ lm(log(resources) ~ group + status, data = agents) |> summary()
 nnet::multinom(status ~ group, data = agents, trace = FALSE) |> summary()
 ```
 
-The next step is to assign these agents to the housing units based on a periodic (i.e., sinusoidal) function and the agent's resources, as well as random noise. The use of periodic functions and the addition of noise allow for different degrees of spatial clustering by income and group memberhsip, making the degree of segregation "tunable". Increasing `cycles` produces smaller clusters; increasing `noise` weakens sorting and makes a more even distribution. This assignment process leaves the spatial distribution of points and the joint distribution of group membership and income fixed. The only thing that varies is the differential spatial distribution of the population by income and hence, indirectly, by group membership and status.
+The next step is to assign these agents to the housing units based on a periodic (i.e., sinusoidal) function and the agent's resources, as well as random noise. The use of periodic functions and the addition of noise allow for different degrees of spatial clustering by income and group memberhsip, making the degree of segregation "tunable". Increasing `cycles` produces smaller clusters; increasing `noise` weakens sorting and makes a more even distribution. Once the points and agents are established, the only thing that varies across these scenarios is the agent-to-location assignment. The number and placement of points and the covariate distributions for the agents are the same in each pattern. 
 
 ```{r assignment}
 location_noise <- rnorm(N)
@@ -150,12 +150,12 @@ We can calculate spatial segregation measures using the `spseg` function, here u
 
 ```{r micro-indices}
 micro_variables <- list(
-  group = spseg_categorical(values = "group"),
+  group = spseg_categorical(vars = "group"),
   resources = spseg_continuous(
-    values = "resources",
+    vars = "resources",
     summary = list(type = "shares", probs = c(0.25, 0.5, 0.75))
   ),
-  status = spseg_ordinal(values = "status")
+  status = spseg_ordinal(vars = "status")
 )
 bands <- c(25, 50, 75, 100, 200, 300, 400, 500, 1000)
 result <- spseg(
@@ -191,9 +191,15 @@ We can use `as.data.frame` methods to extract different pieces of information fr
 
 ```{r segstats-result}
 result_overall <- result |>
-  as.data.frame(what = "indices") |>
-  as_tibble()
+  as.data.frame(what = "indices")
 
+result_overall |>
+  filter(band == 100)
+```
+
+
+
+```{r pairwise-result}
 result_pairwise <- result |>
   as.data.frame(what = "pairwise") |>
   as_tibble()
@@ -201,11 +207,6 @@ result_pairwise <- result |>
 result_exposure <- result |>
   as.data.frame(what = "exposure") |>
   as_tibble()
-
-result_seg_stats |>
-  filter(band == 100) |>
-  select(variable, measure, value) |>
-  knitr::kable(digits = 3)
 ```
 
 The indices describe different aspects of segregation, so it is useful to look at
@@ -450,13 +451,13 @@ rank distribution at every location; it does not recover sorting hidden by bins.
 
 ```{r count-specifications}
 count_variables <- list(
-  group = spseg_categorical(counts = group_columns),
+  group = spseg_categorical(vars = group_columns),
   resources = spseg_continuous(
-    counts = income_columns,
+    vars = income_columns,
     representation = "intervals",
     summary = list(type = "shares", probs = c(0.25, 0.5, 0.75))
   ),
-  status = spseg_ordinal(counts = status_columns)
+  status = spseg_ordinal(vars = status_columns)
 )
 ```
 

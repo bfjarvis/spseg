@@ -4,7 +4,7 @@ summary_fixture <- function() {
 }
 
 summary_run <- function(d, summary = NULL, ...) {
-  spseg(d, list(income = spseg_continuous(counts = c("a", "b", "c", "d"),
+  spseg(d, list(income = spseg_continuous(vars = c("a", "b", "c", "d"),
     scores = c(10, 20, 30, 40), summary = summary)), coords = c("x", "y"),
     bands = 0, weighting = "unweighted", output = "full", ...)
 }
@@ -13,7 +13,7 @@ test_that("continuous summaries default to synchronized quartile shares", {
   d <- summary_fixture()
   result <- summary_run(d)
   endpoints <- summary_run(d, list(probs = c(0, .25, .5, .75, 1)))
-  expect_identical(spseg_continuous(values = "income")$summary$type, "shares")
+  expect_identical(spseg_continuous(vars = "income")$summary$type, "shares")
   expect_equal(result$analyses, endpoints$analyses)
   expect_equal(result$analyses$income$env[[1]],
                as.matrix(d[c("a", "b", "c", "d")]) / 4, ignore_attr = TRUE)
@@ -65,12 +65,12 @@ test_that("exact cuts preserve ties and reject ambiguous specifications", {
   result <- summary_run(summary_fixture(), list(cuts = 20))
   expect_equal(result$analyses$income$env[[1]],
                rbind(c(.75, .25), c(.25, .75)), ignore_attr = TRUE)
-  expect_error(spseg_continuous(values = "v", summary = list(cuts = 20, probs = .5)),
+  expect_error(spseg_continuous(vars = "v", summary = list(cuts = 20, probs = .5)),
                "only one")
-  expect_error(spseg_continuous(values = "v",
+  expect_error(spseg_continuous(vars = "v",
     summary = list(type = "quantiles", cuts = 20)), "requires shares")
   for (p in list(c(.5, .25), c(.5, .5), NA_real_, c(-.1, .5))) {
-    expect_error(spseg_continuous(values = "v", summary = list(probs = p)),
+    expect_error(spseg_continuous(vars = "v", summary = list(probs = p)),
                  "increase strictly")
   }
 })
@@ -78,7 +78,7 @@ test_that("exact cuts preserve ties and reject ambiguous specifications", {
 test_that("interval allocation retains requested groups and is auditable", {
   d <- data.frame(x = 0:1, y = 0, a = c(10, 0), b = c(0, 10),
                   c = c(30, 40), d = c(10, 0))
-  vars <- list(income = spseg_continuous(counts = c("a", "b", "c", "d"),
+  vars <- list(income = spseg_continuous(vars = c("a", "b", "c", "d"),
     representation = "intervals", summary = list(type = "quantiles")))
   expect_warning(result <- spseg(d, vars, coords = c("x", "y"), bands = c(0, 2),
                                  output = "full"), "Interval summary interpolation")
@@ -89,7 +89,7 @@ test_that("interval allocation retains requested groups and is auditable", {
   expect_equal(colSums(definition$groups$allocation * c(.1, .1, .7, .1)),
                rep(.25, 4), ignore_attr = TRUE)
   expect_equal(ncol(result$analyses$income$env[[1]]), 3L)
-  expect_error(spseg(d, list(income = spseg_continuous(counts = c("a", "b"),
+  expect_error(spseg(d, list(income = spseg_continuous(vars = c("a", "b"),
     representation = "intervals", summary = list(cuts = 20))),
     coords = c("x", "y"), bands = 0), "require exact")
 })
@@ -97,7 +97,7 @@ test_that("interval allocation retains requested groups and is auditable", {
 test_that("single interval summaries explicitly use the rank interpolation model", {
   d <- data.frame(x = 0:1, y = 0, a = c(2, 4), b = 0)
   run <- function(summary) spseg(d, list(income = spseg_continuous(
-    counts = c("a", "b"), representation = "intervals", summary = summary)),
+    vars = c("a", "b"), representation = "intervals", summary = summary)),
     coords = c("x", "y"), bands = 0, output = "full")
   expect_warning(ranks <- run(list(type = "quantiles")), "Interval summary interpolation")
   expect_equal(unname(ranks$analyses$income$env[[1]]),
@@ -113,7 +113,7 @@ test_that("single interval summaries explicitly use the rank interpolation model
 
 test_that("open upper categories apportion deciles and report neighborhood diagnostics", {
   d <- data.frame(x = c(0, 10), y = 0, bottom = c(70, 100), top = c(30, 0))
-  spec <- spseg_continuous(counts = c("bottom", "top"), representation = "intervals",
+  spec <- spseg_continuous(vars = c("bottom", "top"), representation = "intervals",
     summary = list(probs = seq(.1, .9, .1)))
   expect_warning(result <- spseg(d, list(income = spec), coords = c("x", "y"),
     bands = c(0, 20), weighting = "unweighted", output = "full"),
@@ -133,7 +133,7 @@ test_that("open upper categories apportion deciles and report neighborhood diagn
   expect_true(all(env$interpolated_share == 1))
   mapped <- sf::st_as_sf(result, bands = 0)
   expect_false("interpolated_share" %in% names(mapped))
-  aligned <- spseg_continuous(counts = c("bottom", "top"), representation = "intervals",
+  aligned <- spseg_continuous(vars = c("bottom", "top"), representation = "intervals",
     summary = list(probs = .85))
   expect_no_warning(unsplit <- spseg(d, list(income = aligned), coords = c("x", "y"),
     bands = c(0, 20), weighting = "unweighted", output = "full"))
@@ -150,11 +150,11 @@ test_that("open upper categories apportion deciles and report neighborhood diagn
 })
 
 test_that("removed continuous arguments fail instead of selecting an old path", {
-  expect_error(spseg_continuous(values = "v", localenv = "quantiles"),
+  expect_error(spseg_continuous(vars = "v", localenv = "quantiles"),
                "unused argument")
-  expect_error(spseg_continuous(values = "v", exposure = list(probs = c(0, 1))),
+  expect_error(spseg_continuous(vars = "v", exposure = list(probs = c(0, 1))),
                "unused argument")
-  expect_error(spseg_continuous(values = "v", localenv = "shares",
+  expect_error(spseg_continuous(vars = "v", localenv = "shares",
                                 summary = list(type = "shares")), "unused argument")
-  expect_no_warning(spseg_ordinal(values = "v", localenv = "quantiles"))
+  expect_no_warning(spseg_ordinal(vars = "v", localenv = "quantiles"))
 })

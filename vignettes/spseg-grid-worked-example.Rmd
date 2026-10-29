@@ -289,7 +289,7 @@ spseg_to_table <- function(result, scenario) {
 
 spseg_raw <- spseg(
   coords,
-  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(vars = c("A", "B"))),
   data = counts,
   bands = 0,
   weighting = "unweighted",
@@ -299,7 +299,7 @@ spseg_raw <- spseg(
 
 spseg_unweighted <- spseg(
   coords,
-  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(vars = c("A", "B"))),
   data = counts,
   bands = 1,
   weighting = "unweighted",
@@ -310,7 +310,7 @@ spseg_unweighted <- spseg(
 
 spseg_weighted <- spseg(
   coords,
-  variables = list(groups = spseg_categorical(counts = c("A", "B"))),
+  variables = list(groups = spseg_categorical(vars = c("A", "B"))),
   data = counts,
   bands = 1,
   weighting = "exponential",

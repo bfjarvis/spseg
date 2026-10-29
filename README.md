@@ -74,9 +74,9 @@ people <- tibble(
 )
 
 variables <- list(
-  group = spseg_categorical(values = "group"),
-  education = spseg_ordinal(values = "education"),
-  income = spseg_continuous(values = "income")
+  group = spseg_categorical(vars = "group"),
+  education = spseg_ordinal(vars = "education"),
+  income = spseg_continuous(vars = "income")
 )
 
 result <- spseg(
@@ -93,8 +93,9 @@ result <- spseg(
 result
 ```
 
-`variables` names the analyses and describes their inputs. Each `values` argument
-selects one column. `bands` sets the neighborhood radii; the biweight kernel gives
+`variables` names the analyses and describes their inputs. Each `vars` argument
+selects one observed-value column or multiple category-count columns.
+`bands` sets the neighborhood radii; the biweight kernel gives
 nearer residents more weight. `measures = "all"` requests the scalar indices and
 exposure summaries. `output = "full"` also retains local environments for inspection
 and mapping.
@@ -175,14 +176,14 @@ reports shares of four global quartile groups. For a different grouping, supply
 interior probabilities:
 
 ```r
-spseg_continuous(values = "income", summary = list(probs = c(.2, .4, .6, .8)))
+spseg_continuous(vars = "income", summary = list(probs = c(.2, .4, .6, .8)))
 ```
 
 To describe the income ranks found at local quantiles, select quantile summaries:
 
 ```r
 spseg_continuous(
-  values = "income",
+  vars = "income",
   summary = list(type = "quantiles", probs = c(.25, .5, .75), mean_rank = TRUE)
 )
 ```
@@ -198,7 +199,7 @@ For absolute income thresholds, use
 
 ## Aggregated population counts
 
-For small-area tables, select category-count columns with `counts`. This example
+For small-area tables, select multiple category-count columns with `vars`. This example
 has two areas and three ordered income intervals:
 
 ```r
@@ -212,9 +213,9 @@ area_result <- spseg(
   areas,
   coords = c("x", "y"),
   variables = list(
-    group = spseg_categorical(counts = c("group_A", "group_B")),
+    group = spseg_categorical(vars = c("group_A", "group_B")),
     income = spseg_continuous(
-      counts = c("income_low", "income_middle", "income_high"),
+      vars = c("income_low", "income_middle", "income_high"),
       representation = "intervals"
     )
   ),
@@ -226,7 +227,14 @@ area_result <- spseg(
 With these distinct area locations, `bands = 0` treats each area's own residents
 as its local environment, giving non-spatial segregation across areas. Positive
 distance bands combine nearby areas into spatial neighborhoods. Ordered-category
-counts use `spseg_ordinal(counts = c(...))` in the same way.
+counts use `spseg_ordinal(vars = c(...))` in the same way.
+
+Long-form counts work too: select one membership column and use the count as a
+weight, for example `spseg_categorical(vars = "race", weights = "population_count")`.
+Each row represents a neighborhood/category combination; rows in the same
+neighborhood must share its coordinates or geometry. A neighborhood identifier
+alone does not provide spatial locations. With multiple `vars`, the selected
+columns already contain counts, so do not also supply `weights`.
 
 For interval income, column order defines the income ordering. spseg interpolates
 in global-rank space and proportionally allocates interval populations to the

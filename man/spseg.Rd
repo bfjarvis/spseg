@@ -36,12 +36,12 @@ With `network`, supply an observation table; coordinates are optional.}
 
 \item{variables}{Column names for a single categorical variable, or a uniquely
 named list of [spseg_variables] specifications. A single column name is
-interpreted as observed category memberships (microdata); two or more column
+interpreted as observed category memberships; two or more column
 names are interpreted as category counts (aggregated data). A message reports
 this assumption. The result is named after the single column, or `categorical`
 for multiple count columns. Use an explicit specification for other variable
-types, a custom result name, or a single category-count column. A count
-specification can select several columns. All variables share spatial
+types, a custom result name, or population weights for long-form counts.
+Single-column count input is not supported. All variables share spatial
 discovery; kNN uses each variable's eligible population and adaptive
 distance weights. Each specification can override `measures`.
 Grid and pycnophylactic surfaces require count specifications for all
@@ -215,7 +215,7 @@ These descriptive profiles are neither P matrices nor segregation indices.
 \examples{
 data(spseg_data)
 xy <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
-variables <- list(ethnicity = spseg_categorical(counts = c("A1", "A2")))
+variables <- list(ethnicity = spseg_categorical(vars = c("A1", "A2")))
 result <- spseg(xy, variables, data = spseg_data, bands = c(0, 2), output = "full")
 as.data.frame(result)
 head(as.data.frame(result, what = "env"))

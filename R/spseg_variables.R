@@ -1,19 +1,25 @@
 #' Describe variables for a shared spatial segregation calculation
 #'
 #' These constructors describe data columns; they do not search neighborhoods.
-#' Supply exactly one of `values` (a single column) and `counts` (columns in
-#' category/value order). Column selectors are names or integer positions.
+#' Select columns with `vars`: one column supplies observed memberships or values;
+#' multiple columns supply counts in category/value order. Column selectors are
+#' names or integer positions. A single count column is not supported.
 #' Continuous variables accept exact observations or interval membership/counts
 #' through `representation`. Interval CDFs are interpolated directly; individual
 #' values are not imputed.
 #'
-#' @param values Column containing category membership or observed values.
-#' @param counts Columns containing nonnegative population counts.
+#' @param vars One column containing category membership or observed values, or
+#'   two or more columns containing nonnegative population counts. Count columns
+#'   must be supplied in category/value order.
 #' @param levels Category order for observed ordinal or interval membership.
 #'   Ordered factors supply their own order. For categorical values, factor
 #'   levels or sorted distinct values are used when this is omitted.
 #' @param measures Optional measure selection overriding [spseg()].
-#' @param weights Population-weight column or numeric vector for `values`.
+#' @param weights Population-weight column or numeric vector when `vars` selects
+#'   one column. This supports survey weights and long-form aggregated counts,
+#'   where each row records a location/category combination. Rows at the same
+#'   location share coordinates or geometry. With multiple `vars`, the count
+#'   columns already supply population mass and `weights` must be omitted.
 #'   Defaults to the `population` supplied to [spseg()], or its inferred default.
 #' @param na.action Missing-value policy: `"fail"` or `"omit"`. Omission applies
 #'   only to this variable, including its kNN stopping population. Other
@@ -63,30 +69,33 @@
 #' @return A `spseg_variable` specification for `spseg(variables = ...)`.
 #' @seealso [spseg()]
 #' @examples
-#' spseg_categorical(values = "ethnicity")
-#' spseg_ordinal(counts = c("primary", "secondary", "tertiary"))
-#' spseg_continuous(counts = c("low", "middle", "high"), representation = "intervals")
-#' spseg_continuous(values = "income", summary = list(probs = c(.2, .8)))
-#' spseg_continuous(values = "income",
+#' spseg_categorical(vars = "ethnicity")
+#' spseg_ordinal(vars = c("primary", "secondary", "tertiary"))
+#' spseg_continuous(vars = c("low", "middle", "high"), representation = "intervals")
+#' spseg_continuous(vars = "income", summary = list(probs = c(.2, .8)))
+#' spseg_continuous(vars = "income",
 #'                  summary = list(type = "quantiles", mean_rank = TRUE))
-#' spseg_ordinal(values = "education", localenv = "quantiles")
+#' spseg_ordinal(vars = "education", localenv = "quantiles")
+#' # Long-form counts: one membership column and a population weight per row.
+#' spseg_categorical(vars = "race", weights = "population_count")
 #' @name spseg_variables
 NULL
 
-.spseg_variable <- function(type, values, counts, levels, measures, weights,
+.spseg_variable <- function(type, vars, levels, measures, weights,
                           na.action, interpolation = NULL, scores = NULL,
                           localenv = "shares", representation = NULL) {
-  if (is.null(values) == is.null(counts)) {
-    stop("Supply exactly one of 'values' and 'counts'", call. = FALSE)
+  if (!typeof(vars) %in% c("character", "integer", "double") ||
+      !is.null(dim(vars)) ||
+      !length(vars) || anyNA(vars) || anyDuplicated(vars) ||
+      (is.character(vars) && any(!nzchar(vars))) ||
+      (is.numeric(vars) && any(!is.finite(vars) | vars < 1 | vars != floor(vars)))) {
+    stop("'vars' must select non-empty, non-missing, unique column names or positive integer positions",
+         call. = FALSE)
   }
-  if (!is.null(values) && length(values) != 1L) {
-    stop("'values' must select one column", call. = FALSE)
-  }
-  if (!is.null(counts) && length(counts) == 0L) {
-    stop("'counts' must select at least one column", call. = FALSE)
-  }
+  values <- if (length(vars) == 1L) vars else NULL
+  counts <- if (length(vars) > 1L) vars else NULL
   if (!is.null(counts) && !is.null(weights)) {
-    stop("'weights' applies to 'values'; count columns already contain mass",
+    stop("'weights' applies only when 'vars' selects one column; count columns already contain mass",
          call. = FALSE)
   }
   structure(list(type = type, values = values, counts = counts,
@@ -101,25 +110,25 @@ NULL
 
 #' @rdname spseg_variables
 #' @export
-spseg_categorical <- function(values = NULL, counts = NULL, levels = NULL,
+spseg_categorical <- function(vars, levels = NULL,
                             measures = NULL, weights = NULL,
                             na.action = c("fail", "omit")) {
-  .spseg_variable("categorical", values, counts, levels, measures, weights,
+  .spseg_variable("categorical", vars, levels, measures, weights,
                 match.arg(na.action))
 }
 
 #' @rdname spseg_variables
 #' @export
-spseg_ordinal <- function(values = NULL, counts = NULL, levels = NULL,
+spseg_ordinal <- function(vars, levels = NULL,
                        measures = NULL, weights = NULL,
                        na.action = c("fail", "omit"), localenv = "shares") {
-  .spseg_variable("ordinal", values, counts, levels, measures, weights,
+  .spseg_variable("ordinal", vars, levels, measures, weights,
                 match.arg(na.action), localenv = localenv)
 }
 
 #' @rdname spseg_variables
 #' @export
-spseg_continuous <- function(values = NULL, counts = NULL,
+spseg_continuous <- function(vars,
                           representation = c("exact", "intervals"),
                           levels = NULL, scores = NULL,
                           measures = NULL, weights = NULL,
@@ -138,10 +147,10 @@ spseg_continuous <- function(values = NULL, counts = NULL,
     if (!is.null(interpolation))
       stop("'interpolation' applies only to representation = 'intervals'", call. = FALSE)
   }
-  if (!is.null(values) && !is.null(scores)) {
+  if (length(vars) == 1L && !is.null(scores)) {
     stop("'scores' applies only to continuous count columns", call. = FALSE)
   }
-  out <- .spseg_variable("continuous", values, counts, levels, measures, weights,
+  out <- .spseg_variable("continuous", vars, levels, measures, weights,
                 match.arg(na.action), scores = scores,
                 representation = representation,
                 interpolation = interpolation)

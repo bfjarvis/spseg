@@ -6,10 +6,10 @@ n <- as.integer(Sys.getenv("SPSEG_BENCHMARK_N", "5000"))
 d <- data.frame(x=runif(n), y=runif(n), ethnicity=sample(letters[1:4], n, TRUE),
                 education=ordered(sample(1:4, n, TRUE)),
                 age=sample(18:90, n, TRUE), income=round(exp(rnorm(n, 10, 1))))
-variables <- list(ethnicity=spseg_categorical(values="ethnicity"),
-                   education=spseg_ordinal(values="education"),
-                   age=spseg_continuous(values="age"),
-                   income=spseg_continuous(values="income"))
+variables <- list(ethnicity=spseg_categorical(vars="ethnicity"),
+                   education=spseg_ordinal(vars="education"),
+                   age=spseg_continuous(vars="age"),
+                   income=spseg_continuous(vars="income"))
 bands <- c(.025,.05,.1) * sqrt(5000/n)
 measure <- function() {
   joint <- system.time(result <- spseg(d, coords=c("x","y"), variables=variables,

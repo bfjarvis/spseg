@@ -8,8 +8,8 @@ test_that("count preparation is reused during population inference", {
     original(spec, data)
   }, .package = "spseg")
   # Omitted count rows still determine each variable's eligible population.
-  specs <- list(first = spseg_categorical(counts = c("a", "b"), na.action = "omit"),
-    second = spseg_categorical(counts = c("c", "e")))
+  specs <- list(first = spseg_categorical(vars = c("a", "b"), na.action = "omit"),
+    second = spseg_categorical(vars = c("c", "e")))
   expect_error(spseg(d, specs, coords = c("x", "y"), bands = 0),
     "populations differ")
   expect_identical(calls, 2L)
@@ -25,7 +25,7 @@ test_that("surface setup validates the current option vocabulary", {
   geom <- sf::st_make_grid(sf::st_as_sfc(sf::st_bbox(
     c(xmin = 0, ymin = 0, xmax = 2, ymax = 1))), n = c(2, 1))
   x <- sf::st_sf(a = c(4, 1), b = c(1, 4), geometry = geom)
-  run <- function(...) spseg(x, list(race = spseg_categorical(counts = c("a", "b"))),
+  run <- function(...) spseg(x, list(race = spseg_categorical(vars = c("a", "b"))),
     bands = 0, surface = "pycno", ...)
   expect_error(run(keep_geometry = TRUE), "surface options")
   expect_error(run(surface_geometry = "polygon"), "surface_geometry")

@@ -103,12 +103,12 @@
 #' @param verbose Logical. If `TRUE`, report progress messages.
 #' @param variables Column names for a single categorical variable, or a uniquely
 #'   named list of [spseg_variables] specifications. A single column name is
-#'   interpreted as observed category memberships (microdata); two or more column
+#'   interpreted as observed category memberships; two or more column
 #'   names are interpreted as category counts (aggregated data). A message reports
 #'   this assumption. The result is named after the single column, or `categorical`
 #'   for multiple count columns. Use an explicit specification for other variable
-#'   types, a custom result name, or a single category-count column. A count
-#'   specification can select several columns. All variables share spatial
+#'   types, a custom result name, or population weights for long-form counts.
+#'   Single-column count input is not supported. All variables share spatial
 #'   discovery; kNN uses each variable's eligible population and adaptive
 #'   distance weights. Each specification can override `measures`.
 #'   Grid and pycnophylactic surfaces require count specifications for all
@@ -176,7 +176,7 @@
 #' @examples
 #' data(spseg_data)
 #' xy <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
-#' variables <- list(ethnicity = spseg_categorical(counts = c("A1", "A2")))
+#' variables <- list(ethnicity = spseg_categorical(vars = c("A1", "A2")))
 #' result <- spseg(xy, variables, data = spseg_data, bands = c(0, 2), output = "full")
 #' as.data.frame(result)
 #' head(as.data.frame(result, what = "env"))
@@ -228,12 +228,12 @@ spseg <- function(
     }
     columns <- unname(variables)
     if (length(columns) == 1L) {
-      variables <- setNames(list(spseg_categorical(values = columns)), columns)
-      message("Assuming categorical microdata: '", columns,
+      variables <- setNames(list(spseg_categorical(vars = columns)), columns)
+      message("Assuming categorical observed memberships: '", columns,
               "' contains observed category memberships; result named '",
               columns, "'.")
     } else {
-      variables <- list(categorical = spseg_categorical(counts = columns))
+      variables <- list(categorical = spseg_categorical(vars = columns))
       message("Assuming aggregated categorical data: selected columns contain ",
               "category counts for one variable; result named 'categorical'.")
     }
@@ -260,7 +260,7 @@ spseg <- function(
   if (surface == "raw" && length(dots))
     stop("Surface options require surface = 'grid' or 'pycno'", call. = FALSE)
   if (surface != "raw" && any(vapply(variables, function(z) is.null(z$counts), logical(1))))
-    stop("Grid and pycnophylactic surfaces require 'counts' for every variable",
+    stop("Grid and pycnophylactic surfaces require category counts in multiple 'vars' columns for every variable",
          call. = FALSE)
   if (length(power) != 1L || !is.numeric(power) || !is.finite(power) || power <= 0)
     stop("'power' must be a positive finite number", call. = FALSE)

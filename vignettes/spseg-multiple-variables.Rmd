@@ -37,22 +37,25 @@ people <- data.frame(
   age = c(18, 20, 20, 25, 30, 31, 35, 40, 45, 50, 60, 70)
 )
 variables <- list(
-  ethnicity = spseg_categorical(values="ethnicity"),
-  education = spseg_ordinal(values="education"),
-  income = spseg_continuous(values="income"),
-  age = spseg_continuous(values="age")
+  ethnicity = spseg_categorical(vars="ethnicity"),
+  education = spseg_ordinal(vars="education"),
+  income = spseg_continuous(vars="income"),
+  age = spseg_continuous(vars="age")
 )
 result <- spseg(people, coords=c("x", "y"), variables=variables,
                 measures="all", bands=c(2, 4), scope="multigroup")
 as.data.frame(result)
 ```
 
-`spseg_ordinal(values=...)` requires an ordered factor or explicit `levels`.
-`spseg_continuous(values=..., representation="intervals", levels=...)` describes
+`spseg_ordinal(vars=...)` requires an ordered factor or explicit `levels`.
+`spseg_continuous(vars=..., representation="intervals", levels=...)` describes
 membership in intervals of an underlying continuous variable. The default
 `representation="exact"` instead requires numeric observations. Supplied
-interval labels do not determine numerical spacing. `values` and `counts` are
-mutually exclusive. These and `spseg_categorical()` are the three specification
+interval labels do not determine numerical spacing. A single column in `vars`
+selects observed memberships or values; multiple columns select counts. For
+long-form aggregated data, select the membership/value column and supply the
+population-count column as `weights`, with locations repeated across categories.
+These and `spseg_categorical()` are the three specification
 constructors; interval input uses the same continuous constructor as exact input.
 
 ```{r aggregates}
@@ -61,10 +64,10 @@ blocks <- data.frame(x=1:4, y=0,
 aggregate_result <- spseg(
   blocks, coords=c("x", "y"),
   variables=list(
-    education=spseg_ordinal(counts=c("low", "middle", "high")),
-    income=spseg_continuous(counts=c("low", "middle", "high"),
+    education=spseg_ordinal(vars=c("low", "middle", "high")),
+    income=spseg_continuous(vars=c("low", "middle", "high"),
                             representation="intervals"),
-    exact_age=spseg_continuous(counts=c("low", "middle", "high"), scores=c(20, 40, 60))
+    exact_age=spseg_continuous(vars=c("low", "middle", "high"), scores=c(20, 40, 60))
   ), bands=c(0, 2), measures=c("information", "diversity", "square_root", "dissimilarity")
 )
 as.data.frame(aggregate_result)
@@ -329,7 +332,7 @@ share_result <- spseg(
   income_units,
   coords = c("x", "y"),
   variables = list(income = spseg_continuous(
-    counts = income_columns,
+    vars = income_columns,
     scores = c(10, 20, 30, 40),
     summary = list(type = "shares", probs = 0.5)
   )),
@@ -365,7 +368,7 @@ rank_result <- spseg(
   income_units,
   coords = c("x", "y"),
   variables = list(income = spseg_continuous(
-    counts = income_columns,
+    vars = income_columns,
     scores = c(10, 20, 30, 40),
     summary = list(type = "quantiles", probs = 0.5, mean_rank = TRUE)
   )),
@@ -441,9 +444,9 @@ request local rank quantiles for exact income and education together:
 ```{r compact-environments}
 environments <- spseg(people, coords=c("x", "y"), bands=3, output="full",
   variables=list(
-    income=spseg_continuous(values="income",
+    income=spseg_continuous(vars="income",
       summary=list(type="quantiles", probs=c(.25, .5, .75), mean_rank=TRUE)),
-    education=spseg_ordinal(values="education", localenv="quantiles")
+    education=spseg_ordinal(vars="education", localenv="quantiles")
   ))
 head(as.data.frame(environments, what="env", variables="income"))
 as.data.frame(environments, what="exposure", variables="income")
@@ -487,8 +490,8 @@ polygons <- sf::st_make_grid(sf::st_as_sfc(sf::st_bbox(
   c(xmin=0,ymin=0,xmax=2,ymax=2))), n=c(2,2))
 areas <- sf::st_sf(blocks, geometry=polygons)
 gridded <- spseg(areas,
-  variables=list(education=spseg_ordinal(counts=c("low","middle","high")),
-                 income=spseg_continuous(representation = "intervals", counts=c("low","middle","high"))),
+  variables=list(education=spseg_ordinal(vars=c("low","middle","high")),
+                 income=spseg_continuous(representation = "intervals", vars=c("low","middle","high"))),
   surface="grid", nrow=4, ncol=4, bands=1, output="full")
 as.data.frame(gridded)
 ```

@@ -52,7 +52,7 @@ For examples that require coordinates, create the centroids of a 10 by 10 grid.
 ```{r coordinates}
 coords <- as.matrix(expand.grid(x = seq(0.5, 9.5), y = seq(0.5, 9.5)))
 pattern_a <- spseg_data[, 1:2]
-variables <- list(groups = spseg_categorical(counts = c("A1", "A2")))
+variables <- list(groups = spseg_categorical(vars = c("A1", "A2")))
 
 head(coords)
 head(pattern_a)
@@ -81,7 +81,7 @@ are shared even though each uses a separate pair of count columns.
 ```{r all-dissimilarity}
 patterns <- setNames(
   lapply(seq_len(8), function(i) {
-    spseg_categorical(counts = names(spseg_data)[c(2 * i - 1, 2 * i)])
+    spseg_categorical(vars = names(spseg_data)[c(2 * i - 1, 2 * i)])
   }),
   LETTERS[1:8]
 )

@@ -1,4 +1,10 @@
-# spseg 0.9.0.9000
+# spseg 0.9.1
+
+- Variable constructors now use a single `vars` argument: one column selects
+  observed memberships or values, optionally weighted for long-form counts;
+  multiple columns select category/value counts. Removed the `values` and
+  `counts` arguments without compatibility aliases. Single-column count input
+  is no longer supported; supply memberships/values with population weights.
 
 - Added an R/hexSticker logo recipe that spells `spseg` through spatial sorting
   of continuous resources with viridis colors. Run `project/create-logo.R` to

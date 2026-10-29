@@ -8,7 +8,7 @@ toy_grid <- function(cols = 1:2) {
 
 test_that("spseg returns S3 index results by default", {
   toy <- toy_grid()
-  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values)
+  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values)
 
   expect_s3_class(result, "spseg_result")
   expect_null(result$coords)
@@ -20,7 +20,7 @@ test_that("spseg returns S3 index results by default", {
 
 test_that("spseg can store local environments without indices", {
   toy <- toy_grid()
-  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(0, 2),
+  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = c(0, 2),
                   output = "localenv")
 
   expect_s3_class(result, "spseg_result")
@@ -33,11 +33,11 @@ test_that("spseg can store local environments without indices", {
 
 test_that("spseg full output stores local environments and indices", {
   toy <- toy_grid()
-  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
+  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
                   output = "full")
-  env_only <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
+  env_only <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
                     output = "localenv")
-  indices_only <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
+  indices_only <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
                         output = "indices")
 
   expect_s3_class(result, "spseg_result")
@@ -54,7 +54,7 @@ test_that("spseg full output stores local environments and indices", {
 
 test_that("indices from stored local environments match full spseg output", {
   toy <- toy_grid(cols = 1:3)
-  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
+  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
                   scope = "both", output = "full")
   indices <- categorical_reference(toy$values, result$analyses$groups$env[[1]])
 
@@ -82,21 +82,21 @@ test_that("weighting schemes behave as expected for coordinates", {
                    ncol = 2, byrow = TRUE)
   colnames(values) <- c("a", "b")
 
-  unweighted <- spseg(coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(values)))), data = values, weighting = "unweighted", bands = 1,
+  unweighted <- spseg(coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(values)))), data = values, weighting = "unweighted", bands = 1,
                       output = "localenv")
   expect_equal(unweighted$analyses$groups$env[[1]][1, ], c(a = .5, b = .5))
   expect_equal(unweighted$analyses$groups$env[[1]][3, ], c(a = 1, b = 0))
 
-  inverse <- spseg(coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(values)))), data = values, weighting = "inverse", bands = 2,
+  inverse <- spseg(coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(values)))), data = values, weighting = "inverse", bands = 2,
                    power = 2, output = "localenv")
-  exponential <- spseg(coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(values)))), data = values, weighting = "exponential", bands = 2,
+  exponential <- spseg(coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(values)))), data = values, weighting = "exponential", bands = 2,
                        output = "localenv")
   expect_false(isTRUE(all.equal(inverse$analyses$groups$env, exponential$analyses$groups$env)))
 })
 
 test_that("selected measures control stored indices", {
   toy <- toy_grid()
-  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values,
+  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values,
                   measures = c("information", "dissimilarity"),
                   bands = c(1, 2),
                   output = "indices")
@@ -117,7 +117,7 @@ test_that("zero bandwidth produces unsmoothed indices", {
                    ncol = 2, byrow = TRUE)
   colnames(values) <- c("a", "b")
 
-  result <- spseg(coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(values)))), data = values, bands = 0, output = "full",
+  result <- spseg(coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(values)))), data = values, bands = 0, output = "full",
                   measures = "information")
 
   expect_equal(unname(result$analyses$groups$env[[1]]), unname(values/rowSums(values)))
@@ -127,7 +127,7 @@ test_that("zero bandwidth produces unsmoothed indices", {
 
 test_that("pairwise scalar indices agree with multigroup indices for two groups", {
   toy <- toy_grid(cols = 5:6)
-  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
+  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
                   output = "indices", scope = "both")
 
   for (band in names(result$analyses$groups$indices$multigroup$d)) {
@@ -149,7 +149,7 @@ test_that("pairwise indices skip units outside the pair and mark empty pairs", {
                    ncol = 4, byrow = TRUE)
   colnames(values) <- c("a", "b", "c", "empty")
 
-  result <- spseg(coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(values)))), data = values, bands = 0, output = "indices",
+  result <- spseg(coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(values)))), data = values, bands = 0, output = "indices",
                   scope = "pairwise",
                   measures = c("dissimilarity", "information", "diversity"))
 
@@ -173,7 +173,7 @@ test_that("sf inputs preserve geometry in local environment outputs", {
                    ncol = 2, byrow = TRUE,
                    dimnames = list(NULL, c("a", "b")))
   x <- sf::st_sf(a = values[, 1], b = values[, 2], geometry = geom)
-  result <- spseg(x, variables = list(groups = spseg_categorical(counts = seq_len(ncol(sf::st_drop_geometry(x))))), bands = c(0, 2), output = "localenv")
+  result <- spseg(x, variables = list(groups = spseg_categorical(vars = seq_len(ncol(sf::st_drop_geometry(x))))), bands = c(0, 2), output = "localenv")
 
   out <- sf::st_as_sf(result, variables = "groups", bands = c(0, 2))
   expect_s3_class(out, "sf")
@@ -186,7 +186,7 @@ test_that("sf inputs preserve geometry in local environment outputs", {
 
 test_that("as.data.frame compiles local environments", {
   toy <- toy_grid(cols = 5:6)
-  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(0, 2),
+  result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = c(0, 2),
                   output = "localenv")
 
   out <- as.data.frame(result, what = "env", variables = "groups", bands = c(0, 2))
@@ -214,7 +214,7 @@ test_that("grid population surfaces preserve source polygon totals", {
     verbose = FALSE
   )
 
-  result <- spseg(grid_sf, variables = list(groups = spseg_categorical(counts = seq_len(ncol(spseg_data[, 1:2])))), data = spseg_data[, 1:2], surface = "grid",
+  result <- spseg(grid_sf, variables = list(groups = spseg_categorical(vars = seq_len(ncol(spseg_data[, 1:2])))), data = spseg_data[, 1:2], surface = "grid",
                   nrow = 10, ncol = 10, bands = 2, output = "localenv")
   expect_s3_class(result, "spseg_result")
   expect_null(result$geometry)
@@ -223,7 +223,7 @@ test_that("grid population surfaces preserve source polygon totals", {
                tolerance = 1e-8)
 
   result_with_points <- spseg(
-    grid_sf, variables = list(groups = spseg_categorical(counts = seq_len(ncol(spseg_data[, 1:2])))),
+    grid_sf, variables = list(groups = spseg_categorical(vars = seq_len(ncol(spseg_data[, 1:2])))),
     data = spseg_data[, 1:2],
     surface = "grid",
     surface_geometry = "points",
@@ -239,7 +239,7 @@ test_that("grid population surfaces preserve source polygon totals", {
   )
 
   result_with_geometry <- spseg(
-    grid_sf, variables = list(groups = spseg_categorical(counts = seq_len(ncol(spseg_data[, 1:2])))),
+    grid_sf, variables = list(groups = spseg_categorical(vars = seq_len(ncol(spseg_data[, 1:2])))),
     data = spseg_data[, 1:2],
     surface = "grid",
     surface_geometry = TRUE,
@@ -314,7 +314,7 @@ test_that("surface audit retains grid and pycno intermediates", {
   x <- sf::st_sf(a = values[, 1], b = values[, 2], geometry = geom)
 
   minimal <- spseg(
-    x, variables = list(groups = spseg_categorical(counts = seq_len(ncol(sf::st_drop_geometry(x))))),
+    x, variables = list(groups = spseg_categorical(vars = seq_len(ncol(sf::st_drop_geometry(x))))),
     bands = 1,
     surface = "grid",
     nrow = 4,
@@ -322,7 +322,7 @@ test_that("surface audit retains grid and pycno intermediates", {
     output = "indices"
   )
   audited <- spseg(
-    x, variables = list(groups = spseg_categorical(counts = seq_len(ncol(sf::st_drop_geometry(x))))),
+    x, variables = list(groups = spseg_categorical(vars = seq_len(ncol(sf::st_drop_geometry(x))))),
     bands = 1,
     surface = "pycno",
     surface_audit = TRUE,
@@ -514,7 +514,7 @@ test_that("pycnophylactic surfaces preserve source polygon totals", {
     args = list(celldim = 0.5, converge = 1),
     verbose = FALSE
   )
-  result <- spseg(x, variables = list(groups = spseg_categorical(counts = seq_len(ncol(sf::st_drop_geometry(x))))), bands = 1, surface = "pycno", celldim = 0.5,
+  result <- spseg(x, variables = list(groups = spseg_categorical(vars = seq_len(ncol(sf::st_drop_geometry(x))))), bands = 1, surface = "pycno", celldim = 0.5,
                   converge = 1, output = "localenv")
 
   expect_s3_class(result, "spseg_result")
@@ -531,7 +531,7 @@ test_that("kNN uses count-based thresholds with fractional boundary units", {
                    ncol = 2, byrow = TRUE,
                    dimnames = list(NULL, c("a", "b")))
 
-  result <- spseg(coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(values)))), data = values, bands = c(5, 15), neighbors = "knn",
+  result <- spseg(coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(values)))), data = values, bands = c(5, 15), neighbors = "knn",
                   weighting = "unweighted", normalize = FALSE,
                   output = "localenv")
 
@@ -546,19 +546,19 @@ test_that("kNN uses count-based thresholds with fractional boundary units", {
 test_that("brute force search matches Boost search", {
   toy <- toy_grid(cols = 5:6)
 
-  radius_tree <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
+  radius_tree <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
                        search = "boost", output = "full")
-  radius_brute <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
+  radius_brute <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = c(1, 2),
                         search = "brute", output = "full")
 
   expect_equal(radius_brute$neighbors$engine, "brute")
   expect_equal(radius_brute$analyses$groups$env, radius_tree$analyses$groups$env, tolerance = 1e-12)
   expect_equal(radius_brute$analyses$groups$indices, radius_tree$analyses$groups$indices, tolerance = 1e-12)
 
-  knn_tree <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(10, 25),
+  knn_tree <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = c(10, 25),
                     neighbors = "knn", weighting = "unweighted",
                     normalize = FALSE, search = "boost", output = "full")
-  knn_brute <- spseg(toy$coords, variables = list(groups = spseg_categorical(counts = seq_len(ncol(toy$values)))), data = toy$values, bands = c(10, 25),
+  knn_brute <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = c(10, 25),
                      neighbors = "knn", weighting = "unweighted",
                      normalize = FALSE, search = "brute", output = "full")
 

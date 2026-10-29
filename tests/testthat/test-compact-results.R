@@ -1,8 +1,8 @@
 compact_fixture <- function(output = "full", measures = "all") {
   d <- data.frame(x = c(0, 1, 3, 5), y = 0,
     a = c(8, 6, 1, 2), b = c(2, 4, 9, 8), income = c(1, 2, 4, 8))
-  spseg(d, list(race = spseg_categorical(counts = c("a", "b")),
-    income = spseg_continuous(values = "income",
+  spseg(d, list(race = spseg_categorical(vars = c("a", "b")),
+    income = spseg_continuous(vars = "income",
       summary = list(type = "quantiles", probs = .5, mean_rank = TRUE))),
     coords = c("x", "y"), population = rep(10, 4), bands = c(0, 2),
     output = output, measures = measures)
@@ -58,7 +58,7 @@ test_that("empty and all-missing tables retain meaningful typed columns", {
   expect_type(empty_rank$prob, "double")
   expect_type(empty_rank$value, "double")
   constant <- spseg(data.frame(x = 0:1, y = 0, a = 1, b = 0),
-    list(race = spseg_categorical(counts = c("a", "b"))),
+    list(race = spseg_categorical(vars = c("a", "b"))),
     coords = c("x", "y"), bands = 0)
   indices <- as.data.frame(constant)
   expect_identical(names(indices), c("variable", "band", "measure", "value"))
@@ -66,7 +66,7 @@ test_that("empty and all-missing tables retain meaningful typed columns", {
   expect_true(nrow(indices) > 0)
   expect_identical(as.data.frame(constant, what = "diagnostics")$status, "constant")
   empty_env <- spseg(data.frame(x = 0:1, y = 0, v = 1:2),
-    list(v = spseg_continuous(values = "v",
+    list(v = spseg_continuous(vars = "v",
       summary = list(type = "quantiles", probs = c(0, 1)))),
     coords = c("x", "y"), bands = 0, output = "localenv")
   table <- as.data.frame(empty_env, what = "env")
@@ -84,7 +84,7 @@ test_that("diagnostics are separated at the appropriate row granularity", {
   expect_equal(nrow(as.data.frame(r, what = "diagnostics")), 4L)
   expect_equal(nrow(as.data.frame(r, what = "interpolation")), 0L)
   d <- data.frame(x = 0:2, y = 0, a = c(1, 0, 3), b = c(1, 2, 0))
-  variables <- list(income = spseg_continuous(counts = c("a", "b"),
+  variables <- list(income = spseg_continuous(vars = c("a", "b"),
     representation = "intervals"))
   r <- suppressWarnings(spseg(d, variables, coords = c("x", "y"),
     bands = c(1, 3), neighbors = "knn", output = "full"))
@@ -109,13 +109,13 @@ test_that("diagnostics are separated at the appropriate row granularity", {
 test_that("compact spatial and network tables preserve join identifiers", {
   d <- data.frame(x = 0:2, y = 0, group = c("a", "b", "a"), node = letters[1:3])
   points <- sf::st_as_sf(d, coords = c("x", "y"), crs = 3857)
-  r <- spseg(points, list(group = spseg_categorical(values = "group")),
+  r <- spseg(points, list(group = spseg_categorical(vars = "group")),
     bands = c(0, 1), output = "full")
   mapped <- sf::st_as_sf(r, bands = 1)
   expect_identical(names(mapped), c("variable", "band", "location", "category", "value", "geometry"))
   expect_equal(sf::st_geometry(mapped), sf::st_geometry(points)[mapped$location])
   network <- spseg_network(data.frame(from = c("a", "b"), to = c("b", "c")))
-  net <- spseg(d, list(group = spseg_categorical(values = "group")),
+  net <- spseg(d, list(group = spseg_categorical(vars = "group")),
     network = network, node_id = "node", bands = c(0, 1), output = "full")
   env <- as.data.frame(net, what = "env", bands = 1)
   expect_equal(env$node, d$node[env$location])

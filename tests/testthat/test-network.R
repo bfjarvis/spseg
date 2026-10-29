@@ -52,10 +52,10 @@ test_that("network paths agree with Euclidean paths for every variable type", {
     o=ordered(c(1,2,2,3,1)))
   edges <- data.frame(from=letters[1:4],to=letters[2:5],cost=diff(d$x))
   net <- spseg_network(edges,cost="cost",units="minutes")
-  variables <- list(g=spseg_categorical(counts=c("a","b")),
-    o=spseg_ordinal(values="o"),b=spseg_continuous(representation = "intervals", counts=c("a","b"),
+  variables <- list(g=spseg_categorical(vars=c("a","b")),
+    o=spseg_ordinal(vars="o"),b=spseg_continuous(representation = "intervals", vars=c("a","b"),
       summary=list(probs=sum(d$a)/sum(d$a+d$b))),
-    v=spseg_continuous(values="v"))
+    v=spseg_continuous(vars="v"))
   for (mode in c("radius","knn")) for (kernel in c("unweighted","biweight","inverse","exponential")) {
     bands <- if(mode=="radius") c(0,2,5) else c(2,4)
     spatial <- spseg(d,variables,coords=c("x","y"),population=rep(1,5),
@@ -77,8 +77,8 @@ test_that("weighted and unweighted neighborhoods match an independent reference"
   edges$cost <- sample(0:4,nrow(edges),TRUE)
   d <- data.frame(node=1:n,a=sample(0:4,n,TRUE),b=sample(1:3,n,TRUE),
     c=sample(0:2,n,TRUE),e=sample(1:2,n,TRUE))
-  vars <- list(g=spseg_categorical(counts=c("a","b")),
-               h=spseg_continuous(representation = "intervals", counts=c("c","e"),
+  vars <- list(g=spseg_categorical(vars=c("a","b")),
+               h=spseg_continuous(representation = "intervals", vars=c("c","e"),
                  summary=list(probs=sum(d$c)/sum(d$c+d$e))))
   for (directed in c(FALSE,TRUE)) for (weighted in c(FALSE,TRUE)) {
     net <- spseg_network(edges,cost=if(weighted)"cost" else NULL,directed=directed)
@@ -105,7 +105,7 @@ test_that("KNN completes hop and zero-cost boundary groups", {
   # Focal plus 10 first-, 70 second-, and 500 third-order neighbors.
   edges <- data.frame(from=c(rep(0,10),rep(1,70),rep(11,500)),to=1:580)
   d <- data.frame(node=0:580,a=c(rep(1,81),rep(0,500)),b=c(rep(0,81),rep(1,500)))
-  r <- spseg(d,list(g=spseg_categorical(counts=c("a","b"))),
+  r <- spseg(d,list(g=spseg_categorical(vars=c("a","b"))),
     network=spseg_network(edges),node_id="node",neighbors="knn",bands=100,
     weighting="unweighted",output="full")
   expect_equal(unname(r$analyses$g$env[[1]][1,]),c(.81,.19))
@@ -113,7 +113,7 @@ test_that("KNN completes hop and zero-cost boundary groups", {
   expect_equal(r$analyses$g$knn$max_population,100)
   edges <- data.frame(from=c("a","b","c"),to=c("b","c","d"),cost=c(1,0,0))
   d <- data.frame(node=letters[1:4],a=c(1,1,0,0),b=c(0,0,1,1))
-  r <- spseg(d,list(g=spseg_categorical(counts=c("a","b"))),
+  r <- spseg(d,list(g=spseg_categorical(vars=c("a","b"))),
     network=spseg_network(edges,cost="cost"),node_id="node",neighbors="knn",
     bands=2,weighting="unweighted",output="full")
   expect_equal(unname(r$analyses$g$env[[1]][1,]),c(2/3,1/3))
@@ -122,7 +122,7 @@ test_that("KNN completes hop and zero-cost boundary groups", {
 test_that("transit nodes, parallel edges and shared observation nodes conserve mass", {
   edges <- data.frame(from=c("a","t","a","a"),to=c("t","b","t","a"),cost=c(1,1,3,0))
   d <- data.frame(node=c("a","a","b"),g=c("A","B","B"))
-  vars <- list(g=spseg_categorical(values="g"))
+  vars <- list(g=spseg_categorical(vars="g"))
   r <- spseg(d,vars,network=spseg_network(edges,cost="cost"),node_id="node",
              bands=c(0,2),weighting="unweighted",output="full")
   expect_equal(unname(r$analyses$g$env[[1]][1,]),c(.5,.5))
@@ -138,7 +138,7 @@ test_that("transit nodes, parallel edges and shared observation nodes conserve m
 test_that("network neighborhoods preserve row and edge order invariance", {
   d <- data.frame(node=letters[1:6],a=c(10,0,5,0,2,1),b=c(0,20,0,10,3,4))
   edges <- data.frame(from=letters[1:5],to=letters[2:6])
-  vars <- list(g=spseg_categorical(counts=c("a","b")))
+  vars <- list(g=spseg_categorical(vars=c("a","b")))
   run <- function(d,edges) spseg(d,vars,network=spseg_network(edges),node_id="node",
     neighbors="knn",bands=25,weighting="exponential",output="full")
   r <- run(d,edges)
@@ -152,17 +152,17 @@ test_that("unreachable eligible populations produce informative errors", {
   edges <- data.frame(from="a",to="b")
   d <- data.frame(node=c("a","b","c"),g=c("A","B","A"),v=c(1,NA,2))
   net <- spseg_network(edges)
-  expect_error(spseg(d,list(g=spseg_categorical(values="g")),network=net,
+  expect_error(spseg(d,list(g=spseg_categorical(vars="g")),network=net,
     node_id="node",neighbors="knn",bands=2),"Variable 'g'.*focal row 3.*node 'c'.*population is 1")
-  expect_error(spseg(d,list(v=spseg_continuous(values="v",na.action="omit")),
+  expect_error(spseg(d,list(v=spseg_continuous(vars="v",na.action="omit")),
     network=net,node_id="node",neighbors="knn",bands=2),
     "Variable 'v'.*node 'a'.*population is 1")
   d <- d[1:2,]
-  expect_error(spseg(d,list(g=spseg_categorical(values="g")),
+  expect_error(spseg(d,list(g=spseg_categorical(vars="g")),
     network=spseg_network(edges,directed=TRUE),node_id="node",neighbors="knn",bands=2),
     "focal row 2.*node 'b'.*population is 1")
   isolated <- spseg_network(data.frame(from=character(),to=character()))
-  r <- spseg(d,list(g=spseg_categorical(values="g")),network=isolated,
+  r <- spseg(d,list(g=spseg_categorical(vars="g")),network=isolated,
               node_id="node",bands=0,output="full")
   expect_equal(unname(r$analyses$g$env[[1]]),diag(2))
 })
@@ -170,7 +170,7 @@ test_that("unreachable eligible populations produce informative errors", {
 test_that("geometry is optional and never determines network distances", {
   d <- data.frame(node=c("a","b"),x=c(0,100),y=0,g=c("A","B"))
   net <- spseg_network(data.frame(from="a",to="b"))
-  vars <- list(g=spseg_categorical(values="g"))
+  vars <- list(g=spseg_categorical(vars="g"))
   r <- spseg(d,vars,network=net,node_id="node",bands=1,
              weighting="unweighted",output="full")
   expect_null(r$coords)
@@ -199,7 +199,7 @@ test_that("network inputs reject invalid or ambiguous specifications", {
   expect_error(spseg_network(edges,directed=NA),"directed")
   expect_error(spseg_network(edges,units=1),"units")
   d <- data.frame(node=c("a","b"),g=c("A","B"))
-  vars <- list(g=spseg_categorical(values="g"))
+  vars <- list(g=spseg_categorical(vars="g"))
   net <- spseg_network(edges)
   expect_error(spseg(d,vars,network=edges,node_id="node",bands=1),"spseg_network")
   expect_error(spseg(d,vars,network=net,bands=1),"node_id")

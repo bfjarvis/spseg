@@ -166,7 +166,7 @@ providence_spseg <-
   providence |>
   select(all_of(group_cols)) |>
   spseg(
-    variables = list(race = spseg_categorical(counts = group_cols)),
+    variables = list(race = spseg_categorical(vars = group_cols)),
     bands = bands,
     weighting = "biweight",
     power = 2,

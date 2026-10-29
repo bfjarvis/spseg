@@ -23,7 +23,7 @@
 #' edges <- data.frame(from=c("a","b"), to=c("b","c"), minutes=c(2,3))
 #' network <- spseg_network(edges, cost="minutes", units="minutes")
 #' nodes <- data.frame(node=c("a","b","c"), group=c("A","B","B"))
-#' spseg(nodes, list(group=spseg_categorical(values="group")), network=network,
+#' spseg(nodes, list(group=spseg_categorical(vars="group")), network=network,
 #'       node_id="node", bands=3, weighting="unweighted")
 #' @export
 spseg_network <- function(edges, from = "from", to = "to", cost = NULL,

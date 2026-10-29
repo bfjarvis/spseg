@@ -8,8 +8,7 @@
 \title{Describe variables for a shared spatial segregation calculation}
 \usage{
 spseg_categorical(
-  values = NULL,
-  counts = NULL,
+  vars,
   levels = NULL,
   measures = NULL,
   weights = NULL,
@@ -17,8 +16,7 @@ spseg_categorical(
 )
 
 spseg_ordinal(
-  values = NULL,
-  counts = NULL,
+  vars,
   levels = NULL,
   measures = NULL,
   weights = NULL,
@@ -27,8 +25,7 @@ spseg_ordinal(
 )
 
 spseg_continuous(
-  values = NULL,
-  counts = NULL,
+  vars,
   representation = c("exact", "intervals"),
   levels = NULL,
   scores = NULL,
@@ -40,9 +37,9 @@ spseg_continuous(
 )
 }
 \arguments{
-\item{values}{Column containing category membership or observed values.}
-
-\item{counts}{Columns containing nonnegative population counts.}
+\item{vars}{One column containing category membership or observed values, or
+two or more columns containing nonnegative population counts. Count columns
+must be supplied in category/value order.}
 
 \item{levels}{Category order for observed ordinal or interval membership.
 Ordered factors supply their own order. For categorical values, factor
@@ -50,7 +47,11 @@ levels or sorted distinct values are used when this is omitted.}
 
 \item{measures}{Optional measure selection overriding [spseg()].}
 
-\item{weights}{Population-weight column or numeric vector for `values`.
+\item{weights}{Population-weight column or numeric vector when `vars` selects
+one column. This supports survey weights and long-form aggregated counts,
+where each row records a location/category combination. Rows at the same
+location share coordinates or geometry. With multiple `vars`, the count
+columns already supply population mass and `weights` must be omitted.
 Defaults to the `population` supplied to [spseg()], or its inferred default.}
 
 \item{na.action}{Missing-value policy: `"fail"` or `"omit"`. Omission applies
@@ -109,20 +110,23 @@ A `spseg_variable` specification for `spseg(variables = ...)`.
 }
 \description{
 These constructors describe data columns; they do not search neighborhoods.
-Supply exactly one of `values` (a single column) and `counts` (columns in
-category/value order). Column selectors are names or integer positions.
+Select columns with `vars`: one column supplies observed memberships or values;
+multiple columns supply counts in category/value order. Column selectors are
+names or integer positions. A single count column is not supported.
 Continuous variables accept exact observations or interval membership/counts
 through `representation`. Interval CDFs are interpolated directly; individual
 values are not imputed.
 }
 \examples{
-spseg_categorical(values = "ethnicity")
-spseg_ordinal(counts = c("primary", "secondary", "tertiary"))
-spseg_continuous(counts = c("low", "middle", "high"), representation = "intervals")
-spseg_continuous(values = "income", summary = list(probs = c(.2, .8)))
-spseg_continuous(values = "income",
+spseg_categorical(vars = "ethnicity")
+spseg_ordinal(vars = c("primary", "secondary", "tertiary"))
+spseg_continuous(vars = c("low", "middle", "high"), representation = "intervals")
+spseg_continuous(vars = "income", summary = list(probs = c(.2, .8)))
+spseg_continuous(vars = "income",
                  summary = list(type = "quantiles", mean_rank = TRUE))
-spseg_ordinal(values = "education", localenv = "quantiles")
+spseg_ordinal(vars = "education", localenv = "quantiles")
+# Long-form counts: one membership column and a population weight per row.
+spseg_categorical(vars = "race", weights = "population_count")
 }
 \seealso{
 [spseg()]
