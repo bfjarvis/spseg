@@ -6,7 +6,7 @@ Author: Seong-Yun Hong <syhong@khu.ac.kr> and David O'Sullivan, with code
   contributions by Benjamin Jarvis and Changlock Choi
 Maintainer: Seong-Yun Hong <syhong@khu.ac.kr>
 Depends: R (>= 4.2.0)
-Imports: sf, stats, terra
+Imports: sf, stats, terra, utils
 LinkingTo: Rcpp, RcppArmadillo, BH (>= 1.84.0-0)
 Suggests: ggplot2, knitr, dplyr, tidyr, tidyverse, nnet, parallel,
         rmarkdown, roxygen2, sfnetworks, testthat (>= 3.0.0)

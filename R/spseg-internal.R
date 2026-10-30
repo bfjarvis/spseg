@@ -43,6 +43,21 @@
 }
 
 .spseg_prepare_result <- function(result, config, bands, keep_env) {
+  if (!is.null(result$scores) || !is.null(result$contributions)) {
+    labels <- config$pair_labels
+    pairs <- if (length(labels) > 1L) utils::combn(labels, 2) else
+      matrix(character(), nrow = 2, ncol = 0)
+    result$score_pairs <- data.frame(group_a = pairs[1, ], group_b = pairs[2, ])
+    for (what in c("scores", "contributions")) {
+      if (is.null(result[[what]])) next
+      for (scope in c("multigroup", "pairwise")) {
+        result[[what]][[scope]] <- lapply(result[[what]][[scope]], function(z) {
+          names(z) <- as.character(bands)
+          z
+        })
+      }
+    }
+  }
   for (group in c("multigroup", "pairwise")) {
     result$indices[[group]] <- lapply(result$indices[[group]], function(z) {
       names(z) <- as.character(bands)

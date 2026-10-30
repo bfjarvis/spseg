@@ -1,7 +1,6 @@
 ---
 title: "Categorical, Ordinal, and Continuous Segregation"
 output: rmarkdown::html_vignette
-bibliography: segregation-references.bib
 vignette: >
   %\VignetteIndexEntry{Categorical, Ordinal, and Continuous Segregation}
   %\VignetteEngine{knitr::rmarkdown}
@@ -94,8 +93,9 @@ Each specification can override `measures`. The common selectors are
 `"relative_diversity"` and `"variance_ratio"` are aliases for the diversity
 family; the nominal measure is specifically relative diversity, not the other
 multigroup indices that share its binary reduction. `"all"` includes all five families.
-`scope` controls categorical multigroup/pairwise calculations. Ordered
-summaries are computed across cumulative thresholds, not all pairs of slices.
+`scope` controls categorical multigroup/pairwise calculations and pairwise
+comparisons between resolved continuous groups. Ordinal indices combine
+cumulative thresholds, not nominal comparisons between all pairs of categories.
 
 # Population and spatial contributions
 
@@ -160,146 +160,24 @@ substantively useful neighborhood.
 
 # Measure definitions and provenance
 
-The nominal baseline is @reardon2002, with the spatial environment framework
-of @reardon2004. The ordered baseline is @reardon2009 and @reardon2011.
-The formulas below specify the package's conventions, including supplements.
+The mathematical definitions now have a dedicated technical guide:
+`vignette("spseg-measure-definitions")`. It gives the local variation and
+deviation functions, regional normalizers, multigroup and pairwise formulas,
+and their relationship to Reardon and colleagues' work. It distinguishes
+published definitions from package supplements, empirical rank conventions,
+and interval-interpolation assumptions.
 
-## Categorical variables
-
-Write $p_{ig}$ for local shares, $P_g$ for regional shares, and
-$I(P)=\sum_g P_g(1-P_g)$, $E(P)=-\sum_g P_g\log P_g$.
-
-\[
-H=1-\frac{\sum_i\alpha_i E(p_i)}{E(P)},\qquad
-R=1-\frac{\sum_i\alpha_i I(p_i)}{I(P)},\qquad
-D=\frac{\sum_i\alpha_i\sum_g|p_{ig}-P_g|}{2I(P)}.
-\]
-
-These are Reardon and Firebaugh's information theory, relative diversity,
-and dissimilarity formulations. They reduce to the standard binary measures.
-Relative diversity reduces to the binary variance ratio, but is distinct from
-the other multigroup indices with that same binary reduction.
-
-The categorical root supplement is the symmetric multigroup Atkinson index
-in the normalization of @frankel2011. For nonoverlapping units,
-
-\[
-A_K=1-\sum_i\left(\prod_{g=1}^K\frac{n_{ig}}{N_g}\right)^{1/K}.
-\]
-
-For spatial environments the package explicitly uses
-$1-\sum_i\alpha_i\operatorname{GM}(p_i)/\operatorname{GM}(P)$ over globally
-nonempty groups. This equals the displayed index for nonoverlapping units.
-With two groups it is Hutchens' square-root index [@hutchens2004]; with more
-groups its root degree is the number of globally nonempty groups. It can
-equal one whenever each local environment lacks at least one group, even
-when environments contain mixtures of the remaining groups. Changing group
-definitions can change this index. It is not an average of pairwise indices.
-Globally empty categories remain visible in shares and exposure output but
-are excluded from the geometric mean; their pairwise comparisons are undefined.
-
-## Ordinal variables
-
-Write $C_{ik}$ and $Q_k$ for local and global cumulative proportions through
-category $k$. For information, diversity, and root respectively, use
-
-\[
-f_H(p)=-p\log p-(1-p)\log(1-p),\quad
-f_R(p)=p(1-p),\quad f_S(p)=2\sqrt{p(1-p)}.
-\]
-
-The measure is $1-\sum_i\alpha_i V_i/V$, where
-$V_i=\sum_{k=1}^{K-1}f(C_{ik})$ and $V=\sum_{k=1}^{K-1}f(Q_k)$.
-Multiplicative variation constants and log bases cancel. These are Reardon's
-ordinal $H^O$, $R^O$, and $S^O$ [@reardon2009]. Here "variance ratio" is the
-traditional family name; it is not a variance decomposition of arbitrary
-numerical category codes.
-
-Our **ordinal dissimilarity supplement** is
-
-\[
-D_O=\frac{\sum_i\alpha_i\sum_k|C_{ik}-Q_k|}
-           {2\sum_k Q_k(1-Q_k)}.
-\]
-
-For nonoverlapping units this is the average of ordinary binary dissimilarity
-over cumulative thresholds, weighted proportionally to $Q_k(1-Q_k)$. With
-two categories it equals ordinary binary dissimilarity. It is not Reardon's
-rejected ordinal absolute-difference index based on $1-|2p-1|$.
-
-## Continuous variables: grouped and observed
-
-In the continuous population formulation, global percentile $q$ is uniform;
-$G_i(q)$ is the local proportion at or below that global percentile. Reardon's
-rank-order $H^R,R^R,S^R$ compare integrated local variation
-$\int_0^1 f(G_i(q))\,dq$ with global variation $\int_0^1 f(q)\,dq$
-[@reardon2011]. The respective global denominators, with the functions above,
-are $1/2$, $1/6$, and $\pi/4$. All ordered root calculations remain square
-roots because their thresholds define binary comparisons.
-
-For **grouped continuous input**, regional interval totals define common
-percentile knots $(0,Q_1,\ldots,Q_K=1)$. Local cumulative shares define CDFs
-at these knots. The package interpolates local CDFs linearly *in global
-percentile space* and integrates each segment analytically (with stable
-narrow-segment limits). It does not assume uniform dollar values, require a
-finite top-coded income endpoint, or fit Reardon's polynomial segregation
-curve. It assumes no further within-interval sorting conditional on the
-reported interval. The estimator is exact under that interpolation convention,
-not necessarily identical to Reardon's estimator or a bound on latent sorting.
-Proportional subdivision preserves the interpolant; general rebinning need not.
-
-For **observed continuous input**, sort distinct exact values globally. A
-value with overall mass share $\pi_l$ receives the weighted midrank
-$z_l=\sum_{r<l}\pi_r+\pi_l/2$. Use the local and global discrete CDFs
-$F_i(z),F(z)$ of these same global scores. Set
-
-\[
-V_i=\int_0^1 f(F_i(z))\,dz,\qquad
-V=\int_0^1 f(F(z))\,dz,\qquad S_f=1-\frac{\sum_i\alpha_i V_i}{V}.
-\]
-
-This is the package's **empirical weighted-midrank extension**, for both tied
-and untied data, rather than a claim that Reardon uniquely specifies finite
-sample treatment. With equally weighted distinct observations it integrates
-empirical threshold variation using rank spacing $1/n$. Ties stay together;
-there is no jitter, random tie breaking, or RNG consumption. The denominator
-is empirical, not the continuous constant. Exact-value count input uses the
-same convention and agrees with equivalent weighted individual records.
-Rounded or censored values do not identify their unobserved within-value ranks;
-choose a grouped interpretation when that is the intended model.
-
-Our **rank-order dissimilarity supplement** is
-
-\[
-D_R=\frac{\sum_i\alpha_i\int_0^1|F_i(z)-F(z)|\,dz}
-           {2\int_0^1 F(z)(1-F(z))\,dz}.
-\]
-
-For grouped interpolation, the global CDF is $F(q)=q$, and this becomes
-$3\sum_i\alpha_i\int_0^1|G_i(q)-q|\,dq$. For empirical input, use the
-actual overall empirical CDF and denominator. In nonoverlapping continuous
-populations it is the average of threshold binary dissimilarity weighted by
-$6q(1-q)$. This is an explicitly specified supplement, not attributed to
-Reardon and not a claim of priority over other distance-based indices.
-
-The dissimilarity supplements preserve a limitation of binary dissimilarity:
-some equalizing exchanges leave the result unchanged. For example, with three
-equally populated units, changing below-threshold shares from $(.8,.6,.1)$ to
-$(.7,.7,.1)$ leaves dissimilarity at $8/15$. Integration need not remove such
-insensitivity. Do not claim Reardon's strict exchange properties for them.
-
-The algorithms integrate CDFs directly: no separate binary datasets,
-polynomial fitting, or all-pairs rank-difference matrices are constructed.
-Observed-value calculations stay sparse. Empirical dissimilarity uses prefix
-integrals of the overall CDF, avoiding a full regional scan per neighborhood.
+The guide also explains which expressions require nonoverlapping units,
+how local scores differ from additive index contributions, and why compact
+plotting summaries do not necessarily support exact index reconstruction.
+This vignette concentrates on specifying variables and interpreting outputs.
 
 # Exposure and isolation
 
-For categorical variables, exposure is **unnormalized**, following the
-local-composition interpretation of @reardon2004. For focal group $a$ and
-target group $b$, $P^*_{ab}=\\sum_i(n_{ia}/N_a)p_{ib}$. Diagonals describe
-isolation; off-diagonals describe exposure to other groups. This differs from
-the normalized exposure index also denoted $P$ in @reardon2002.
+For categorical variables, exposure is **unnormalized**: it averages local
+target-group shares over members of a focal group. Diagonals describe
+isolation; off-diagonals describe exposure to other groups. See the technical
+guide for the formula and its distinction from normalized scalar exposure.
 
 Continuous variables use one summary specification. Shares are the default;
 the default interior probabilities `.25`, `.5`, and `.75` define four global
@@ -496,9 +374,9 @@ gridded <- spseg(areas,
 as.data.frame(gridded)
 ```
 
-The package is in pre-1.0 development. Every `spseg()` call uses an explicit
-named `variables` list, including single-variable analyses. Results always use
-`result$analyses[[variable_name]]`; stored local environments contain shares.
-There is no compatibility calling convention or alternate result layout.
-
-# References
+The package is in pre-1.0 development. Use a named `variables` list for
+explicit specifications, or column-name shorthand for one categorical
+analysis. Results use `result$analyses[[variable_name]]`; stored environments
+contain the requested share or rank summaries. There is no compatibility
+calling convention for the original seg API. Mathematical definitions and
+sources are collected in `vignette("spseg-measure-definitions")`.

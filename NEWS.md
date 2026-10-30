@@ -1,3 +1,16 @@
+# spseg (development version)
+
+- Extracted and expanded the technical measure definitions into a separate
+  vignette, documenting local variation/deviation functions, normalizers,
+  pairwise conditioning, additive contributions, and methodological provenance.
+
+- Organized C++ scoring around shared vector primitives, explicit neighborhood
+  score evaluators, and streaming regional accumulators. Added independent
+  `keep_scores` and `keep_contributions` options, with data-frame and sf
+  extraction. Their default is `FALSE`; per-location arrays are allocated only
+  when requested. Regional indices and local environments retain their existing
+  definitions and scales.
+
 # spseg 0.9.1
 
 - Variable constructors now use a single `vars` argument: one column selects
