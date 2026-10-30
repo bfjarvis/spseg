@@ -1,0 +1,824 @@
+---
+title: "Measure Definitions, Local Variation, and Contributions"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    toc_depth: 2
+bibliography: segregation-references.bib
+vignette: >
+  %\VignetteIndexEntry{Measure Definitions, Local Variation, and Contributions}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+library(spseg)
+```
+
+# Purpose and provenance
+
+Segregation calculations in spseg proceed from local population distributions
+to local scores, then to population-weighted regional indices. This vignette
+defines those quantities and their mathematical relationships. For input
+syntax and applications, see `vignette("spseg-multiple-variables")` and
+`vignette("spseg-grid-worked-example")`.
+
+The nominal definitions build on @reardon2002, the spatial framework on
+@reardon2004, and the ordinal and rank-order families on
+@reardon2009 and @reardon2011. The relevant sections describe spseg's
+empirical-rank and interpolation conventions, its dissimilarity supplements,
+and the multigroup Atkinson/root formulation of @frankel2011.
+
+Here, **variation** describes population heterogeneity through entropy,
+diversity, or square-root functions. **Nominal/categorical** variables describe
+unordered groups; **ordinal** variables supply a category order; and
+**continuous** variables support comparisons across the income-rank distribution.
+
+# Notation and population accounting
+
+We describe one variable and one neighborhood band at a time. Each variable
+has its own eligible population. The original focal populations supply the
+averaging weights across all neighborhood bands.
+
+| Symbol | Meaning |
+|:--|:--|
+| $i,j$ | Focal and neighboring support units, respectively |
+| $g=1,\ldots,M$ | Original categories, intervals, or distinct observed values |
+| $N_{ig}$ | Original eligible population in category/value $g$ at unit $i$ |
+| $T_i=\sum_g N_{ig}$ | Original eligible population at focal unit $i$ |
+| $T=\sum_i T_i$ | Regional eligible population |
+| $T_g=\sum_i N_{ig}$; $P_g=T_g/T$ | Regional group total and share |
+| $\alpha_i=T_i/T$ | Focal-population averaging weight |
+| $\lambda_{ij}$ | Neighborhood inclusion fraction times spatial kernel weight |
+| $L_{ig}=\sum_j\lambda_{ij}N_{jg}$ | Weighted local population mass |
+| $p_{ig}=L_{ig}/\sum_h L_{ih}$ | Local composition |
+| $C_{ik}=\sum_{g\leq k}p_{ig}$; $Q_k=\sum_{g\leq k}P_g$ | Local and regional cumulative proportions |
+| $q\in[0,1]$ | A regional percentile threshold in the continuous formulation |
+
+For individual or weighted membership records, $N_{ig}$ represents the
+population assigned to a category code and row weight. Counts, survey weights,
+missing-value policies, and surface redistribution determine the eligible
+population before the formulas below are applied.
+
+The original focal mass $T_i$ weights each neighborhood's contribution to a
+regional index. Kernel weights determine its local composition. A unit with
+$T_i=0$ therefore has zero index weight even when nearby populations give it
+a calculable local composition.
+
+Population kNN selects a target population before kernel weighting, includes
+the focal unit first, and applies proportional inclusion to a tied boundary
+shell. Pairwise indices reuse the variable's selected neighborhoods. The
+workflow vignette gives the neighborhood-selection details.
+
+# Four families, three variable types
+
+Each family evaluates a different feature of the local distribution. The
+variable type determines how category values or cumulative thresholds are
+combined:
+
+| Family | Nominal/categorical | Ordinal | Continuous/rank-order |
+|:--|:--|:--|:--|
+| Information, $H$ | Entropy across categories | Sum binary entropy across cutoffs | Integrate binary entropy across ranks |
+| Diversity, $R$ | Diversity across categories | Sum binary diversity across cutoffs | Integrate binary diversity across ranks |
+| Root, $S$ | Geometric mean across globally nonempty groups | Sum binary root variation across cutoffs | Integrate binary root variation across ranks |
+| Dissimilarity, $D$ | Absolute category-share deviations | Absolute cumulative-share deviations | Integrated absolute CDF deviations |
+
+Exposure and isolation describe the average local compositions experienced
+by group members. Their formulas follow the scalar-index definitions below.
+
+## Binary variation functions and Reardon's symbols
+
+In the ordered framework, @reardon2011, equation (5), denotes binary entropy,
+diversity, and square-root variation by $E$, $I$, and $V$. The corresponding
+segregation indices are $H$, $R$, and $S$. We label the binary variation
+functions by their index family:
+
+$$
+\begin{aligned}
+\phi_H(p)&=-p\log p-(1-p)\log(1-p),\\
+\phi_R(p)&=p(1-p),\\
+\phi_S(p)&=2\sqrt{p(1-p)}.
+\end{aligned}
+$$
+
+Here and below, $\log$ is the natural logarithm and, when $p=0$, we make use of the limit $\lim_{x\rightarrow 0} x \log x = 0$. Relative
+to the paper's notation, $\phi_H=(\log2)E$, $\phi_R=I/4$, and
+$\phi_S=V$. Consistent scaling of local variation and its regional normalizer
+makes each index invariant to these multiplicative constants. Raw local
+variation retains the stated scale.
+
+Dissimilarity uses a discrepancy between the local distribution and its
+regional reference. Its definition and normalization are given separately
+for each variable type.
+
+## Local scores, regional sums, and normalization
+
+For information, diversity, and root, let $v_{i,f}$ be local variation and
+$v_f$ the corresponding regional reference, for $f\in\{H,R,S\}$. Then
+
+$$
+A_f=\sum_i T_i v_{i,f},\qquad
+J_f=1-\frac{A_f}{T v_f}
+   =1-\frac{\sum_i\alpha_i v_{i,f}}{v_f}.
+$$
+
+$J_H,J_R,J_S$ are the regional $H,R,S$ indices, and $v_{i,f}$ measures
+variation within a focal unit's environment. For dissimilarity, let $d_i$
+be a local discrepancy and $d_0$ its regional normalizer:
+
+$$
+A_D=\sum_i T_i d_i,\qquad
+D=\frac{A_D}{T d_0}.
+$$
+
+Dissimilarity is the normalized discrepancy; the other three indices measure
+the relative reduction in local variation. The sections below specify
+$v_{i,f}$, $v_f$, $d_i$, and $d_0$ for each variable type.
+
+The implementation collects these four completed neighborhood scores in
+$\mathbf a_i=(v_{i,H},v_{i,R},v_{i,S},d_i)$. A component already includes
+the sum over groups, cutoffs, or rank segments required by its definition.
+The regional accumulator updates $A_f\leftarrow A_f+T_i a_{i,f}$ and
+then releases $\mathbf a_i$. Retaining all neighborhood scores is optional.
+
+# Nominal/categorical variables
+
+## Information and relative diversity
+
+Define the vector-valued extensions
+
+$$
+\mathcal E(\mathbf p)=-\sum_g p_g\log p_g,\qquad
+\mathcal I(\mathbf p)=\sum_g p_g(1-p_g).
+$$
+
+The local scores and references are
+
+$$
+v_{i,H}=\mathcal E(\mathbf p_i),\quad v_H=\mathcal E(\mathbf P),
+\qquad
+v_{i,R}=\mathcal I(\mathbf p_i),\quad v_R=\mathcal I(\mathbf P).
+$$
+
+These give the information theory and relative diversity formulations of
+@reardon2002 on nonoverlapping units. The package uses local-environment
+compositions for their spatial analogues. In the binary case, vector entropy
+equals $\phi_H(p)$ and vector diversity equals $2\phi_R(p)$; the factor of
+two cancels. Relative diversity has the familiar binary variance-ratio
+interpretation.[^relative-diversity]
+
+## Dissimilarity
+
+The generalized categorical dissimilarity formula is
+
+$$
+d_i=\sum_g|p_{ig}-P_g|,\qquad
+d_0=2\mathcal I(\mathbf P),\qquad
+D=\frac{\sum_i\alpha_i\sum_g|p_{ig}-P_g|}{2\mathcal I(\mathbf P)}.
+$$
+
+For two groups, writing $p_i=p_{i1}$ and $P=P_1$, this reduces to
+
+$$
+D=\frac{\sum_i\alpha_i|p_i-P|}{2P(1-P)}.
+$$
+
+With nonoverlapping units it is ordinary binary dissimilarity. The spatial
+version applies the same formula to local compositions, using original focal
+populations as averaging weights.
+
+## Root and geometric-mean variation
+
+Let $\mathcal A=\{g:P_g>0\}$ and $K=|\mathcal A|$. Define
+
+$$
+G(\mathbf p)=\left(\prod_{g\in\mathcal A}p_g\right)^{1/K},\qquad
+v_{i,S}=G(\mathbf p_i),\quad v_S=G(\mathbf P).
+$$
+
+For nonoverlapping units, the resulting index is the symmetric multigroup
+Atkinson formulation in the normalization of @frankel2011:
+
+$$
+S=1-\sum_i\left(\prod_{g\in\mathcal A}\frac{N_{ig}}{T_g}\right)^{1/K}.
+$$
+
+For spatial environments, spseg uses
+$1-\sum_i\alpha_i G(\mathbf p_i)/G(\mathbf P)$. With two groups the constant
+factor relating $G$ and $\phi_S$ cancels, giving Hutchens' square-root index
+[@hutchens2004]. For $K$ globally nonempty groups, the root degree is $K$.
+This multigroup index measures their joint representation in each local
+environment.[^root-support]
+
+Globally empty categories remain visible in category-share output and are
+excluded from the geometric mean. Comparisons involving a globally empty
+group are undefined.
+
+# Ordinal variables
+
+Ordinal measures use the $M-1$ cumulative cutoffs defined by the supplied
+category order.
+
+For $f\in\{H,R,S\}$,
+
+$$
+v_{i,f}=\sum_{k=1}^{M-1}\phi_f(C_{ik}),\qquad
+v_f=\sum_{k=1}^{M-1}\phi_f(Q_k).
+$$
+
+These are the package's implementation of the ordinal $H^O,R^O,S^O$
+families [@reardon2009]. Each cutoff divides the population into those at or
+below it and those above it. The index combines variation across these
+cumulative binary divisions.
+
+The **ordinal dissimilarity supplement** is
+
+$$
+d_i=\sum_{k=1}^{M-1}|C_{ik}-Q_k|,\qquad
+d_0=2\sum_{k=1}^{M-1}Q_k(1-Q_k).
+$$
+
+For nonoverlapping units, it is the average of cutoff-specific binary
+dissimilarities with weights proportional to $Q_k(1-Q_k)$. With two
+categories it reduces to ordinary binary dissimilarity. This package supplement
+extends binary dissimilarity by aggregating cumulative-share discrepancies.
+
+# Continuous variables
+
+## Population formulation
+
+Let $G_i(q)$ be the local proportion with income at or below the income
+threshold at regional percentile $q$. The continuous regional reference is
+$G(q)=q$. A region's 75th-percentile income could, for example, be the
+90th percentile in one neighborhood: $G_i(0.75)=0.90$.
+
+For $f\in\{H,R,S\}$, the local and regional integrals are
+
+$$
+v_{i,f}=\int_0^1\phi_f(G_i(q))\,dq,\qquad
+v_f=\int_0^1\phi_f(q)\,dq.
+$$
+
+With the package's scaling,
+
+$$
+v_H=\frac12,\qquad v_R=\frac16,\qquad v_S=\frac\pi4.
+$$
+
+These integrals express the rank-order variation-ratio target: they summarize
+each neighborhood's cumulative distribution across regional income thresholds.
+The following sections specify the CDF and normalizer for interval and exact
+observations.
+
+## Interval counts or interval memberships
+
+Regional interval shares define knots $Q_0=0,Q_1,\ldots,Q_M=1$. At each
+knot the local CDF is $C_{ik}$, with $C_{i0}=0$. Within an interval with
+$Q_k>Q_{k-1}$, the package specifies
+
+$$
+G_i(q)=C_{i,k-1}
+ +\frac{q-Q_{k-1}}{Q_k-Q_{k-1}}(C_{ik}-C_{i,k-1}).
+$$
+
+It integrates each segment analytically, using stable numerical limits for
+narrow segments. The global CDF is the identity under this construction, so
+the three continuous normalizers above apply. Globally empty intervals have
+zero width and do not contribute to the integrals.
+
+The interpolation assigns the same conditional rank distribution within each
+reported interval at every location. Its rank-space formulation accommodates
+open-ended income intervals. Proportional subdivision of an interval preserves
+the interpolated CDF.
+
+Reardon estimates threshold-specific segregation curves by polynomial fitting
+and extrapolation beyond the observed thresholds [@reardon2011]. spseg models
+local CDFs directly and integrates the piecewise-linear curves under the
+common within-interval allocation assumption. Both estimators rely on
+assumptions about unobserved within-bin sorting.
+
+Additional within-bin sorting can make spseg's estimates understate segregation.
+As interval boundaries shift in regional percentile terms across places or
+times, changes in estimation bias can produce apparent differences despite
+unchanged underlying segregation. The direction and magnitude depend on the
+unobserved patterns. Comparisons therefore benefit from examining the
+percentile coverage of the supplied intervals.
+
+## Exact observations and exact-value counts
+
+Sort the distinct observed values globally. If value $g$ has regional share
+$P_g$, assign its entire tied mass the weighted midrank
+
+$$
+z_g=\sum_{h<g}P_h+\frac{P_g}{2}.
+$$
+
+Let $F_i(z)$ and $F(z)$ be the local and regional empirical CDFs on these
+same global scores. The package evaluates
+
+$$
+v_{i,f}=\int_0^1\phi_f(F_i(z))\,dz,\qquad
+v_f=\int_0^1\phi_f(F(z))\,dz.
+$$
+
+For $M$ distinct values this is a step-function calculation. Since
+$\phi_f(0)=\phi_f(1)=0$, it can be written
+
+$$
+v_{i,f}=\sum_{k=1}^{M-1}(z_{k+1}-z_k)\phi_f(C_{ik}),\qquad
+v_f=\sum_{k=1}^{M-1}(z_{k+1}-z_k)\phi_f(Q_k).
+$$
+
+This is spseg's **empirical weighted-midrank convention**. The regional
+normalizer is calculated from the observed distribution on the same rank
+support as the local CDFs. With equally weighted distinct observations the
+interior spacing is $1/n$; tied observations share a common global rank.
+Exact-value counts and equivalent weighted individual records follow the
+same convention. Sparse local distributions make this calculation practical
+when neighborhoods contain a small subset of the distinct regional values.
+
+An interval interpretation supplies a model for variation within reported
+categories. Exact input treats each supplied value as an observed outcome.
+
+## Rank-order dissimilarity supplement
+
+For exact input the package defines
+
+$$
+d_i=\int_0^1|F_i(z)-F(z)|\,dz,\qquad
+d_0=2\int_0^1 F(z)(1-F(z))\,dz.
+$$
+
+For interval interpolation, replace $F_i(z)$ by $G_i(q)$ and $F(z)$ by $q$:
+
+$$
+d_i=\int_0^1|G_i(q)-q|\,dq,\qquad d_0=\frac13.
+$$
+
+The resulting $D=\sum_i\alpha_i d_i/d_0$ is a package supplement based on
+integrated CDF discrepancies. In a nonoverlapping continuous population it is
+a weighted average of threshold binary dissimilarities, with density
+$6q(1-q)$. It retains the transfer insensitivity of binary dissimilarity at
+individual thresholds.[^dissimilarity-transfers]
+
+# Spatial environments and alternative expressions
+
+For disjoint units with their own populations as environments,
+$\sum_i\alpha_i p_{ig}=P_g$. At a continuous threshold the corresponding
+identity is $\sum_i\alpha_i G_i(q)=q$. Under this identity, the continuous
+variation ratios can also be written as
+
+$$
+H^R=2\int_0^1\sum_i\alpha_i\left[
+G_i(q)\log\frac{G_i(q)}q
++(1-G_i(q))\log\frac{1-G_i(q)}{1-q}\right]\,dq,
+$$
+
+$$
+R^R=6\int_0^1\sum_i\alpha_i(G_i(q)-q)^2\,dq.
+$$
+
+These are equations (17) and (18) of @reardon2011, for a continuous regional
+rank distribution. Their empirical analogues use the empirical regional CDF
+and normalizers defined above.
+
+For overlapping spatial neighborhoods, separate normalization by local
+population can change the population-weighted marginal distribution. spseg
+evaluates the **variation-ratio definition** in this setting. Preservation
+of the regional marginal guarantees agreement with the alternative
+expressions.[^marginal-identity]
+
+A negative variation-ratio index means that average local variation exceeds
+the regional reference. Interpretation of spatial results therefore depends
+on both neighborhood construction and the properties of the selected measure.
+
+# Pairwise indices
+
+For a selected pair $a,b$, let
+
+$$
+T_i^{ab}=N_{ia}+N_{ib},\qquad T^{ab}=T_a+T_b,\qquad
+\alpha_i^{ab}=T_i^{ab}/T^{ab},
+$$
+
+$$
+u_i^{ab}=\frac{p_{ia}}{p_{ia}+p_{ib}},\qquad
+U^{ab}=\frac{P_a}{P_a+P_b}.
+$$
+
+Form the conditional vectors $\mathbf p_i^{ab}=(u_i^{ab},1-u_i^{ab})$
+and $\mathbf P^{ab}=(U^{ab},1-U^{ab})$. The pair-conditioned scores use
+the same vector primitives as multigroup calculations:
+
+$$
+v_{i,H}^{ab}=\mathcal E(\mathbf p_i^{ab}),\quad
+v_{i,R}^{ab}=\mathcal I(\mathbf p_i^{ab}),\quad
+v_{i,S}^{ab}=G(\mathbf p_i^{ab}).
+$$
+
+Their regional references evaluate the corresponding primitive at
+$\mathbf P^{ab}$. The dissimilarity quantities are
+
+$$
+d_i^{ab}=\Delta(\mathbf p_i^{ab},\mathbf P^{ab})
+         =2|u_i^{ab}-U^{ab}|,\qquad
+d_0^{ab}=2\mathcal I(\mathbf P^{ab})=4U^{ab}(1-U^{ab}).
+$$
+
+Apply the accumulation and normalization templates using the pair's focal
+weights $\alpha_i^{ab}$. Neighborhood selection uses the full variable's
+eligible population, and local conditioning compares the pair's shares
+within those neighborhoods.
+
+A defined pair has positive regional population in both groups. Focal units
+with zero pair population receive zero weight, and local conditioning requires
+positive pair mass. Pairwise matrices are symmetric and have undefined
+diagonals. With only two groups, categorical multigroup and pairwise indices
+agree.
+
+Pairwise output covers categorical groups and the global groups resolved by
+a continuous `summary`. For continuous input, $N_{ia}$ and $p_{ia}$ refer to
+those resolved groups, using the same allocation fractions for focal and
+local populations. Continuous scalar indices summarize the full rank
+distribution; pairwise indices compare the selected reporting groups.
+
+# Local variation and additive contributions
+
+For a fixed regional definition and a nonzero normalizer, define
+
+$$
+c_{i,f}=\alpha_i\left(1-\frac{v_{i,f}}{v_f}\right),\qquad
+c_{i,D}=\alpha_i\frac{d_i}{d_0}.
+$$
+
+Then $\sum_i c_{i,f}=J_f$ and $\sum_i c_{i,D}=D$. Pairwise contributions
+use the pair-conditioned weights, scores, and references above. The numerical
+examples below calculate these contributions explicitly. In `spseg()`,
+`keep_scores = TRUE` retains the local scores and
+`keep_contributions = TRUE` retains their additive contributions. The two
+options are independent of environment storage and of each other.
+
+These expressions distinguish four different objects:
+
+| Object | Interpretation |
+|:--|:--|
+| Local distribution | Shares or a CDF describing the neighborhood |
+| Local variation/deviation | $v_{i,f}$ or $d_i$, before focal weighting |
+| Accumulation term | $T_i v_{i,f}$ or $T_i d_i$, entering the raw regional sum |
+| Additive index contribution | $c_{i,f}$ or $c_{i,D}$, which sums to the index |
+
+An additive variation-ratio contribution is negative when its local variation
+exceeds the regional reference, even if the regional index is positive.
+A zero-population focal unit contributes zero.
+
+Summing contributions over a subset of focal units attributes part of the
+**fixed regional index** to that subset. A within-subregion index uses the
+subregion's population, reference distribution, and neighborhood definitions,
+and generally requires recalculation.
+
+## What can be reconstructed from retained results?
+
+Recalculation from local scores requires the focal populations, regional
+reference, and local variations or deviations for the requested family.
+Exposure additionally requires the focal-group population allocation.
+
+Complete category shares preserve a categorical or ordinal local distribution.
+Full interval shares and the interpolation specification preserve an interval
+model. Exact continuous reconstruction can require many distinct values and
+their probabilities. Compact grouped shares and quantiles provide summaries
+for interpretation and mapping; exact index reconstruction generally requires
+the fuller distribution or family-specific local scores.
+
+# Exposure, isolation, and rank summaries
+
+The package's exposure matrix is directional and **unnormalized**:
+
+$$
+P^*_{ab}=\sum_i\frac{N_{ia}}{T_a}p_{ib}.
+$$
+
+Each entry is the average local share of target group $b$ experienced by
+members of focal group $a$, following @reardon2004.[^exposure-symbol]
+Its diagonal gives isolation; off-diagonal entries give exposure to other
+groups. A row sums to one when its focal group exists and all relevant
+environments are valid. Exposure is directional: groups can experience
+different levels of exposure to one another.
+
+Ordinal exposure uses original categories, even if the retained ordinal
+environment is a quantile or grouped-share summary. Continuous share exposure
+uses the resolved global groups. For interval input, proportional allocation
+in regional-percentile space supplies the same modeled group fractions for
+original focal populations and local target populations. Allocation diagnostics
+are described in
+`vignette("spseg-multiple-variables")`.
+
+For continuous `summary = list(type = "quantiles", ...)`, the extraction
+request `what = "exposure"` returns **descriptive rank profiles**: averages
+of local global-rank quantiles, and optionally mean ranks. Each entry averages
+the neighborhood statistic over members of the focal group. Share exposure
+is expressed as a population proportion; these profiles are expressed in
+global income ranks.
+
+# Boundary cases
+
+The formulas assume a positive finite eligible population and a defined
+regional normalizer. In current output:
+
+- An exact constant variable has undefined scalar indices, `NA` with status
+  `"constant"`. Its exposure can still equal one.
+- One populated continuous *interval* represents unobserved within-interval
+  variation under the interpolation model. Identical interval distributions
+  can therefore have zero rank-order segregation.
+- A positive-mass focal unit with an empty local environment makes that band's
+  indices undefined, with status `"empty_environment"`.
+- Globally empty focal exposure groups have undefined rows. Globally empty
+  groups are excluded from the categorical geometric mean.
+- Zero probabilities enter entropy through the continuous limit $0\log0=0$.
+
+# A numerical check of local scores and contributions
+
+The following small example uses three unequal-population units and three
+categories. Unit locations are distinct; radius zero and unweighted
+neighborhoods reproduce the original local distributions. The calculation
+below reconstructs the four categorical indices from their local scores,
+including the geometric-mean root.
+
+```{r categorical-check}
+counts <- rbind(
+  c(A = 8, B = 1, C = 1),
+  c(A = 1, B = 6, C = 1),
+  c(A = 1, B = 1, C = 4)
+)
+T_i <- rowSums(counts)
+alpha <- T_i / sum(T_i)
+p <- counts / T_i
+P <- colSums(counts) / sum(counts)
+
+entropy_terms <- function(p) {
+  out <- p
+  positive <- p > 0
+  out[positive] <- -p[positive] * log(p[positive])
+  out
+}
+
+local_scores <- cbind(
+  h = rowSums(entropy_terms(p)),
+  r = rowSums(p * (1 - p)),
+  s = exp(rowMeans(log(p))),
+  d = rowSums(abs(sweep(p, 2, P)))
+)
+reference <- c(
+  h = sum(entropy_terms(P)),
+  r = sum(P * (1 - P)),
+  s = exp(mean(log(P))),
+  d = 2 * sum(P * (1 - P))
+)
+contributions <- sweep(local_scores, 2, reference, "/")
+contributions[, c("h", "r", "s")] <-
+  1 - contributions[, c("h", "r", "s")]
+contributions <- contributions * alpha
+round(contributions, 3)
+colSums(contributions)
+
+result <- spseg(
+  data.frame(x = 1:3, y = 0, counts),
+  variables = list(groups = spseg_categorical(vars = colnames(counts))),
+  coords = c("x", "y"),
+  bands = 0,
+  weighting = "unweighted",
+  scope = "both",
+  output = "full"
+)
+engine <- result$analyses$groups$indices$multigroup
+engine_scores <- vapply(
+  names(reference),
+  function(key) engine[[key]][1],
+  numeric(1)
+)
+isTRUE(all.equal(colSums(contributions), engine_scores, tolerance = 1e-12))
+```
+
+## Ordinal sums versus continuous integrals
+
+Using the same counts, ordinal and exact continuous input can share a
+cumulative-probability matrix. They differ in how cutoffs are combined:
+ordinal scores sum across cutoffs; empirical continuous scores weight each
+step by its global midrank spacing.
+
+```{r ordered-check}
+C <- t(apply(p, 1, cumsum))[, 1:2, drop = FALSE]
+Q <- cumsum(P)[1:2]
+z <- cumsum(P) - P / 2
+phi <- list(
+  h = function(x) entropy_terms(x) + entropy_terms(1 - x),
+  r = function(x) x * (1 - x),
+  s = function(x) 2 * sqrt(x * (1 - x))
+)
+
+compare_ordered <- function(type) {
+  widths <- if (type == "ordinal") rep(1, length(Q)) else diff(z)
+  values <- vapply(
+    phi,
+    function(f) {
+      local <- as.vector(f(C) %*% widths)
+      global <- sum(f(Q) * widths)
+      sum(alpha * (1 - local / global))
+    },
+    numeric(1)
+  )
+  deviation <- as.vector(abs(sweep(C, 2, Q)) %*% widths)
+  values["d"] <- sum(alpha * deviation) / (2 * sum(Q * (1 - Q) * widths))
+  specification <- if (type == "ordinal") {
+    spseg_ordinal(vars = colnames(counts))
+  } else {
+    spseg_continuous(vars = colnames(counts), scores = c(10, 20, 80))
+  }
+  computed <- spseg(
+    data.frame(x = 1:3, y = 0, counts),
+    variables = list(attribute = specification),
+    coords = c("x", "y"),
+    bands = 0,
+    weighting = "unweighted",
+    scope = "multigroup"
+  )$analyses$attribute$indices$multigroup
+  actual <- vapply(names(values), function(key) computed[[key]][1], numeric(1))
+  isTRUE(all.equal(values, actual, tolerance = 1e-12))
+}
+c(ordinal = compare_ordered("ordinal"), exact = compare_ordered("exact"))
+```
+
+## Pair-conditioned contributions
+
+For groups A and B, the focal averaging weights differ from the full-variable
+weights because C is excluded from pair population totals. The local shares
+are conditioned on the pair, while the neighborhoods remain those selected
+for the three-group variable. At radius zero the neighborhoods are unchanged
+by conditioning; at positive bands, selecting neighbors from only A and B
+could give a different kNN calculation.
+
+```{r pairwise-check}
+pair_mass <- rowSums(counts[, c("A", "B"), drop = FALSE])
+alpha_pair <- pair_mass / sum(pair_mass)
+u <- p[, "A"] / rowSums(p[, c("A", "B"), drop = FALSE])
+U <- P["A"] / sum(P[c("A", "B")])
+pair_local <- cbind(h = phi$h(u), r = 2 * u * (1 - u),
+  s = sqrt(u * (1 - u)), d = 2 * abs(u - U))
+pair_reference <- c(h = phi$h(U), r = 2 * U * (1 - U),
+  s = sqrt(U * (1 - U)), d = 4 * U * (1 - U))
+pair_contributions <- sweep(pair_local, 2, pair_reference, "/")
+pair_contributions[, c("h", "r", "s")] <-
+  1 - pair_contributions[, c("h", "r", "s")]
+pair_contributions <- pair_contributions * alpha_pair
+pair_sums <- colSums(pair_contributions)
+pair_indices <- result$analyses$groups$indices$pairwise
+pair_actual <- vapply(
+  names(pair_sums),
+  function(key) {
+    pair_indices[[key]][[1]]["A", "B"]
+  },
+  numeric(1)
+)
+isTRUE(all.equal(pair_sums, pair_actual, tolerance = 1e-12))
+```
+
+## Interpolated interval contributions
+
+For interval interpolation, the continuous integral follows the linear CDF
+segments. The next example checks the diversity integral against independent
+numerical integration.
+
+```{r interval-check}
+knots <- c(0, cumsum(P))
+local_diversity <- apply(p, 1, function(shares) {
+  local_cdf <- stats::approxfun(knots, c(0, cumsum(shares)))
+  sum(vapply(
+    seq_len(ncol(p)),
+    function(k) {
+      stats::integrate(
+        function(q) {
+          cumulative <- local_cdf(q)
+          cumulative * (1 - cumulative)
+        },
+        knots[k],
+        knots[k + 1]
+      )$value
+    },
+    numeric(1)
+  ))
+})
+manual_R <- 1 - sum(alpha * local_diversity) / (1 / 6)
+interval_result <- spseg(
+  data.frame(x = 1:3, y = 0, counts),
+  variables = list(
+    income = spseg_continuous(
+      vars = colnames(counts),
+      representation = "intervals",
+      summary = list(probs = Q)
+    )
+  ),
+  coords = c("x", "y"),
+  bands = 0,
+  weighting = "unweighted",
+  measures = "diversity"
+)
+isTRUE(all.equal(
+  manual_R,
+  unname(interval_result$analyses$income$indices$multigroup$r[1]),
+  tolerance = 1e-10
+))
+```
+
+# Implementation reference
+
+The engine discovers neighbors once per focal unit and reuses them across
+requested variables and bands. It constructs a local distribution, evaluates
+the requested scores, updates accumulators, and optionally retains compact
+summaries. Several families share a distribution traversal. Sparse observed
+distributions and regional prefix integrals support efficient continuous
+calculations.
+
+`src/spseg_scores.h` contains the mathematical primitives and linear-CDF
+integrators. `src/spseg_engine.cpp` constructs distributions and combines
+the primitives into neighborhood scores and regional sums.
+
+The same vector primitives serve two-group and multigroup calculations:
+
+| Primitive | Definition |
+|:--|:--|
+| `E(p)` | $-\sum_g p_g\log p_g$ |
+| `I(p)` | $\sum_g p_g(1-p_g)$ |
+| `G(p, P, K)` | $\exp(K^{-1}\sum_{g:P_g>0}\log p_g)$, with zero when an included share is zero |
+| `Delta(p, P)` | $\sum_g|p_g-P_g|$ |
+
+`local_scores(p, P, selected, K)` evaluates the requested primitives in a
+shared group traversal. For ordered variables, `cdf_scores(C, Q, selected)`
+uses $\mathbf p=(C,1-C)$ and $\mathbf P=(Q,1-Q)$, with respective multipliers
+$(1,1/2,2,1/2)$ for $(H,R,S,D)$. These multipliers preserve the ordered
+score units defined above. Pairwise categorical scores use the vector
+primitives directly, together with their corresponding vector normalizers.
+
+| Current code | Mathematical role |
+|:--|:--|
+| `N`, `T_i`, `P`, `z` | Counts, focal masses, regional proportions, and weighted global midranks |
+| `p`, `sparse` | Dense or sparse local probability distribution |
+| `Q` | Vector of regional cumulative proportions $Q_k$ |
+| `categorical_scores()`, `ordinal_scores()`, `continuous_scores()` | Completed neighborhood score vector $\mathbf a_i$ for each variable type |
+| `integrate_linear_scores()` | Rank-width-weighted integral of all requested scores along one linear CDF segment |
+| `mean_linear_score()`, `entropy_antiderivative()` | Stable segment averages and entropy antiderivative used by the linear integrator |
+| `integrate_step_scores()` | Score integrals over a constant empirical-CDF segment |
+| `integrate_step_deviation()`, `regional_cdf_antiderivative()` | Absolute deviation from the regional empirical CDF, using cached prefix integrals |
+| `mean_linear_absolute()` | Mean absolute linear deviation on an interpolated segment |
+| `normalizers`, `A` | Regional normalizers and raw focal-population-weighted sums |
+| `A_pair` | Pair-conditioned raw variation/deviation sums |
+| `exposure_acc`, `rank_acc` | Focal-group-weighted local shares or rank summaries |
+| `accumulate_scores()` | Streaming update $A_f\leftarrow A_f+T_i a_{i,f}$ |
+| `VariableAnalysis::process_neighborhood()` | One local-distribution construction, optional summaries, score evaluation, and accumulation per focal unit and band |
+| `VariableAnalysis::finalize_results()` | Regional normalization, status handling, and output assembly |
+
+For example, retaining contributions while returning mainly indices uses:
+
+```{r retained-contributions}
+retained <- spseg(
+  x = data.frame(x = 1:3, y = 0, counts), coords = c("x", "y"),
+  variables = list(groups = spseg_categorical(vars = colnames(counts))),
+  bands = 0, keep_contributions = TRUE
+)
+head(as.data.frame(retained, what = "contributions"))
+```
+
+Each analysis stores requested arrays in `$scores` or `$contributions`,
+separated into `$multigroup` and `$pairwise`, then by measure and band.
+With both retention options at their default `FALSE`, the engine keeps only
+the running regional sums and the current neighborhood's temporary scores.
+
+[^relative-diversity]: Reardon and Firebaugh's squared coefficient of variation
+    index also has a binary variance-ratio interpretation. For multigroup
+    calculations, spseg's diversity selector implements relative diversity $R$.
+
+[^root-support]: If each environment lacks at least one globally nonempty
+    group, its geometric mean is zero and the index equals one. This can occur
+    with mixtures of the remaining groups. The multigroup root therefore
+    captures a different feature of composition from an average of pairwise roots.
+
+[^dissimilarity-transfers]: Some equalizing exchanges leave binary dissimilarity
+    unchanged. Three equally populated units with below-threshold shares
+    $(.8,.6,.1)$ and $(.7,.7,.1)$ both give $D=8/15$. The ordered supplements
+    inherit this limitation at their component thresholds.
+
+[^marginal-identity]: The difference can be expressed through the marginal
+    departure $\sum_i\alpha_iG_i(q)-q$:
+
+    $$
+    \sum_i\alpha_i(G_i(q)-q)^2
+    =q(1-q)-\sum_i\alpha_i G_i(q)(1-G_i(q))
+     +(1-2q)\left(\sum_i\alpha_i G_i(q)-q\right).
+    $$
+
+    Marginal preservation makes the final term zero.
+
+[^exposure-symbol]: Reardon and Firebaugh's normalized scalar exposure index
+    also uses the symbol $P$. In spseg, the result field `p` holds the
+    directional exposure/isolation matrix defined here.
+
+# References

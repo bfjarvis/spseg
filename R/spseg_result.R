@@ -22,7 +22,11 @@
 #'   `"pairwise"` for two-group indices, `"exposure"` for focal-group summaries,
 #'   `"env"` for stored local summaries, `"diagnostics"` for per-band status and
 #'   kNN diagnostics, or `"interpolation"` for stored neighborhood interpolation
-#'   diagnostics. Continuous pairwise indices compare resolved global groups.
+#'   diagnostics. `"scores"` extracts retained local variation/deviation scores;
+#'   `"contributions"` extracts their additive index contributions. Both identify
+#'   `scope`, `location`, `measure`, and pair members where applicable, and require
+#'   their corresponding `keep_scores` or `keep_contributions` option in [spseg()].
+#'   Continuous pairwise indices compare resolved global groups.
 #' @param bands Optional subset of neighborhood bands.
 #' @param row.names,optional Standard data-frame generic arguments.
 #' @param ... Reserved for generic methods. Extraction rejects unused arguments.
@@ -36,6 +40,8 @@
 #'       `prob`, `value`.
 #'     \item Local shares: `variable`, `band`, `location`, `category`, `value`.
 #'     \item Local ranks: `variable`, `band`, `location`, `statistic`, `prob`, `value`.
+#'     \item Scores/contributions: `variable`, `band`, `scope`, `location`,
+#'       `measure`, `value`, plus pair members when pairwise results are requested.
 #'   }
 #'   Columns are chosen from the selected analyses' summary specifications, not
 #'   observed missingness. Mixed share/rank tables contain the union of their
@@ -53,6 +59,10 @@
 #'
 #'   Type, representation, method, normalizers, and calculation settings remain
 #'   in the result object rather than being repeated in result tables.
+#'   Retained scores and contributions are stored separately in each analysis,
+#'   grouped by scope, measure, and band. `st_as_sf()` supports `what = "env"`,
+#'   `"scores"`, and `"contributions"` when `output = "full"` or `"localenv"`
+#'   has retained geometry or coordinates.
 #'   `what = "diagnostics"` returns one row per variable/band with `status` and
 #'   any kNN population/radius diagnostics. `what = "interpolation"` returns
 #'   one row per stored interval neighborhood/band with `location`,
@@ -106,13 +116,15 @@ print.spseg_result <- function(x, ...) {
 #' @export
 as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     ..., what = c("indices", "pairwise", "exposure", "env", "diagnostics",
-                 "interpolation"), variables = NULL, bands = NULL) {
+                 "interpolation", "scores", "contributions"), variables = NULL, bands = NULL) {
   .spseg_unused_arguments(list(...))
   what <- match.arg(what)
   extract <- switch(what, indices = .spseg_indices_rows,
     pairwise = .spseg_pairwise_rows, exposure = .spseg_exposure_rows,
     env = .spseg_env_rows, diagnostics = .spseg_diagnostic_rows,
-    interpolation = .spseg_interpolation_rows)
+    interpolation = .spseg_interpolation_rows,
+    scores = function(...) .spseg_score_rows(..., what = "scores"),
+    contributions = function(...) .spseg_score_rows(..., what = "contributions"))
   selected <- .spseg_analysis_subset(x, variables, bands)
   analyses <- x$analyses[selected$variables]
   schema <- .spseg_result_schema(analyses, what)
@@ -120,6 +132,10 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
   keys <- c(d = "dissimilarity", h = "information", r = "diversity", s = "square_root")
   for (name in selected$variables) {
     analysis <- x$analyses[[name]]
+    if (what %in% c("scores", "contributions") && is.null(analysis[[what]])) {
+      stop("Local ", what, " were not retained; set keep_", what, " = TRUE",
+           call. = FALSE)
+    }
     if (what %in% c("indices", "pairwise", "exposure") && x$output == "localenv") {
       stop("Indices were not calculated; use output = 'indices' or 'full'", call. = FALSE)
     }
@@ -146,7 +162,7 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     block[names(schema)]
   })
   out <- if (length(rows)) do.call(rbind, rows) else schema
-  if (what %in% c("env", "interpolation") && !is.null(x$node_id)) {
+  if (what %in% c("env", "interpolation", "scores", "contributions") && !is.null(x$node_id)) {
     out$node <- x$node_id[out$location]
   }
   rownames(out) <- row.names
@@ -182,7 +198,14 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     },
     interpolation = c(base, list(location = integer(),
       bottom_category_share = numeric(), top_category_share = numeric(),
-      interpolated_share = numeric()))
+      interpolated_share = numeric())),
+    scores = , contributions = {
+      has_pairs <- any(vapply(analyses, function(a)
+        length(a[[what]]$pairwise) > 0, logical(1)))
+      c(base, list(scope = character(), location = integer(), measure = character()),
+        if (has_pairs) list(group_a = character(), group_b = character()),
+        list(value = numeric()))
+    }
   )
   as.data.frame(schema, stringsAsFactors = FALSE)
 }
@@ -192,6 +215,27 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     data.frame(base, measure = unname(keys[key]),
       value = unname(analysis$indices$multigroup[[key]][b]), row.names = NULL)
   })
+}
+
+.spseg_score_rows <- function(analysis, base, b, keys, what) {
+  rows <- list()
+  for (scope in c("multigroup", "pairwise")) {
+    store <- analysis[[what]][[scope]]
+    for (key in intersect(names(keys), names(store))) {
+      values <- store[[key]][[b]]
+      if (scope == "multigroup") {
+        rows[[length(rows) + 1L]] <- data.frame(base, scope = scope,
+          location = seq_along(values), measure = unname(keys[key]), value = values)
+      } else if (ncol(values)) {
+        pair <- rep(seq_len(ncol(values)), each = nrow(values))
+        rows[[length(rows) + 1L]] <- data.frame(base, scope = scope,
+          location = rep(seq_len(nrow(values)), times = ncol(values)),
+          measure = unname(keys[key]), group_a = analysis$score_pairs$group_a[pair],
+          group_b = analysis$score_pairs$group_b[pair], value = as.vector(values))
+      }
+    }
+  }
+  rows
 }
 
 .spseg_pairwise_rows <- function(analysis, base, b, keys) {
@@ -261,13 +305,15 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
 #' @rdname spseg_result
 #' @method st_as_sf spseg_result
 #' @export
-st_as_sf.spseg_result <- function(x, ..., variables = NULL, bands = NULL) {
+st_as_sf.spseg_result <- function(x, ..., variables = NULL, bands = NULL,
+                                what = c("env", "scores", "contributions")) {
   .spseg_unused_arguments(list(...))
   if (is.null(x$coords) && is.null(x$geometry))
     stop("No stored geometry or coordinates; network-only results cannot be mapped",
          call. = FALSE)
-  out <- as.data.frame(x, what = "env", variables = variables, bands = bands)
-  if (!nrow(out)) stop("No stored environment rows to extract", call. = FALSE)
+  what <- match.arg(what)
+  out <- as.data.frame(x, what = what, variables = variables, bands = bands)
+  if (!nrow(out)) stop("No stored local result rows to extract", call. = FALSE)
   if (!is.null(x$geometry)) sf::st_sf(out, geometry = x$geometry[out$location]) else {
     out$x <- x$coords[out$location, 1]
     out$y <- x$coords[out$location, 2]

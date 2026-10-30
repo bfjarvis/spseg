@@ -15,12 +15,19 @@
   row.names = NULL,
   optional = FALSE,
   ...,
-  what = c("indices", "pairwise", "exposure", "env", "diagnostics", "interpolation"),
+  what = c("indices", "pairwise", "exposure", "env", "diagnostics", "interpolation",
+    "scores", "contributions"),
   variables = NULL,
   bands = NULL
 )
 
-\method{st_as_sf}{spseg_result}(x, ..., variables = NULL, bands = NULL)
+\method{st_as_sf}{spseg_result}(
+  x,
+  ...,
+  variables = NULL,
+  bands = NULL,
+  what = c("env", "scores", "contributions")
+)
 
 \method{as.list}{spseg_result}(x, ...)
 }
@@ -35,7 +42,11 @@
 `"pairwise"` for two-group indices, `"exposure"` for focal-group summaries,
 `"env"` for stored local summaries, `"diagnostics"` for per-band status and
 kNN diagnostics, or `"interpolation"` for stored neighborhood interpolation
-diagnostics. Continuous pairwise indices compare resolved global groups.}
+diagnostics. `"scores"` extracts retained local variation/deviation scores;
+`"contributions"` extracts their additive index contributions. Both identify
+`scope`, `location`, `measure`, and pair members where applicable, and require
+their corresponding `keep_scores` or `keep_contributions` option in [spseg()].
+Continuous pairwise indices compare resolved global groups.}
 
 \item{variables}{Optional names of analyses to extract.}
 
@@ -52,6 +63,8 @@ Printing returns `x` invisibly. Extraction returns a long data frame
       `prob`, `value`.
     \item Local shares: `variable`, `band`, `location`, `category`, `value`.
     \item Local ranks: `variable`, `band`, `location`, `statistic`, `prob`, `value`.
+    \item Scores/contributions: `variable`, `band`, `scope`, `location`,
+      `measure`, `value`, plus pair members when pairwise results are requested.
   }
   Columns are chosen from the selected analyses' summary specifications, not
   observed missingness. Mixed share/rank tables contain the union of their
@@ -69,6 +82,10 @@ Printing returns `x` invisibly. Extraction returns a long data frame
 
   Type, representation, method, normalizers, and calculation settings remain
   in the result object rather than being repeated in result tables.
+  Retained scores and contributions are stored separately in each analysis,
+  grouped by scope, measure, and band. `st_as_sf()` supports `what = "env"`,
+  `"scores"`, and `"contributions"` when `output = "full"` or `"localenv"`
+  has retained geometry or coordinates.
   `what = "diagnostics"` returns one row per variable/band with `status` and
   any kNN population/radius diagnostics. `what = "interpolation"` returns
   one row per stored interval neighborhood/band with `location`,

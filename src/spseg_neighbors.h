@@ -32,7 +32,7 @@ inline double spseg_weight(double d, double bw, double power, int weighting) {
   }
 }
 
-struct Contributions {
+struct NeighborhoodWeights {
   std::vector<int> ids;
   std::vector<double> weights;
   bool knn = false;
@@ -58,9 +58,9 @@ inline bool populations_reached(const std::vector<PopulationSum>& sums,
   });
 }
 
-inline Contributions radius_contributions(const std::vector<Neighbor>& neighbors,
+inline NeighborhoodWeights radius_weights(const std::vector<Neighbor>& neighbors,
     double band, double power, int weighting, bool normalized) {
-  Contributions out;
+  NeighborhoodWeights out;
   const double bw = normalized && band > 0 ? band : 1.0;
   double tolerance = bw;
   if (weighting == Inverse) for (const auto& nb : neighbors) {
@@ -76,20 +76,20 @@ inline Contributions radius_contributions(const std::vector<Neighbor>& neighbors
   return out;
 }
 
-inline Contributions knn_contributions(const std::vector<Neighbor>& neighbors,
-    const arma::vec& mass, double target, double power,
+inline NeighborhoodWeights population_knn_weights(const std::vector<Neighbor>& neighbors,
+    const arma::vec& T_i, double target, double power,
     int weighting, bool normalized) {
-  Contributions out;
+  NeighborhoodWeights out;
   out.knn = true;
   out.target = target;
   if (neighbors.empty()) return out;
   const int focal = neighbors.front().id;
-  const double fraction = mass[focal] > 0 ? std::min(1.0, target / mass[focal]) : 0;
+  const double fraction = T_i[focal] > 0 ? std::min(1.0, target / T_i[focal]) : 0;
   out.ids.push_back(focal);
   out.weights.push_back(fraction);
   std::vector<double> distances{0};
   PopulationSum selected;
-  selected.add(static_cast<long double>(fraction) * mass[focal]);
+  selected.add(static_cast<long double>(fraction) * T_i[focal]);
   const double tolerance = 16 * std::numeric_limits<double>::epsilon() * target;
   double nearest_positive = 0;
   std::size_t begin = 1;
@@ -97,7 +97,7 @@ inline Contributions knn_contributions(const std::vector<Neighbor>& neighbors,
     std::size_t end = begin + 1;
     while (end < neighbors.size() && neighbors[end].d == neighbors[begin].d) ++end;
     PopulationSum shell;
-    for (std::size_t j = begin; j < end; ++j) shell.add(mass[neighbors[j].id]);
+    for (std::size_t j = begin; j < end; ++j) shell.add(T_i[neighbors[j].id]);
     if (shell.sum > 0) {
       const double inclusion = static_cast<double>(
         std::min(1.0L, (target - selected.sum) / shell.sum));
@@ -105,11 +105,11 @@ inline Contributions knn_contributions(const std::vector<Neighbor>& neighbors,
       if (out.radius > 0 && nearest_positive == 0) nearest_positive = out.radius;
       for (std::size_t j = begin; j < end; ++j) {
         const int id = neighbors[j].id;
-        if (mass[id] <= 0) continue;
+        if (T_i[id] <= 0) continue;
         out.ids.push_back(id);
         out.weights.push_back(inclusion);
         distances.push_back(neighbors[j].d);
-        selected.add(static_cast<long double>(inclusion) * mass[id]);
+        selected.add(static_cast<long double>(inclusion) * T_i[id]);
       }
     }
     begin = end;

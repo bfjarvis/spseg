@@ -100,6 +100,17 @@
 #'   summaries, with `mean_rank = TRUE` in that list for a separate mean.
 #'   Customize continuous summaries with `summary`, or ordinal summaries with
 #'   `localenv`, independently of full-resolution scalar indices.
+#' @param keep_scores Logical. Retain per-location H/R/S local variation and
+#'   D discrepancies, for the requested measures and scopes. Extract with
+#'   `as.data.frame(result, what = "scores")`.
+#' @param keep_contributions Logical. Retain additive per-location index
+#'   contributions, extracted with `what = "contributions"`. They sum to the
+#'   corresponding regional index, using original focal-population weights and
+#'   pair-specific weights for pairwise results. Both retention options default
+#'   to `FALSE` and work independently of `output`; only requested arrays are
+#'   allocated. Exposure and rank profiles have separate output.
+#'   Retention memory grows with locations, bands, requested scalar measures,
+#'   and group pairs; each enabled option stores its own arrays.
 #' @param verbose Logical. If `TRUE`, report progress messages.
 #' @param variables Column names for a single categorical variable, or a uniquely
 #'   named list of [spseg_variables] specifications. A single column name is
@@ -113,7 +124,8 @@
 #'   distance weights. Each specification can override `measures`.
 #'   Grid and pycnophylactic surfaces require count specifications for all
 #'   variables and polygonal sf input; raw support also accepts observed values.
-#'   See `vignette("spseg-multiple-variables")` for formulas and sources.
+#'   See `vignette("spseg-measure-definitions")` for formulas and sources,
+#'   and `vignette("spseg-multiple-variables")` for workflows.
 #' @param coords With plain data frames,
 #'   two coordinate column names or positions. For sf input, omit this argument
 #'   to use the active geometry. Distances are Euclidean in coordinate units;
@@ -211,6 +223,8 @@ spseg <- function(
   surface_audit = FALSE,
   scope = c("both", "multigroup", "pairwise"),
   output = c("indices", "full", "localenv"),
+  keep_scores = FALSE,
+  keep_contributions = FALSE,
   verbose = FALSE,
   network = NULL,
   node_id = NULL,
@@ -255,6 +269,13 @@ spseg <- function(
     stop("Network input requires surface = 'raw'", call. = FALSE)
   scope <- match.arg(scope, c("both", "multigroup", "pairwise"))
   output <- match.arg(output, c("indices", "full", "localenv"))
+  retention <- list(keep_scores = keep_scores,
+                    keep_contributions = keep_contributions)
+  for (option in names(retention)) {
+    value <- retention[[option]]
+    if (!is.logical(value) || length(value) != 1L || is.na(value))
+      stop("'", option, "' must be TRUE or FALSE", call. = FALSE)
+  }
   if (!is.logical(surface_audit) || length(surface_audit) != 1L || is.na(surface_audit))
     stop("'surface_audit' must be TRUE or FALSE", call. = FALSE)
   if (surface == "raw" && length(dots))
@@ -330,7 +351,7 @@ spseg <- function(
                          match(search, c("boost", "brute")) - 1L,
                          if (relational) prepared_network$graph else list(),
                          as.integer(.spseg_scope_flags(scope)), output != "indices",
-                         output != "localenv")
+                         output != "localenv", keep_scores, keep_contributions)
   analyses <- Map(.spseg_prepare_result, engine$analyses, compiled,
                   MoreArgs = list(bands = bands, keep_env = output != "indices"))
   result <- list(analyses = analyses, bands = as.numeric(bands),
@@ -340,9 +361,11 @@ spseg <- function(
                  population = if (output != "indices") population else NULL,
                  crs = checked$crs, weighting = weighting, power = power,
                  normalize = normalize, surface = surface, output = output,
+                 keep_scores = keep_scores, keep_contributions = keep_contributions,
                  surface_info = surface_info,
                  network = if (relational) prepared_network$summary else NULL,
-                 node_id = if (relational && output != "indices") prepared_network$ids else NULL,
+                 node_id = if (relational &&
+                   (output != "indices" || keep_scores || keep_contributions)) prepared_network$ids else NULL,
                  neighbors = list(type = neighbors, values = bands,
                                   space = if (relational) "network" else "euclidean",
                                   units = if (neighbors == "knn") "population" else

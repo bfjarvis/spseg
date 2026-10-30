@@ -21,6 +21,8 @@ spseg(
   surface_audit = FALSE,
   scope = c("both", "multigroup", "pairwise"),
   output = c("indices", "full", "localenv"),
+  keep_scores = FALSE,
+  keep_contributions = FALSE,
   verbose = FALSE,
   network = NULL,
   node_id = NULL,
@@ -46,7 +48,8 @@ discovery; kNN uses each variable's eligible population and adaptive
 distance weights. Each specification can override `measures`.
 Grid and pycnophylactic surfaces require count specifications for all
 variables and polygonal sf input; raw support also accepts observed values.
-See `vignette("spseg-multiple-variables")` for formulas and sources.}
+See `vignette("spseg-measure-definitions")` for formulas and sources,
+and `vignette("spseg-multiple-variables")` for workflows.}
 
 \item{coords}{With plain data frames,
 two coordinate column names or positions. For sf input, omit this argument
@@ -125,6 +128,19 @@ variables default to shares of resolved global quartile groups. Use
 summaries, with `mean_rank = TRUE` in that list for a separate mean.
 Customize continuous summaries with `summary`, or ordinal summaries with
 `localenv`, independently of full-resolution scalar indices.}
+
+\item{keep_scores}{Logical. Retain per-location H/R/S local variation and
+D discrepancies, for the requested measures and scopes. Extract with
+`as.data.frame(result, what = "scores")`.}
+
+\item{keep_contributions}{Logical. Retain additive per-location index
+contributions, extracted with `what = "contributions"`. They sum to the
+corresponding regional index, using original focal-population weights and
+pair-specific weights for pairwise results. Both retention options default
+to `FALSE` and work independently of `output`; only requested arrays are
+allocated. Exposure and rank profiles have separate output.
+Retention memory grows with locations, bands, requested scalar measures,
+and group pairs; each enabled option stores its own arrays.}
 
 \item{verbose}{Logical. If `TRUE`, report progress messages.}
 

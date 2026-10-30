@@ -284,8 +284,10 @@ preparation with `sfnetworks`.
 
 - [Getting started](vignettes/spseg-getting-started.Rmd): a complete workflow from
   simulated people to polygon counts and parallel comparisons across patterns.
-- [Multiple variables and methods](vignettes/spseg-multiple-variables.Rmd): measure
-  definitions, sources, input choices, and interpretation.
+- [Multiple variables and methods](vignettes/spseg-multiple-variables.Rmd): input
+  choices, multi-variable workflows, and interpretation.
+- [Technical definitions](vignettes/spseg-measure-definitions.Rmd): variation
+  functions, normalizers, local contributions, and methodological sources.
 - Installed help: `?spseg`, `?spseg_variables`, and `?spseg_result`.
 - [GitHub Issues](https://github.com/bfjarvis/spseg/issues): bug reports, feature
   requests, and questions about methods or workflows.
