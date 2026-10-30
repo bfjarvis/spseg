@@ -75,13 +75,13 @@ test_that("categorical measures match independent formulas across spatial option
       reference <- categorical_reference(d[c("a","b","c")],
                                            result$analyses$first$env[[band]])
       for (key in c("d","h","r","s")) {
-        expect_lte(abs(unname(result$analyses$first$indices$multigroup[[key]][band])-
-                         reference$multigroup[[key]]), 1e-12)
+        expect_lte(abs(unname(result$analyses$first$indices$overall[[key]][band])-
+                         reference$overall[[key]]), 1e-12)
         expect_equal(result$analyses$first$indices$pairwise[[key]][[band]],
                      reference$pairwise[[key]][[1]], tolerance=1e-12)
       }
-      expect_equal(result$analyses$first$indices$multigroup$p[[band]],
-                   reference$multigroup$p[[1]], tolerance=1e-12)
+      expect_equal(result$analyses$first$indices$overall$p[[band]],
+                   reference$overall$p[[1]], tolerance=1e-12)
     }
     expect_equal(result$analyses$first,result$analyses$second)
     expect_equal(result$diagnostics$focal_searches,nrow(d))
@@ -103,7 +103,7 @@ test_that("ordinal, grouped, and empirical calculators match independent referen
   for (v in names(variables)) {
     reference <- ordered_reference(counts,local,c(o="ordinal",g="grouped",c="continuous")[[v]])
     for (key in names(reference)) expect_equal(
-      unname(result$analyses[[v]]$indices$multigroup[[key]]),unname(reference[key]),tolerance=2e-8)
+      unname(result$analyses[[v]]$indices$overall[[key]]),unname(reference[key]),tolerance=2e-8)
   }
 })
 
@@ -137,18 +137,18 @@ test_that("categorical root is Hutchens for two groups and Atkinson for several"
   d <- data.frame(x=1:3,y=0,counts)
   result <- spseg(d,coords=c("x","y"),variables=list(g=spseg_categorical(vars=c("a","b","c"))),
                   bands=0,measures="square_root")
-  expect_equal(unname(result$analyses$g$indices$multigroup$s),1)
+  expect_equal(unname(result$analyses$g$indices$overall$s),1)
   expect_equal(result$analyses$g$indices$pairwise$s[[1]][upper.tri(counts)],rep(.5,3))
   binary <- spseg(as.matrix(d[c("x","y")]), variables = list(groups = spseg_categorical(vars = seq_len(ncol(counts[,1:2])))), data = counts[,1:2],bands=c(0,2),
                   measures=c("square_root","information"),output="full")
   totals <- colSums(counts[,1:2])
   direct <- 1-sum(sqrt(counts[,1]/totals[1]*counts[,2]/totals[2]))
-  expect_equal(unname(binary$analyses$groups$indices$multigroup$s[1]),direct)
-  expect_equal(binary$analyses$groups$indices$multigroup$s[1],binary$analyses$groups$indices$pairwise$s[[1]][1,2],ignore_attr=TRUE)
+  expect_equal(unname(binary$analyses$groups$indices$overall$s[1]),direct)
+  expect_equal(binary$analyses$groups$indices$overall$s[1],binary$analyses$groups$indices$pairwise$s[[1]][1,2],ignore_attr=TRUE)
   expect_equal(binary$analyses$groups$env[[1]],counts[,1:2]/rowSums(counts[,1:2]),ignore_attr=TRUE)
   expect_true("square_root" %in% as.data.frame(binary)$measure)
   recomputed <- categorical_reference(counts[,1:2],binary$analyses$groups$env[[1]])
-  expect_equal(recomputed$multigroup$s,unname(binary$analyses$groups$indices$multigroup$s[1]))
+  expect_equal(recomputed$overall$s,unname(binary$analyses$groups$indices$overall$s[1]))
   expect_equal(recomputed$pairwise$s[[1]],binary$analyses$groups$indices$pairwise$s[[1]])
 })
 
@@ -156,9 +156,9 @@ test_that("two-category ordinal measures reduce to binary categorical measures",
   d <- data.frame(x=1:3,y=0,a=c(80,60,10),b=c(20,40,90))
   result <- spseg(d,coords=c("x","y"),variables=list(
     cat=spseg_categorical(vars=c("a","b")),ord=spseg_ordinal(vars=c("a","b"))),bands=0)
-  expect_equal(result$analyses$cat$indices$multigroup,result$analyses$ord$indices$multigroup,
+  expect_equal(result$analyses$cat$indices$overall,result$analyses$ord$indices$overall,
                tolerance=1e-12)
-  expect_equal(unname(result$analyses$ord$indices$multigroup$d),8/15)
+  expect_equal(unname(result$analyses$ord$indices$overall$d),8/15)
 })
 
 test_that("proportional subdivision of a continuous interval preserves the interpolant", {
@@ -183,12 +183,12 @@ test_that("exposure cut selection affects only exposure, and preserves ties and 
     values=spseg_continuous(vars="v",summary=list(cuts=6))),
     bands=c(0,3),output="full")
   expect_identical(.Random.seed,seed)
-  expect_equal(nrow(result$analyses$deciles$indices$multigroup$p[[1]]),4L)
-  expect_equal(nrow(result$analyses$values$indices$multigroup$p[[1]]),2L)
+  expect_equal(nrow(result$analyses$deciles$indices$overall$p[[1]]),4L)
+  expect_equal(nrow(result$analyses$values$indices$overall$p[[1]]),2L)
   for (key in c("d","h","r","s")) expect_equal(
-    result$analyses$deciles$indices$multigroup[[key]],
-    result$analyses$values$indices$multigroup[[key]])
-  expect_equal(rowSums(result$analyses$values$indices$multigroup$p[[2]]),c(1,1),ignore_attr=TRUE)
+    result$analyses$deciles$indices$overall[[key]],
+    result$analyses$values$indices$overall[[key]])
+  expect_equal(rowSums(result$analyses$values$indices$overall$p[[2]]),c(1,1),ignore_attr=TRUE)
   unique <- transform(d, v=seq_len(nrow(d)))
   ten <- spseg(unique[1:10,],coords=c("x","y"),
                 variables=list(v=spseg_continuous(vars="v",
@@ -247,7 +247,7 @@ test_that("populations, omissions, constants, and invalid specifications are exp
   expect_true(all(is.na(as.data.frame(r,variables="v")$value)))
   expect_equal(r$analyses$v$status, c("2"="constant"))
   expect_equal(r$population,d$pop)
-  expect_equal(r$analyses$v$indices$multigroup$p[[1]][1,1],1)
+  expect_equal(r$analyses$v$indices$overall$p[[1]][1,1],1)
   expect_error(spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(vars="v")),bands=2),"Missing")
   d$c <- 1
   expect_error(spseg(d,coords=c("x","y"),variables=list(
@@ -270,7 +270,7 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
                     income=spseg_continuous(vars="income",na.action="omit",
                       summary=list(type="quantiles",probs=c(.1,.5,.9))))
   r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
-             bands=100,weighting="unweighted",scope="multigroup",output="full")
+             bands=100,weighting="unweighted",scope="overall",output="full")
   expect_equal(unname(r$analyses$income$env[[1]][1,]),
                (c(10,50,90)-.5)/128)
   for (name in names(variables)) {
@@ -281,7 +281,7 @@ test_that("kNN reaches 100 eligible people rather than stopping at 100 residents
   income_only <- spseg(adults,coords=c("x","y"),neighbors="knn",bands=100,
                        variables=list(income=spseg_continuous(vars="income",
                          summary=list(type="quantiles",probs=c(.1,.5,.9)))),
-                       weighting="unweighted",scope="multigroup")
+                       weighting="unweighted",scope="overall")
   expect_equal(r$analyses$income$indices,income_only$analyses$income$indices,
                tolerance=1e-12)
   expect_equal(r$diagnostics$focal_searches,nrow(d))
@@ -374,9 +374,9 @@ test_that("shared kNN radius expansion retains nonzero-distance boundary candida
   variables <- list(race=spseg_categorical(vars="race"),
                     income=spseg_continuous(vars="income",na.action="omit"))
   r <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
-             bands=100,measures="information",scope="multigroup")
+             bands=100,measures="information",scope="overall")
   brute <- spseg(d,coords=c("x","y"),variables=variables,neighbors="knn",
-                 bands=100,measures="information",scope="multigroup",search="brute")
+                 bands=100,measures="information",scope="overall",search="brute")
   expect_equal(r$analyses,brute$analyses,tolerance=1e-12)
   for (analysis in r$analyses) {
     expect_equal(analysis$knn$min_population,100)

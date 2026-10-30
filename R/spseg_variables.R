@@ -7,6 +7,11 @@
 #' Continuous variables accept exact observations or interval membership/counts
 #' through `representation`. Interval CDFs are interpolated directly; individual
 #' values are not imputed.
+#' Ordinal overall indices combine cumulative category thresholds. With
+#' `scope = "both"` or `"pairwise"`, ordinal categories also receive pairwise
+#' indices using the categorical two-group formulas within the same neighborhoods.
+#' Ordinal exposure/isolation uses the original categories. Pairwise indices and
+#' exposures use full category shares even when retained environments are quantiles.
 #'
 #' @param vars One column containing category membership or observed values, or
 #'   two or more columns containing nonnegative population counts. Count columns
@@ -15,6 +20,14 @@
 #'   Ordered factors supply their own order. For categorical values, factor
 #'   levels or sorted distinct values are used when this is omitted.
 #' @param measures Optional measure selection overriding [spseg()].
+#' @param scope Optional `"overall"`, `"pairwise"`, or `"both"`, overriding
+#'   the global scope in [spseg()]. `NULL` inherits the global setting.
+#' @param output Optional `"indices"`, `"full"`, or `"localenv"`, overriding
+#'   the global return mode. `NULL` inherits the global setting.
+#' @param keep_scores,keep_contributions Optional logical retention settings
+#'   overriding [spseg()]. `NULL` inherits the global setting; `FALSE` explicitly
+#'   disables retention for this variable. Effective settings are recorded in
+#'   `result$analyses[[name]]$settings`.
 #' @param weights Population-weight column or numeric vector when `vars` selects
 #'   one column. This supports survey weights and long-form aggregated counts,
 #'   where each row records a location/category combination. Rows at the same
@@ -76,6 +89,8 @@
 #' spseg_continuous(vars = "income",
 #'                  summary = list(type = "quantiles", mean_rank = TRUE))
 #' spseg_ordinal(vars = "education", localenv = "quantiles")
+#' spseg_categorical(vars = c("group_a", "group_b"),
+#'                   scope = "both", output = "full")
 #' # Long-form counts: one membership column and a population weight per row.
 #' spseg_categorical(vars = "race", weights = "population_count")
 #' @name spseg_variables
@@ -83,7 +98,9 @@ NULL
 
 .spseg_variable <- function(type, vars, levels, measures, weights,
                           na.action, interpolation = NULL, scores = NULL,
-                          localenv = "shares", representation = NULL) {
+                          localenv = "shares", representation = NULL,
+                          scope = NULL, output = NULL, keep_scores = NULL,
+                          keep_contributions = NULL) {
   if (!typeof(vars) %in% c("character", "integer", "double") ||
       !is.null(dim(vars)) ||
       !length(vars) || anyNA(vars) || anyDuplicated(vars) ||
@@ -98,8 +115,20 @@ NULL
     stop("'weights' applies only when 'vars' selects one column; count columns already contain mass",
          call. = FALSE)
   }
+  if (!is.null(scope)) scope <- match.arg(scope, c("both", "overall", "pairwise"))
+  if (!is.null(output)) output <- match.arg(output, c("indices", "full", "localenv"))
+  retention <- list(keep_scores = keep_scores,
+                    keep_contributions = keep_contributions)
+  for (name in names(retention)) {
+    value <- retention[[name]]
+    if (!is.null(value) &&
+        (!is.logical(value) || length(value) != 1L || is.na(value)))
+      stop("'", name, "' must be NULL, TRUE, or FALSE", call. = FALSE)
+  }
   structure(list(type = type, values = values, counts = counts,
                  levels = levels, measures = measures, weights = weights,
+                 scope = scope, output = output, keep_scores = keep_scores,
+                 keep_contributions = keep_contributions,
                  na.action = match.arg(na.action, c("fail", "omit")),
                  interpolation = interpolation, scores = scores,
                  representation = representation,
@@ -112,18 +141,25 @@ NULL
 #' @export
 spseg_categorical <- function(vars, levels = NULL,
                             measures = NULL, weights = NULL,
-                            na.action = c("fail", "omit")) {
+                            na.action = c("fail", "omit"), scope = NULL,
+                            output = NULL, keep_scores = NULL,
+                            keep_contributions = NULL) {
   .spseg_variable("categorical", vars, levels, measures, weights,
-                match.arg(na.action))
+                match.arg(na.action), scope = scope, output = output,
+                keep_scores = keep_scores, keep_contributions = keep_contributions)
 }
 
 #' @rdname spseg_variables
 #' @export
 spseg_ordinal <- function(vars, levels = NULL,
                        measures = NULL, weights = NULL,
-                       na.action = c("fail", "omit"), localenv = "shares") {
+                       na.action = c("fail", "omit"), localenv = "shares",
+                       scope = NULL, output = NULL, keep_scores = NULL,
+                       keep_contributions = NULL) {
   .spseg_variable("ordinal", vars, levels, measures, weights,
-                match.arg(na.action), localenv = localenv)
+                match.arg(na.action), localenv = localenv, scope = scope,
+                output = output, keep_scores = keep_scores,
+                keep_contributions = keep_contributions)
 }
 
 #' @rdname spseg_variables
@@ -133,7 +169,8 @@ spseg_continuous <- function(vars,
                           levels = NULL, scores = NULL,
                           measures = NULL, weights = NULL,
                           na.action = c("fail", "omit"), interpolation = NULL,
-                          summary = NULL) {
+                          summary = NULL, scope = NULL, output = NULL,
+                          keep_scores = NULL, keep_contributions = NULL) {
   representation <- match.arg(representation)
   if (representation == "intervals") {
     if (!is.null(scores))
@@ -153,7 +190,8 @@ spseg_continuous <- function(vars,
   out <- .spseg_variable("continuous", vars, levels, measures, weights,
                 match.arg(na.action), scores = scores,
                 representation = representation,
-                interpolation = interpolation)
+                interpolation = interpolation, scope = scope, output = output,
+                keep_scores = keep_scores, keep_contributions = keep_contributions)
   out$summary <- .spseg_summary_options(summary)
   out
 }

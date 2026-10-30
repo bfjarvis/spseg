@@ -35,7 +35,7 @@ test_that("continuous shares and ranks match independent two-unit references", {
     rbind(c(0.125, 0.375), c(0.625, 0.625)), ignore_attr = TRUE)
   expect_equal(ranks$analyses$income$rank_summary[[1]],
     rbind(c(0.25, 0.4375), c(0.5, 0.5625)), ignore_attr = TRUE)
-  expect_null(ranks$analyses$income$indices$multigroup$p)
+  expect_null(ranks$analyses$income$indices$overall$p)
 
   grouped <- as.data.frame(ranks, what = "exposure")
   expect_equal(grouped$statistic,
@@ -105,7 +105,7 @@ test_that("interval populations split proportionally across requested rank bins"
   )
   expect_equal(analysis$env[[1]], expected_local,
     tolerance = 1e-12, ignore_attr = TRUE)
-  expect_equal(analysis$indices$multigroup$p[[1]], rbind(
+  expect_equal(analysis$indices$overall$p[[1]], rbind(
     c(5 / 8, 3 / 8, 0, 0),
     c(3 / 8, 7 / 24, 1 / 6, 1 / 6),
     c(0, 1 / 6, 5 / 12, 5 / 12),
@@ -179,8 +179,8 @@ test_that("interval summary grids leave full continuous scalar indices unchanged
   result <- suppressWarnings(spseg(d, variables, coords = c("x", "y"),
     bands = c(0, 2), weighting = "unweighted", output = "full"))
   scalar_names <- c("d", "h", "r", "s")
-  expect_equal(result$analyses$quartiles$indices$multigroup[scalar_names],
-    result$analyses$custom$indices$multigroup[scalar_names], tolerance = 1e-12)
+  expect_equal(result$analyses$quartiles$indices$overall[scalar_names],
+    result$analyses$custom$indices$overall[scalar_names], tolerance = 1e-12)
   expect_equal(result$analyses$quartiles$normalizers,
     result$analyses$custom$normalizers, tolerance = 1e-12)
 })
@@ -199,8 +199,8 @@ test_that("summary grids do not change continuous scalar indices or search count
   scalar_names <- c("d", "h", "r", "s")
   reference <- result$analyses$default
   for (name in names(specs)[-1]) {
-    expect_equal(result$analyses[[name]]$indices$multigroup[scalar_names],
-      reference$indices$multigroup[scalar_names], tolerance = 1e-12)
+    expect_equal(result$analyses[[name]]$indices$overall[scalar_names],
+      reference$indices$overall[scalar_names], tolerance = 1e-12)
     expect_equal(result$analyses[[name]]$normalizers, reference$normalizers,
       tolerance = 1e-12)
   }

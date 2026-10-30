@@ -19,7 +19,7 @@ spseg(
   search = c("boost", "brute"),
   surface = c("raw", "grid", "pycno"),
   surface_audit = FALSE,
-  scope = c("both", "multigroup", "pairwise"),
+  scope = c("both", "overall", "pairwise"),
   output = c("indices", "full", "localenv"),
   keep_scores = FALSE,
   keep_contributions = FALSE,
@@ -112,12 +112,15 @@ contributions, the initial gridded counts, and pycnophylactically smoothed
 counts when applicable. The default retains only lightweight grid and
 fallback metadata.}
 
-\item{scope}{Whether to calculate "multigroup" measures, "pairwise"
-two-group measures, or "both" for categorical outcomes and resolved continuous
-global groups. Continuous pairwise indices use binary group shares within
-the original full-variable neighborhoods, independently of summary mode.
-They do not replace full-resolution continuous scalar indices. Ordered outcomes
-always return their cumulative-threshold summaries; exposure is separate.}
+\item{scope}{Whether to calculate "overall" measures, "pairwise"
+two-group measures, or "both" for categorical/ordinal categories and resolved
+continuous global groups. Ordinal pairwise indices compare individual
+categories using the same pair-conditioned formulas as categorical input.
+Overall indices use the full categorical distribution, ordinal cumulative
+thresholds, or continuous rank distribution. Continuous pairwise indices
+use binary group shares within the original full-variable neighborhoods,
+independently of summary mode. Exposure is selected through `measures`
+independently of scope. This global default can be overridden per variable.}
 
 \item{output}{Return mode. "indices" stores only segregation indices.
 "full" stores both indices and local environments. "localenv"
@@ -127,7 +130,10 @@ variables default to shares of resolved global quartile groups. Use
 `summary = list(type = "quantiles")` for synchronized local/grouped rank
 summaries, with `mean_rank = TRUE` in that list for a separate mean.
 Customize continuous summaries with `summary`, or ordinal summaries with
-`localenv`, independently of full-resolution scalar indices.}
+`localenv`, independently of full-resolution scalar indices.
+This global default can be overridden per variable. Shared input geometry,
+coordinates, data, and population are retained once if any variable stores
+environments.}
 
 \item{keep_scores}{Logical. Retain per-location H/R/S local variation and
 D discrepancies, for the requested measures and scopes. Extract with
@@ -140,7 +146,8 @@ pair-specific weights for pairwise results. Both retention options default
 to `FALSE` and work independently of `output`; only requested arrays are
 allocated. Exposure and rank profiles have separate output.
 Retention memory grows with locations, bands, requested scalar measures,
-and group pairs; each enabled option stores its own arrays.}
+and group pairs; each enabled option stores its own arrays.
+Both retention options can be overridden per variable, including by `FALSE`.}
 
 \item{verbose}{Logical. If `TRUE`, report progress messages.}
 
@@ -199,8 +206,8 @@ selects the requested eligible population, truncating the focal unit when
 needed and including equidistant boundary units proportionately. Neighboring
 units are added by centroid distance. An unattainable threshold raises an error.
 
-Each named variable has a result in `result$analyses`. Its multigroup
-measures are stored in `indices$multigroup` and requested pairwise
+Each named variable has a result in `result$analyses`. Its overall
+measures are stored in `indices$overall` and requested pairwise
 measures in `indices$pairwise`.
 Pairwise scalar measures are returned as one symmetric matrix per
 bandwidth with one row and column for each population group. Units with

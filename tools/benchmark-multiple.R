@@ -13,10 +13,10 @@ variables <- list(ethnicity=spseg_categorical(vars="ethnicity"),
 bands <- c(.025,.05,.1) * sqrt(5000/n)
 measure <- function() {
   joint <- system.time(result <- spseg(d, coords=c("x","y"), variables=variables,
-    bands=bands, scope="multigroup"))["elapsed"]
+    bands=bands, scope="overall"))["elapsed"]
   separate <- system.time(invisible(lapply(seq_along(variables), function(i)
     spseg(d, coords=c("x","y"), variables=variables[i], bands=bands,
-           scope="multigroup"))))["elapsed"]
+           scope="overall"))))["elapsed"]
   stopifnot(result$diagnostics$focal_searches==n)
   c(joint=unname(joint), separate=unname(separate), speedup=unname(separate/joint))
 }

@@ -91,7 +91,7 @@ as.data.frame(spseg(
   data = spseg_data,
   bands = 0,
   measures = "dissimilarity",
-  scope = "multigroup"
+  scope = "overall"
 ))
 ```
 

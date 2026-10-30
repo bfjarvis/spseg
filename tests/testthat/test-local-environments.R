@@ -36,8 +36,8 @@ test_that("interval quantiles and shares use the same linear CDF model", {
   expect_equal(unname(s$analyses$v$env[[1]]),
     rbind(c(.5, .5, 0), c(0, 7/12, 5/12), c(0, 11/36, 25/36)), tolerance = 1e-12)
   scalar <- c("d", "h", "r", "s")
-  expect_equal(q$analyses$v$indices$multigroup[scalar],
-    s$analyses$v$indices$multigroup[scalar], tolerance = 1e-12)
+  expect_equal(q$analyses$v$indices$overall[scalar],
+    s$analyses$v$indices$overall[scalar], tolerance = 1e-12)
   d$b1 <- d$b * .3
   d$b2 <- d$b * .7
   split <- run(d, c("a", "b1", "b2", "c"),
@@ -82,8 +82,8 @@ test_that("summary choices preserve scalar indices and ordinal behavior", {
     expect_equal(as.data.frame(r), as.data.frame(indices), tolerance = 1e-12)
     for (name in c("quantiles", "custom")) {
       scalar <- c("d", "h", "r", "s")
-      expect_equal(r$analyses$default$indices$multigroup[scalar],
-        r$analyses[[name]]$indices$multigroup[scalar])
+      expect_equal(r$analyses$default$indices$overall[scalar],
+        r$analyses[[name]]$indices$overall[scalar])
     }
     expect_equal(r$analyses$ordinal$indices, r$analyses$ordinal_quantiles$indices)
     expect_equal(unname(r$analyses$ordinal$env[[1]]),
@@ -102,7 +102,7 @@ test_that("local shares do not require exposure calculation", {
     weighting = "unweighted", output = "full")
   for (a in r$analyses) {
     expect_equal(unname(a$env[[1]]), matrix(.5, 10, 2))
-    expect_null(a$indices$multigroup$p)
+    expect_null(a$indices$overall$p)
   }
 })
 

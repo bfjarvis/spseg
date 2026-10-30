@@ -437,8 +437,11 @@ positive pair mass. Pairwise matrices are symmetric and have undefined
 diagonals. With only two groups, categorical multigroup and pairwise indices
 agree.
 
-Pairwise output covers categorical groups and the global groups resolved by
-a continuous `summary`. For continuous input, $N_{ia}$ and $p_{ia}$ refer to
+Pairwise output covers categorical and ordinal categories and the global groups
+resolved by a continuous `summary`. Ordinal pairwise comparisons condition on
+the two selected categories using the formulas above; the ordered multigroup
+indices combine cumulative thresholds across all categories. For continuous
+input, $N_{ia}$ and $p_{ia}$ refer to
 those resolved groups, using the same allocation fractions for focal and
 local populations. Continuous scalar indices summarize the full rank
 distribution; pairwise indices compare the selected reporting groups.
@@ -590,7 +593,7 @@ result <- spseg(
   scope = "both",
   output = "full"
 )
-engine <- result$analyses$groups$indices$multigroup
+engine <- result$analyses$groups$indices$overall
 engine_scores <- vapply(
   names(reference),
   function(key) engine[[key]][1],
@@ -640,8 +643,8 @@ compare_ordered <- function(type) {
     coords = c("x", "y"),
     bands = 0,
     weighting = "unweighted",
-    scope = "multigroup"
-  )$analyses$attribute$indices$multigroup
+    scope = "overall"
+  )$analyses$attribute$indices$overall
   actual <- vapply(names(values), function(key) computed[[key]][1], numeric(1))
   isTRUE(all.equal(values, actual, tolerance = 1e-12))
 }
@@ -724,7 +727,7 @@ interval_result <- spseg(
 )
 isTRUE(all.equal(
   manual_R,
-  unname(interval_result$analyses$income$indices$multigroup$r[1]),
+  unname(interval_result$analyses$income$indices$overall$r[1]),
   tolerance = 1e-10
 ))
 ```
@@ -788,7 +791,7 @@ head(as.data.frame(retained, what = "contributions"))
 ```
 
 Each analysis stores requested arrays in `$scores` or `$contributions`,
-separated into `$multigroup` and `$pairwise`, then by measure and band.
+separated into `$overall` and `$pairwise`, then by measure and band.
 With both retention options at their default `FALSE`, the engine keeps only
 the running regional sums and the current neighborhood's temporary scores.
 

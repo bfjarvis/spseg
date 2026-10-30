@@ -9,8 +9,10 @@
 #' `summary` selects synchronized shares or rank summaries; ordinal `localenv`
 #' selects quantiles or category shares. Settings are recorded
 #' in `definition$localenv`. The regional reference distribution is retained
-#' once when environments are stored. Inputs and environments are omitted in the
-#' default `output = "indices"` mode.
+#' once when environments are stored. Each analysis records effective `scope`,
+#' `output`, `keep_scores`, and `keep_contributions` in `settings`. Global result
+#' settings record defaults; variable-specific settings take precedence. Shared
+#' inputs are retained once when any analysis stores environments.
 #' Each definition records its `eligible_population`. For kNN, each analysis
 #' also contains a `knn` table: requested population, minimum/maximum selected
 #' population before distance weighting, and minimum/maximum neighborhood
@@ -18,7 +20,7 @@
 #'
 #' @param x A `spseg_result`.
 #' @param variables Optional names of analyses to extract.
-#' @param what Table to extract: `"indices"` for multigroup scalar indices,
+#' @param what Table to extract: `"indices"` for overall scalar indices,
 #'   `"pairwise"` for two-group indices, `"exposure"` for focal-group summaries,
 #'   `"env"` for stored local summaries, `"diagnostics"` for per-band status and
 #'   kNN diagnostics, or `"interpolation"` for stored neighborhood interpolation
@@ -26,7 +28,11 @@
 #'   `"contributions"` extracts their additive index contributions. Both identify
 #'   `scope`, `location`, `measure`, and pair members where applicable, and require
 #'   their corresponding `keep_scores` or `keep_contributions` option in [spseg()].
-#'   Continuous pairwise indices compare resolved global groups.
+#'   Categorical and ordinal pairwise indices compare original categories;
+#'   continuous pairwise indices compare resolved global groups.
+#'   With `variables = NULL`, mixed-output results include analyses with the
+#'   requested stored results. Explicitly selecting an analysis without those
+#'   results raises an error; so does requesting results unavailable everywhere.
 #' @param bands Optional subset of neighborhood bands.
 #' @param row.names,optional Standard data-frame generic arguments.
 #' @param ... Reserved for generic methods. Extraction rejects unused arguments.
@@ -89,6 +95,7 @@ print.spseg_result <- function(x, ...) {
   for (name in names(x$analyses)) {
     a <- x$analyses[[name]]
     cat(" ", name, ": ", a$definition$type, " (", a$definition$method, ")\n", sep = "")
+    cat("    Scope:", a$settings$scope, "| output:", a$settings$output, "\n")
     if (a$definition$type == "continuous") {
       interpretation <- if (a$definition$localenv$type == "quantiles") {
         "focal-group averages of local global-rank statistics, not exposure probabilities"
@@ -126,6 +133,15 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
     scores = function(...) .spseg_score_rows(..., what = "scores"),
     contributions = function(...) .spseg_score_rows(..., what = "contributions"))
   selected <- .spseg_analysis_subset(x, variables, bands)
+  if (is.null(variables)) {
+    available <- vapply(x$analyses[selected$variables], function(a) switch(what,
+      indices = , pairwise = , exposure = a$settings$output != "localenv",
+      env = !is.null(a$env),
+      scores = !is.null(a$scores), contributions = !is.null(a$contributions),
+      interpolation = !identical(a$definition$representation, "intervals") ||
+        !is.null(a$env), TRUE), logical(1))
+    if (any(available)) selected$variables <- selected$variables[available]
+  }
   analyses <- x$analyses[selected$variables]
   schema <- .spseg_result_schema(analyses, what)
   rows <- list()
@@ -136,7 +152,8 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
       stop("Local ", what, " were not retained; set keep_", what, " = TRUE",
            call. = FALSE)
     }
-    if (what %in% c("indices", "pairwise", "exposure") && x$output == "localenv") {
+    if (what %in% c("indices", "pairwise", "exposure") &&
+        analysis$settings$output == "localenv") {
       stop("Indices were not calculated; use output = 'indices' or 'full'", call. = FALSE)
     }
     if (what == "env" && is.null(analysis$env)) {
@@ -211,19 +228,19 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
 }
 
 .spseg_indices_rows <- function(analysis, base, b, keys) {
-  lapply(intersect(names(keys), names(analysis$indices$multigroup)), function(key) {
+  lapply(intersect(names(keys), names(analysis$indices$overall)), function(key) {
     data.frame(base, measure = unname(keys[key]),
-      value = unname(analysis$indices$multigroup[[key]][b]), row.names = NULL)
+      value = unname(analysis$indices$overall[[key]][b]), row.names = NULL)
   })
 }
 
 .spseg_score_rows <- function(analysis, base, b, keys, what) {
   rows <- list()
-  for (scope in c("multigroup", "pairwise")) {
+  for (scope in c("overall", "pairwise")) {
     store <- analysis[[what]][[scope]]
     for (key in intersect(names(keys), names(store))) {
       values <- store[[key]][[b]]
-      if (scope == "multigroup") {
+      if (scope == "overall") {
         rows[[length(rows) + 1L]] <- data.frame(base, scope = scope,
           location = seq_along(values), measure = unname(keys[key]), value = values)
       } else if (ncol(values)) {
@@ -263,7 +280,7 @@ as.data.frame.spseg_result <- function(x, row.names = NULL, optional = FALSE,
       statistic = stats$statistic[column], prob = stats$prob[column],
       value = as.vector(mat))))
   }
-  mat <- analysis$indices$multigroup$p[[b]]
+  mat <- analysis$indices$overall$p[[b]]
   if (is.null(mat) || !length(mat)) return(list())
   list(data.frame(base,
     expand.grid(from_group = rownames(mat), to_group = colnames(mat),

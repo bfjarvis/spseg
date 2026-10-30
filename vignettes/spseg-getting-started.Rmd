@@ -478,7 +478,7 @@ nonspatial <- spseg(
   bands = 0,
   weighting = "unweighted",
   surface = "raw",
-  scope = "multigroup",
+  scope = "overall",
   output = "full"
 )
 
@@ -524,7 +524,7 @@ centroid_spatial <- spseg(
   bands = radius_bands,
   weighting = "biweight",
   surface = "raw",
-  scope = "multigroup"
+  scope = "overall"
 )
 ```
 
@@ -544,7 +544,7 @@ uniform_spatial <- spseg(
   surface = "grid",
   nrow = 30,
   ncol = 30,
-  scope = "multigroup"
+  scope = "overall"
 )
 
 uniform_spatial$surface_info$fallback

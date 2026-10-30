@@ -13,8 +13,8 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
 // spseg_engine_cpp
-List spseg_engine_cpp(NumericMatrix coords, List variables, NumericVector bands, double power, int weighting, bool normalize, int neighbors, int search, List network, IntegerVector scope, bool keep_env, bool keep_indices, bool keep_scores, bool keep_contributions);
-RcppExport SEXP _spseg_spseg_engine_cpp(SEXP coordsSEXP, SEXP variablesSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP neighborsSEXP, SEXP searchSEXP, SEXP networkSEXP, SEXP scopeSEXP, SEXP keep_envSEXP, SEXP keep_indicesSEXP, SEXP keep_scoresSEXP, SEXP keep_contributionsSEXP) {
+List spseg_engine_cpp(NumericMatrix coords, List variables, NumericVector bands, double power, int weighting, bool normalize, int neighbors, int search, List network);
+RcppExport SEXP _spseg_spseg_engine_cpp(SEXP coordsSEXP, SEXP variablesSEXP, SEXP bandsSEXP, SEXP powerSEXP, SEXP weightingSEXP, SEXP normalizeSEXP, SEXP neighborsSEXP, SEXP searchSEXP, SEXP networkSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::traits::input_parameter< NumericMatrix >::type coords(coordsSEXP);
@@ -26,12 +26,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type neighbors(neighborsSEXP);
     Rcpp::traits::input_parameter< int >::type search(searchSEXP);
     Rcpp::traits::input_parameter< List >::type network(networkSEXP);
-    Rcpp::traits::input_parameter< IntegerVector >::type scope(scopeSEXP);
-    Rcpp::traits::input_parameter< bool >::type keep_env(keep_envSEXP);
-    Rcpp::traits::input_parameter< bool >::type keep_indices(keep_indicesSEXP);
-    Rcpp::traits::input_parameter< bool >::type keep_scores(keep_scoresSEXP);
-    Rcpp::traits::input_parameter< bool >::type keep_contributions(keep_contributionsSEXP);
-    rcpp_result_gen = Rcpp::wrap(spseg_engine_cpp(coords, variables, bands, power, weighting, normalize, neighbors, search, network, scope, keep_env, keep_indices, keep_scores, keep_contributions));
+    rcpp_result_gen = Rcpp::wrap(spseg_engine_cpp(coords, variables, bands, power, weighting, normalize, neighbors, search, network));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -53,7 +48,7 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_spseg_spseg_engine_cpp", (DL_FUNC) &_spseg_spseg_engine_cpp, 14},
+    {"_spseg_spseg_engine_cpp", (DL_FUNC) &_spseg_spseg_engine_cpp, 9},
     {"_spseg_spseg_pycno_cpp", (DL_FUNC) &_spseg_spseg_pycno_cpp, 6},
     {NULL, NULL, 0}
 };

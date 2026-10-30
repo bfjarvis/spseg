@@ -38,7 +38,7 @@
 
 \item{row.names, optional}{Standard data-frame generic arguments.}
 
-\item{what}{Table to extract: `"indices"` for multigroup scalar indices,
+\item{what}{Table to extract: `"indices"` for overall scalar indices,
 `"pairwise"` for two-group indices, `"exposure"` for focal-group summaries,
 `"env"` for stored local summaries, `"diagnostics"` for per-band status and
 kNN diagnostics, or `"interpolation"` for stored neighborhood interpolation
@@ -46,7 +46,11 @@ diagnostics. `"scores"` extracts retained local variation/deviation scores;
 `"contributions"` extracts their additive index contributions. Both identify
 `scope`, `location`, `measure`, and pair members where applicable, and require
 their corresponding `keep_scores` or `keep_contributions` option in [spseg()].
-Continuous pairwise indices compare resolved global groups.}
+Categorical and ordinal pairwise indices compare original categories;
+continuous pairwise indices compare resolved global groups.
+With `variables = NULL`, mixed-output results include analyses with the
+requested stored results. Explicitly selecting an analysis without those
+results raises an error; so does requesting results unavailable everywhere.}
 
 \item{variables}{Optional names of analyses to extract.}
 
@@ -108,8 +112,10 @@ shares of global groups for continuous variables by default. Continuous
 `summary` selects synchronized shares or rank summaries; ordinal `localenv`
 selects quantiles or category shares. Settings are recorded
 in `definition$localenv`. The regional reference distribution is retained
-once when environments are stored. Inputs and environments are omitted in the
-default `output = "indices"` mode.
+once when environments are stored. Each analysis records effective `scope`,
+`output`, `keep_scores`, and `keep_contributions` in `settings`. Global result
+settings record defaults; variable-specific settings take precedence. Shared
+inputs are retained once when any analysis stores environments.
 Each definition records its `eligible_population`. For kNN, each analysis
 also contains a `knn` table: requested population, minimum/maximum selected
 population before distance weighting, and minimum/maximum neighborhood

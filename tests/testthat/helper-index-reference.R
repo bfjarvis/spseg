@@ -18,11 +18,11 @@ categorical_reference <- function(counts, local) {
          s = 1-sum(alpha*exp(rowMeans(log(p[,active,drop=FALSE])))) /
            exp(mean(log(shares[active]))))
   }
-  multigroup <- scalar(counts, local)
+  overall <- scalar(counts, local)
   p <- local/rowSums(local)
   exposure <- t(counts) %*% p / colSums(counts)
   dimnames(exposure) <- list(colnames(counts), colnames(counts))
-  multigroup$p <- list(exposure)
+  overall$p <- list(exposure)
   matrices <- lapply(c("d","r","h","s"), function(key) {
     out <- matrix(NA_real_,ncol(counts),ncol(counts),
                    dimnames=list(colnames(counts),colnames(counts)))
@@ -34,5 +34,5 @@ categorical_reference <- function(counts, local) {
     list(out)
   })
   names(matrices) <- c("d","r","h","s")
-  list(multigroup=multigroup,pairwise=matrices)
+  list(overall=overall,pairwise=matrices)
 }

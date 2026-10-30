@@ -42,7 +42,7 @@ struct VariableAnalysis {
   arma::cube A_pair;
   List environments;
   List interpolation;
-  bool keep_env, indices, multigroup, pairwise;
+  bool keep_env, indices, overall, pairwise;
   std::vector<bool> empty;
   NumericVector knn_target, knn_min, knn_max, radius_min, radius_max;
   bool has_knn = false;
@@ -51,7 +51,7 @@ struct VariableAnalysis {
   List scores_overall, scores_pairwise, contributions_overall, contributions_pairwise;
   std::vector<Scores> pair_normalizers;
 
-  VariableAnalysis(List config, int n, int b, bool store, bool calculate, bool multi,
+  VariableAnalysis(List config, int n, int b, bool store, bool calculate, bool calculate_overall,
                    bool pair, bool store_scores, bool store_contributions)
     : type(as<int>(config["type"])), n_bands(b),
       N_input(as<NumericMatrix>(config["counts"])),
@@ -63,8 +63,8 @@ struct VariableAnalysis {
       labels(config["exposure_labels"]),
       A(b,MeasureCount,arma::fill::zeros), environments(store ? b : 0),
       interpolation(store && group_fractions.nrow()>0 ? b : 0),
-      keep_env(store), indices(calculate), multigroup(multi || type!=Categorical),
-      pairwise(pair && (type==Categorical || continuous)), empty(b,false),
+      keep_env(store), indices(calculate), overall(calculate_overall),
+      pairwise(pair), empty(b,false),
       knn_target(b), knn_min(b,R_PosInf), knn_max(b,0.0),
       radius_min(b,R_PosInf), radius_max(b,0.0),
       keep_scores(store_scores), keep_contributions(store_contributions)
@@ -113,11 +113,11 @@ struct VariableAnalysis {
       if(group_fractions.nrow()>0) interpolation[band]=NumericMatrix(n,3);
     }
     if(keep_scores) {
-      if(multigroup) scores_overall = allocate_local_output(n, false);
+      if(overall) scores_overall = allocate_local_output(n, false);
       if(pairwise) scores_pairwise = allocate_local_output(n, true);
     }
     if(keep_contributions) {
-      if(multigroup) contributions_overall = allocate_local_output(n, false);
+      if(overall) contributions_overall = allocate_local_output(n, false);
       if(pairwise) contributions_pairwise = allocate_local_output(n, true);
     }
   }
@@ -390,7 +390,7 @@ struct VariableAnalysis {
         // A location with zero focal population has zero additive weight.
         const char* keys[MeasureCount] = {"p", "h", "r", "d", "s"};
         for(int f : {Information, Diversity, Root, Dissimilarity}) if(selected[f]) {
-          if(multigroup && normalizers[f]>0 &&
+          if(overall && normalizers[f]>0 &&
               (type==ContinuousIntervals || K>1)) {
             List by_band = contributions_overall[keys[f]];
             NumericVector values = by_band[band];
@@ -406,7 +406,7 @@ struct VariableAnalysis {
       }
       return;
     }
-    if(multigroup) {
+    if(overall) {
       const Scores a_i = type == Categorical ? categorical_scores(p) :
         type == Ordinal ? ordinal_scores(p) : continuous_scores(p, sparse);
       if(indices && T_i[i]>0) accumulate_scores(a_i, T_i[i], band);
@@ -470,19 +470,19 @@ struct VariableAnalysis {
   }
 
   List finalize_results() {
-    List multigroup_out, pairwise_out, rank_summary;
+    List overall_out, pairwise_out, rank_summary;
     const char* names[MeasureCount]={"p","h","r","d","s"};
     CharacterVector status(n_bands);
     const bool constant=type==ContinuousIntervals ? false : K<2;
     for(int b=0;b<n_bands;++b) status[b]=empty[b] ? "empty_environment" :
       (constant ? "constant" : "ok");
-    if(indices && multigroup) for(int f:{Dissimilarity,Diversity,Information,Root}) if(flags[f]) {
+    if(indices && overall) for(int f:{Dissimilarity,Diversity,Information,Root}) if(flags[f]) {
       NumericVector out(n_bands,NA_REAL);
       for(int b=0;b<n_bands;++b) if(!empty[b] && !constant && normalizers[f]>0) {
         const double value=A(b,f)/(T*normalizers[f]);
         out[b]=f==Dissimilarity ? value : 1-value;
       }
-      multigroup_out[names[f]]=out;
+      overall_out[names[f]]=out;
     }
     if(indices && flags[Exposure] && continuous && env_type==Quantiles) {
       rank_summary=List(n_bands);
@@ -503,7 +503,7 @@ struct VariableAnalysis {
           out(a,c)=!empty[b] && totals[a]>0 ? exposure_acc(a,c,b)/totals[a] : NA_REAL;
         out.attr("dimnames")=List::create(labels,labels); matrices[b]=out;
       }
-      multigroup_out["p"]=matrices;
+      overall_out["p"]=matrices;
     }
     if(indices && pairwise) for(int f:{Dissimilarity,Diversity,Information,Root}) if(flags[f]) {
       List matrices(n_bands);
@@ -530,7 +530,7 @@ struct VariableAnalysis {
     if(has_knn) knn_summary=List::create(_["requested"]=knn_target,
       _["min_population"]=knn_min,_["max_population"]=knn_max,
       _["min_radius"]=radius_min,_["max_radius"]=radius_max);
-    List out = List::create(_["indices"]=List::create(_["multigroup"]=multigroup_out,
+    List out = List::create(_["indices"]=List::create(_["overall"]=overall_out,
                         _["pairwise"]=pairwise_out),
                         _["env"]=keep_env ? static_cast<SEXP>(environments) : R_NilValue,
                         _["rank_summary"]=rank_summary,
@@ -538,7 +538,7 @@ struct VariableAnalysis {
                         _["status"]=status,_["normalizers"]=refs,
                         _["knn"]=has_knn ? static_cast<SEXP>(knn_summary) : R_NilValue);
     if(keep_scores) out["scores"] = List::create(
-      _["multigroup"]=scores_overall, _["pairwise"]=scores_pairwise);
+      _["overall"]=scores_overall, _["pairwise"]=scores_pairwise);
     if(keep_contributions) {
       for(List store : {contributions_overall, contributions_pairwise}) {
         for(int f=0; f<store.size(); ++f) {
@@ -550,7 +550,7 @@ struct VariableAnalysis {
         }
       }
       out["contributions"] = List::create(
-        _["multigroup"]=contributions_overall, _["pairwise"]=contributions_pairwise);
+        _["overall"]=contributions_overall, _["pairwise"]=contributions_pairwise);
     }
     return out;
   }
@@ -560,8 +560,7 @@ struct VariableAnalysis {
 // [[Rcpp::export(rng = false)]]
 List spseg_engine_cpp(NumericMatrix coords, List variables,
     NumericVector bands, double power, int weighting, bool normalize,
-    int neighbors, int search, List network, IntegerVector scope, bool keep_env,
-    bool keep_indices, bool keep_scores = false, bool keep_contributions = false)
+    int neighbors, int search, List network)
 {
   const int n=as<NumericVector>(as<List>(variables[0])["mass"]).size(), B=bands.size();
   arma::vec X(coords.begin(),coords.nrow(),false), Y(coords.begin()+coords.nrow(),coords.nrow(),false);
@@ -573,9 +572,14 @@ List spseg_engine_cpp(NumericMatrix coords, List variables,
   else euclidean.reset(new EuclideanSearch(X,Y,search==Indexed));
   const CharacterVector names=variables.names();
   std::vector<std::unique_ptr<VariableAnalysis>> models;
-  for(int v=0;v<variables.size();++v)
-    models.emplace_back(new VariableAnalysis(as<List>(variables[v]),n,B,keep_env,
-      keep_indices,scope[0],scope[1],keep_scores,keep_contributions));
+  for(int v=0;v<variables.size();++v) {
+    const List config = variables[v], settings = config["settings"];
+    const std::string scope = as<std::string>(settings["scope"]);
+    const std::string output = as<std::string>(settings["output"]);
+    models.emplace_back(new VariableAnalysis(config,n,B,output!="indices",
+      output!="localenv",scope!="pairwise",scope!="overall",
+      as<bool>(settings["keep_scores"]),as<bool>(settings["keep_contributions"])));
+  }
   const bool knn = neighbors==PopulationNearest;
   // Identical eligible populations share both the stopping rule and kernels.
   // Views refer to analysis-owned R vectors; no n-by-variable copy is needed.

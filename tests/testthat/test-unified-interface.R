@@ -100,7 +100,7 @@ test_that("the variable interface is required and returns one result class", {
                "named list|named.*list")
   result <- spseg(d,vars,coords=c("x","y"),bands=1,output="full")
   expect_identical(class(result), "spseg_result")
-  expect_setequal(names(result$analyses$groups$indices$multigroup),c("d","h","r","s","p"))
+  expect_setequal(names(result$analyses$groups$indices$overall),c("d","h","r","s","p"))
   expect_null(result$indices)
   expect_null(result$env)
   expect_error(as.data.frame(result,shape="long"),"Unused extraction")
@@ -209,13 +209,13 @@ test_that("all count variable types share grid surfaces and neighborhood discove
     band <- if(neighbors=="radius") .9 else 3
     result <- spseg(areas,vars,population="residents",bands=band,surface=surface,
                      neighbors=neighbors,nrow=4,ncol=4,converge=1,
-                     surface_audit=TRUE,output="full",scope="multigroup")
+                     surface_audit=TRUE,output="full",scope="overall")
     expect_equal(result$diagnostics$focal_searches,nrow(result$coords))
     expect_named(result$surface_info$variables,names(vars))
     for (name in names(vars)) {
       alone <- spseg(areas,vars[name],population="residents",bands=band,surface=surface,
                        neighbors=neighbors,nrow=4,ncol=4,converge=1,
-                       output="full",scope="multigroup")
+                       output="full",scope="overall")
       expect_equal(result$analyses[[name]],alone$analyses[[name]],tolerance=1e-10)
       expect_equal(result$analyses[[name]]$definition$eligible_population,unname(totals[name]),
                    tolerance=1e-10)

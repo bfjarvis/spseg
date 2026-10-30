@@ -1,5 +1,18 @@
 # spseg (development version)
 
+- Renamed scope `"multigroup"` and the corresponding result fields to
+  `"overall"`, covering categorical, ordinal, and continuous overall indices.
+  Variable constructors now accept `scope`, `output`, `keep_scores`, and
+  `keep_contributions`; `NULL` inherits the global default and explicit values
+  override it. Mixed-output extraction selects available analyses by default.
+  Pairwise-only scope now consistently omits overall scalar indices for every
+  variable type; exposure remains independently selected through `measures`.
+
+- Ordinal variables now return pairwise category indices when requested by
+  `scope`, alongside their ordered multigroup indices and existing category
+  exposure/isolation matrices. Pairwise scores and contributions can also be
+  retained, independently of the ordinal environment summary.
+
 - Extracted and expanded the technical measure definitions into a separate
   vignette, documenting local variation/deviation functions, normalizers,
   pairwise conditioning, additive contributions, and methodological provenance.

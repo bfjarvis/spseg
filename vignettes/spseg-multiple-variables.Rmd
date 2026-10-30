@@ -42,7 +42,7 @@ variables <- list(
   age = spseg_continuous(vars="age")
 )
 result <- spseg(people, coords=c("x", "y"), variables=variables,
-                measures="all", bands=c(2, 4), scope="multigroup")
+                measures="all", bands=c(2, 4), scope="overall")
 as.data.frame(result)
 ```
 
@@ -93,9 +93,39 @@ Each specification can override `measures`. The common selectors are
 `"relative_diversity"` and `"variance_ratio"` are aliases for the diversity
 family; the nominal measure is specifically relative diversity, not the other
 multigroup indices that share its binary reduction. `"all"` includes all five families.
-`scope` controls categorical multigroup/pairwise calculations and pairwise
-comparisons between resolved continuous groups. Ordinal indices combine
-cumulative thresholds, not nominal comparisons between all pairs of categories.
+`scope = "overall"` selects categorical multigroup indices, ordinal
+cumulative-threshold indices, or continuous rank-order indices.
+`scope = "pairwise"` selects comparisons between categorical/ordinal categories
+or resolved continuous groups; `"both"` is the default. Exposure is selected
+separately through `measures`.
+
+## Variable-specific output
+
+Each variable can override `scope`, `output`, `keep_scores`, and
+`keep_contributions`, as well as `measures`. `NULL` in a variable specification
+inherits the corresponding global setting. An explicit `FALSE` overrides a
+global retention setting of `TRUE`.
+
+```{r variable-output}
+mixed_output <- spseg(
+  blocks, coords = c("x", "y"), bands = c(2, 4),
+  variables = list(
+    groups = spseg_categorical(vars = c("low", "middle", "high"),
+      scope = "both", output = "full"),
+    education = spseg_ordinal(vars = c("low", "middle", "high"),
+      keep_contributions = TRUE)
+  ),
+  scope = "overall", output = "indices"
+)
+mixed_output$analyses$groups$settings
+mixed_output$analyses$education$settings
+head(as.data.frame(mixed_output, what = "env"))
+```
+
+Extraction across all variables includes the analyses with the requested stored
+results. In this example, the environment table contains only `groups`.
+Selecting `variables = "education"` explicitly when requesting environments
+reports that they were not retained. Shared spatial inputs are stored once.
 
 # Population and spatial contributions
 

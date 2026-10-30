@@ -30,7 +30,7 @@ test_that("local and grouped rank statistics use the same focal-weighted quantit
                ignore_attr = TRUE)
   expect_equal(analysis$rank_summary[[1]], cbind(c(1/4, 1/2), c(7/16, 9/16)),
                ignore_attr = TRUE)
-  expect_null(analysis$indices$multigroup$p)
+  expect_null(analysis$indices$overall$p)
   out <- as.data.frame(result, what = "exposure")
   expect_setequal(out$statistic, c("quantile_rank", "mean_rank"))
   expect_false(any(c("to_group", "exposure", "rank") %in% names(out)))
@@ -47,16 +47,16 @@ test_that("continuous pairwise groups and scalar calculations are independent of
   expect_equal(shares$analyses$income$indices$pairwise,
                ranks$analyses$income$indices$pairwise, tolerance = 1e-12)
   for (measure in c("h", "r", "d", "s")) {
-    expect_equal(shares$analyses$income$indices$multigroup[[measure]],
-                 ranks$analyses$income$indices$multigroup[[measure]])
+    expect_equal(shares$analyses$income$indices$overall[[measure]],
+                 ranks$analyses$income$indices$overall[[measure]])
   }
   expect_equal(unname(shares$analyses$income$indices$pairwise$d[[1]][1, 2]), .5)
-  expect_equal(shares$analyses$income$indices$multigroup$p[[1]],
+  expect_equal(shares$analyses$income$indices$overall$p[[1]],
                matrix(c(5/8, 3/8, 3/8, 5/8), 2), ignore_attr = TRUE)
   other <- summary_run(d, list(type = "quantiles", probs = c(.2, .8)))
   for (measure in c("h", "r", "d", "s")) {
-    expect_equal(shares$analyses$income$indices$multigroup[[measure]],
-                 other$analyses$income$indices$multigroup[[measure]])
+    expect_equal(shares$analyses$income$indices$overall[[measure]],
+                 other$analyses$income$indices$overall[[measure]])
   }
   expect_equal(shares$analyses$income$normalizers, other$analyses$income$normalizers)
 })
@@ -108,7 +108,7 @@ test_that("single interval summaries explicitly use the rank interpolation model
                  "Interval summary interpolation")
   expect_equal(unname(mean$analyses$income$env[[1]][, 4]), c(.5, .5))
   expect_warning(shares <- run(list(type = "shares")), "Interval summary interpolation")
-  expect_equal(unname(shares$analyses$income$indices$multigroup$p[[1]]), matrix(.25, 4, 4))
+  expect_equal(unname(shares$analyses$income$indices$overall$p[[1]]), matrix(.25, 4, 4))
 })
 
 test_that("open upper categories apportion deciles and report neighborhood diagnostics", {
@@ -122,7 +122,7 @@ test_that("open upper categories apportion deciles and report neighborhood diagn
   expect_equal(unname(analysis$definition$summary$groups$allocation[2, 9:10]),
                c(1/3, 2/3))
   expect_equal(unname(analysis$env[[1]][, 10]), c(.2, 0))
-  expect_equal(unname(analysis$indices$multigroup$p[[1]][, 10]),
+  expect_equal(unname(analysis$indices$overall$p[[1]][, 10]),
                c(rep(7/85, 8), 12/85, 1/5))
   expect_equal(unname(analysis$interpolation[[1]]),
                cbind(c(.7, 1), c(.3, 0), c(1, 1)))
@@ -139,8 +139,8 @@ test_that("open upper categories apportion deciles and report neighborhood diagn
     bands = c(0, 20), weighting = "unweighted", output = "full"))
   expect_true(all(unsplit$analyses$income$interpolation[[1]][, 3] == 0))
   for (measure in c("h", "r", "d", "s")) {
-    expect_equal(analysis$indices$multigroup[[measure]],
-                 unsplit$analyses$income$indices$multigroup[[measure]])
+    expect_equal(analysis$indices$overall[[measure]],
+                 unsplit$analyses$income$indices$overall[[measure]])
   }
   expect_equal(analysis$normalizers, unsplit$analyses$income$normalizers)
   expect_warning(compact <- spseg(d, list(income = spec), coords = c("x", "y"),

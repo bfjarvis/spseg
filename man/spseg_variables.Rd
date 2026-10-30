@@ -12,7 +12,11 @@ spseg_categorical(
   levels = NULL,
   measures = NULL,
   weights = NULL,
-  na.action = c("fail", "omit")
+  na.action = c("fail", "omit"),
+  scope = NULL,
+  output = NULL,
+  keep_scores = NULL,
+  keep_contributions = NULL
 )
 
 spseg_ordinal(
@@ -21,7 +25,11 @@ spseg_ordinal(
   measures = NULL,
   weights = NULL,
   na.action = c("fail", "omit"),
-  localenv = "shares"
+  localenv = "shares",
+  scope = NULL,
+  output = NULL,
+  keep_scores = NULL,
+  keep_contributions = NULL
 )
 
 spseg_continuous(
@@ -33,7 +41,11 @@ spseg_continuous(
   weights = NULL,
   na.action = c("fail", "omit"),
   interpolation = NULL,
-  summary = NULL
+  summary = NULL,
+  scope = NULL,
+  output = NULL,
+  keep_scores = NULL,
+  keep_contributions = NULL
 )
 }
 \arguments{
@@ -57,6 +69,17 @@ Defaults to the `population` supplied to [spseg()], or its inferred default.}
 \item{na.action}{Missing-value policy: `"fail"` or `"omit"`. Omission applies
 only to this variable, including its kNN stopping population. Other
 variables and radius bandwidths are unaffected.}
+
+\item{scope}{Optional `"overall"`, `"pairwise"`, or `"both"`, overriding
+the global scope in [spseg()]. `NULL` inherits the global setting.}
+
+\item{output}{Optional `"indices"`, `"full"`, or `"localenv"`, overriding
+the global return mode. `NULL` inherits the global setting.}
+
+\item{keep_scores, keep_contributions}{Optional logical retention settings
+overriding [spseg()]. `NULL` inherits the global setting; `FALSE` explicitly
+disables retention for this variable. Effective settings are recorded in
+`result$analyses[[name]]$settings`.}
 
 \item{localenv}{Ordinal retained-environment summary: `"shares"` (default)
 or `"quantiles"`, optionally supplied as a list with `type` and `probs`.
@@ -116,6 +139,11 @@ names or integer positions. A single count column is not supported.
 Continuous variables accept exact observations or interval membership/counts
 through `representation`. Interval CDFs are interpolated directly; individual
 values are not imputed.
+Ordinal overall indices combine cumulative category thresholds. With
+`scope = "both"` or `"pairwise"`, ordinal categories also receive pairwise
+indices using the categorical two-group formulas within the same neighborhoods.
+Ordinal exposure/isolation uses the original categories. Pairwise indices and
+exposures use full category shares even when retained environments are quantiles.
 }
 \examples{
 spseg_categorical(vars = "ethnicity")
@@ -125,6 +153,8 @@ spseg_continuous(vars = "income", summary = list(probs = c(.2, .8)))
 spseg_continuous(vars = "income",
                  summary = list(type = "quantiles", mean_rank = TRUE))
 spseg_ordinal(vars = "education", localenv = "quantiles")
+spseg_categorical(vars = c("group_a", "group_b"),
+                  scope = "both", output = "full")
 # Long-form counts: one membership column and a population weight per row.
 spseg_categorical(vars = "race", weights = "population_count")
 }
