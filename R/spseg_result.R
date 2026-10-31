@@ -30,6 +30,8 @@
 #'   their corresponding `keep_scores` or `keep_contributions` option in [spseg()].
 #'   Categorical and ordinal pairwise indices compare original categories;
 #'   continuous pairwise indices compare resolved global groups.
+#'   Probability-defined continuous groups are labeled by population percentile
+#'   ranges, such as `P0-P25`. Explicit value cuts retain value-based labels.
 #'   With `variables = NULL`, mixed-output results include analyses with the
 #'   requested stored results. Explicitly selecting an analysis without those
 #'   results raises an error; so does requesting results unavailable everywhere.

@@ -15,33 +15,47 @@ knitr::opts_chunk$set(
   fig.height = 5,
   dpi = 120
 )
+theme_set(theme_minimal(base_size = 11))
 ```
 
-This vignette provides an overview of key features of the spseg package, starting from a simulated data set featuring individuals chacterized by a categorical group membership and a continuous covariate. Segregation measures are generated based on this individual-level data, which is an ideal case for segregation measurement. But from there, the data are compiled into various spatial aggregates and the continuous covariate is binned. The performance and features of the package are then demonstrated on these spatially aggregated statistics. The idea is to demonstrate analogues of the kinds of data that researchers are most likely to encounter.
+`spseg` is a package for calculating bespoke local environments and segregation measures in R. It is heavily inspired by the methodological innovations in segregation measurement that Sean Reardon, David O'Sullivan, Kendra Bischoff, and colleagues presented in a series of papers in the 2000s. The package synthesizes these methodological innovations into a coherent measurement framework supported by a `spseg_result` class and corresponding extraction methods. The heaviest computations use compiled C++ code, with Boost C++ libraries supporting bandwidth-based and k-nearest-neighbor searches in Euclidean spaces and on graphs.
+
+This vignette provides an overview of key features of the spseg package, starting from a simulated data set featuring individuals characterized by a categorical group membership, an ordinal status, and a continuous covariate. Segregation measures are generated based on this individual-level data, which is an ideal case for segregation measurement. From there, the data are compiled into spatial aggregates and the continuous covariate is binned. The performance and features of the package are then demonstrated on these spatially aggregated statistics, illustrating the kinds of data that researchers are likely to encounter in their own applications.
+
+
+# Simulating a segregated population
+
+Before we get going, let's load the packages used in this vignette:
 
 ```{r packages, message=FALSE, warning=FALSE}
 library(spseg)
 library(sf)
-library(tidyverse)
-theme_set(theme_minimal(base_size = 11))
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
 ```
 
-# Simulating a segregated population
-
-We start by generating 5,000 fictive housing units and 5,000 fictive actors. The housing units are uniformly and randomly distributed locations within a square. The agents are generated with a binary trait, `group`, an ordinal trait, `status`, and a continuous trait, `resource`. These are abstract, but we could relate these to, for example, race/ethnicity, education, and income. The first two traits are categorical, but the last trait, resources, is intervally scaled. I use a log-normal distribution calibrated to match a given gini coefficient to generate the sample of resources. I establish the draws from this distribution first before assigning agents to points in the distribution. Agents are assigned traits in the following order: start with group membership, then assign status conditional on group membership, and finally assign resources as a function of group membership and status. For later testing, we'll also cut the resources into deciles, which roughly corresponds to the way US Census income data are delivered.
+We start by generating 5,000 fictive housing units and 5,000 fictive actors, which are distributed in different patterns across four scenarios. The housing units are uniformly and randomly distributed locations within a square. The agents have a binary trait, `group`, an ordinal trait, `status`, and a continuous trait, `resources`. These could represent, for example, race/ethnicity, education, and income. These variables are related: members of group A tend to have higher statuses than members of group B. Those in group A and those with higher status also tend to have more resources. 
 
 ```{r agents}
 set.seed(2026)
-N <- 5000L
+N <- 2000L
 side <- 1000
 resource_mean <- 10
-resource_gini <- 0.4
+resource_gini <- 0.5
 resource_sd <- sqrt(2) * qnorm((1 + resource_gini) / 2)
-resources <- sort(rlnorm(
+resource_noise <- 1
+
+resource_sample <- sort(rlnorm(
   N,
   log(resource_mean) - resource_sd^2 / 2,
   resource_sd
 ))
+
+stdz <- function(x) {
+  (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
+}
 
 locations <- tibble(
   point_id = seq_len(N),
@@ -54,35 +68,27 @@ agents <- tibble(
   group = sample(rep(c("A", "B"), each = N / 2))
 ) |>
   mutate(
-    status = 1L * (group == "A") + rnorm(N),
+    status = stdz(1L * (group == "A")) + resource_noise * rnorm(N),
     status = rank(status) / n(),
-    status = case_when(status < 1 / 3 ~ 1L, status < 2 / 3 ~ 2L, .default = 3L),
+    status = case_when(
+      status < (1 / 3) ~ 1L,
+      status < (2 / 3) ~ 2L,
+      .default = 3L
+    )
   ) |>
   mutate(
-    resource = status + 1L * (group == "A") + 2 * rnorm(N),
-  ) |>
-  arrange(resource) |>
-  mutate(
-    resources = resources,
-    status = factor(status, ordered = TRUE),
-    group = factor(group),
-    resources_bin = cut_number(resources, 10),
-    resources_rank = percent_rank(resources)
+    resources = stdz(status + 1L * (group == "A")) + resource_noise * rnorm(N),
+    resources = resource_sample[rank(resources, ties = "first")],
+    resources_rank = rank(resources),
+    status = factor(status, levels = c(1, 2, 3), ordered = TRUE),
+    group = factor(group)
   )
 ```
 
-We can confirm the relationships between agent resources, status, and group membership using linear and multinomial regression:
+These agents are assigned to housing units based on a periodic (i.e., sinusoidal) function, the agent's resources, and random noise. Periodic functions and noise allow for different degrees of spatial clustering by income and group membership. Increasing `cycles` produces smaller clusters; increasing `noise` weakens sorting and makes a more even distribution. Only the agent-to-location assignment varies across scenarios. The number and placement of points and the covariate distributions for the agents are the same in each pattern.
 
-```{r attribute-relationships}
-lm(log(resources) ~ group + status, data = agents) |> summary()
-nnet::multinom(status ~ group, data = agents, trace = FALSE) |> summary()
-```
-
-The next step is to assign these agents to the housing units based on a periodic (i.e., sinusoidal) function and the agent's resources, as well as random noise. The use of periodic functions and the addition of noise allow for different degrees of spatial clustering by income and group memberhsip, making the degree of segregation "tunable". Increasing `cycles` produces smaller clusters; increasing `noise` weakens sorting and makes a more even distribution. Once the points and agents are established, the only thing that varies across these scenarios is the agent-to-location assignment. The number and placement of points and the covariate distributions for the agents are the same in each pattern. 
-
-```{r assignment}
+```{r distribute-agents}
 location_noise <- rnorm(N)
-
 assign_city <- function(cycles = 1, noise = 0.5) {
   periodic <- with(
     locations,
@@ -98,7 +104,7 @@ assign_city <- function(cycles = 1, noise = 0.5) {
   bind_cols(locations, slice(agents, assigned))
 }
 
-scenarios <- crossing(cycles = c(1, 3), noise = c(0.15, 1.5)) |>
+scenarios <- crossing(cycles = c(1, 3), noise = c(0, 1)) |>
   mutate(pattern = paste0(cycles, " cycle(s); noise = ", noise))
 
 patterns <- map2(scenarios$cycles, scenarios$noise, assign_city) |>
@@ -106,43 +112,59 @@ patterns <- map2(scenarios$cycles, scenarios$noise, assign_city) |>
   imap(\(city, label) mutate(city, pattern = label))
 ```
 
-We can visualize the distribution of income across a few scenarios as follows:
+We can visualize the distribution of resources and statuses across agents, and the spatial distribution of resources, statuses, and groups across the scenarios as follows:
 
-```{r patterns-resource}
+```{r patterns, echo=FALSE}
+agents |>
+  ggplot(aes(
+    x = log(resources),
+    y = after_stat(count),
+    group = group,
+    color = group,
+    fill = group
+  )) +
+  geom_density(alpha = 0.3) +
+  theme(
+    legend.position = "inside",
+    legend.position.inside = c(1, 1),
+    legend.justification = c(1, 1)
+  ) +
+  facet_wrap(vars(status), labeller = label_both, ncol = 1) +
+  labs(title = "Agents")
+
 patterns |>
   bind_rows() |>
   ggplot(aes(x, y, colour = resources_rank)) +
-  geom_point(size = 0.3) +
+  geom_point() +
   facet_wrap(~pattern, ncol = 2) +
-  scale_colour_viridis_c() +
+  scale_colour_viridis_c(name = "resource") +
+  labs(title = "Resources") +
   coord_equal() +
   theme_void()
-```
 
-And the distribution of groups below:
-
-```{r patterns-group}
-patterns |>
-  bind_rows() |>
-  ggplot(aes(x, y, colour = group)) +
-  geom_point(size = 0.3) +
-  facet_wrap(~pattern, ncol = 2) +
-  coord_equal() +
-  theme_void() +
-  scale_colour_manual(values = c(A = "#2166ac", B = "#b2182b"))
-```
-
-And finally the distribution of statuses
-
-```{r patterns-status}
+colors <- viridis::mako(4)
 patterns |>
   bind_rows() |>
   ggplot(aes(x, y, colour = status)) +
-  geom_point(size = 0.3) +
+  geom_point() +
   facet_wrap(~pattern, ncol = 2) +
   coord_equal() +
+  scale_colour_discrete(palette = colors, name = "status") +
+  labs(title = "Status") +
   theme_void()
+
+colors <- viridis::rocket(2)
+patterns |>
+  bind_rows() |>
+  ggplot(aes(x, y, colour = group)) +
+  geom_point() +
+  facet_wrap(~pattern, ncol = 2) +
+  coord_equal() +
+  theme_void() +
+  labs(title = "Groups") +
+  scale_color_discrete(palette = c("blue", "red"))
 ```
+
 
 # Measuring segregation in individual data
 
@@ -157,7 +179,7 @@ micro_variables <- list(
   ),
   status = spseg_ordinal(vars = "status")
 )
-bands <- c(25, 50, 75, 100, 200, 300, 400, 500, 1000)
+bands <- c(25, 50, 100, 200, 300, 400, 500, 1000, 2000)
 result <- spseg(
   patterns[[1]],
   coords = c("x", "y"),
@@ -171,57 +193,72 @@ result <- spseg(
 )
 ```
 
-Note that for continuous variables, there were several choices to make with respect to how to calculate local envrivonments and exposures. While the overall continuous segregation measures looks across fine grained income distinctions, it isn't really feasible to report corresponding exposure and local environment measures back. So here, I look at the share of (spatially weighted) nearest neighbors in each income quartile and the mean exposure of each quartile to the other.
+Note that for continuous variables, we can specify a `summary` option. This influences how local environments and exposure measures are reported back, but doesn't influence the calculation of other segregation measures.
 
-The output of the function, stored in `result`, has a package-specific `spseg_result` class with a set of names and methods.
-
-```{r class-result}
-class(result)
-```
-
-```{r print-result}
-print(result)
-```
-
-```{r names-result}
-names(result)
-```
-
-We can use `as.data.frame` methods to extract different pieces of information from `result`. For example, to get the overall segregation statistics, we can do as follows
+The output of the function, stored in `result`, has a package-specific `spseg_result` class with a set of names and methods. We can use `as.data.frame()` to extract different pieces of information from `result`. For example, the following extracts the overall segregation statistics and displays a slice of the resulting table:
 
 ```{r segstats-result}
 result_overall <- result |>
   as.data.frame(what = "indices")
 
 result_overall |>
-  filter(band == 100)
+  filter(band == 100) |>
+  knitr::kable(digits = 3)
+```
+
+We can plot the overall segregation measures across all bands, producing the segregation curves described by Reardon and colleagues. The levels and rates of change change across bands are indicative of a combination of evenness and clustering forms of segregation. If one curves dominates another, the tells use that one pattern is more segregated, in terms of evenness, than the other. The rate of change of segregation across bands tells about the extent of clustering segregation: a faster rate of change indicates that clusters of particular groups or incomes are smaller, that population composition varies more over smaller distances, and that the pattern is more checkerboard like.
+
+```{r single-pattern-curves, fig.height=6}
+result_overall |>
+  ggplot(aes(band, value, color = measure)) +
+  geom_line() +
+  facet_wrap(vars(variable)) +
+  labs(x = "Neighborhood population (kNN)", y = "Segregation index") +
+  theme(
+    aspect.ratio = 1,
+    legend.position = "inside",
+    legend.position.inside = c(1, 1),
+    legend.justification = c(1, 1)
+  )
 ```
 
 
+We can also recover pairwise indices. When there are only two groups, these are the same as those presented above. But when there are multiple groups, as is the case with status and resources, then there multiple comparisons to be made:
 
 ```{r pairwise-result}
 result_pairwise <- result |>
   as.data.frame(what = "pairwise") |>
   as_tibble()
 
-result_exposure <- result |>
-  as.data.frame(what = "exposure") |>
-  as_tibble()
+result_pairwise |>
+  filter(variable == 'status') |>
+  head() |>
+  knitr::kable(digits = 3)
 ```
+
+We can likewise plot the pairwise indices. These are all group-to-group binary indices. In the case of continuous variables, these are based on the `probs` argument, which featured quartile-based cutoffs. Below I filter down to dissimilarity indices and the resource variable only and plot these for the different pairs.
+
+```{r pairwise-result}
+result_pairwise |>
+  filter(measure == 'information' & variable == 'resource') |>
+  ggplot(aes(band, value, color = group_b)) +
+  geom_line() +
+  facet_wrap(vars(group_a)) +
+  labs(x = "Neighborhood population (kNN)", y = "Segregation index") +
+  theme(
+    aspect.ratio = 1,
+    legend.position = "inside",
+    legend.position.inside = c(1, 1),
+    legend.justification = c(1, 1)
+  )
+```
+
 
 The indices describe different aspects of segregation, so it is useful to look at
 how each changes as we enlarge the neighborhood. The bandwidths here are numbers
 of people before distance weighting, including the focal person; they are not
 physical distances. The same kNN population can occupy a small radius in a dense
 area and a larger radius elsewhere.
-
-```{r single-pattern-curves, fig.height=6}
-result_seg_stats |>
-  ggplot(aes(band, value)) +
-  geom_line() +
-  facet_grid(variable ~ measure, scales = "free_y") +
-  labs(x = "Neighborhood population (kNN)", y = "Segregation index")
-```
 
 The categorical, ordinal, and continuous statistics have different definitions.
 Compare scales within a variable and measure rather than treating the vertical
@@ -232,7 +269,6 @@ specified income groups, not the full-resolution continuous index.
 ```{r single-pattern-pairwise}
 result_pairwise |>
   filter(variable == "group", band == 100) |>
-  select(group_a, group_b, measure, value) |>
   knitr::kable(digits = 3)
 ```
 
@@ -343,12 +379,13 @@ Extract only the variables and bands you need when mapping large results.
 We next replace the first pattern of individuals with a table of counts for 45
 Voronoi polygons centered on randomly drawn points. The partition is generated
 independently of the actors' attributes and clipped to our square. Resources are
-reported in the ten bins we created earlier, while group and status retain their
+divided into ten equal-population bins before aggregation, while group and status retain their
 original categories. This resembles a small-area table containing marginal
 counts for several population characteristics.
 
 ```{r voronoi-partition}
 people <- patterns[[1]] |>
+  mutate(resources_bin = cut_number(resources, n = 10)) |>
   st_as_sf(coords = c("x", "y"), remove = FALSE)
 
 domain <- st_as_sfc(st_bbox(c(
@@ -602,7 +639,9 @@ separate patterns are independent jobs that we can run in parallel.
 
 The helper below uses two PSOCK workers from R's `parallel` package, which is
 included with R and works on Windows, macOS, and Linux. Each worker runs a
-separate R process and loads the installed spseg package. The helper stops the
+separate R process and loads the installed spseg package using the parent
+session's library paths. Install the current package before running this example.
+The helper stops the
 workers when it finishes, including if a calculation raises an error. Use fewer
 workers when memory is limited; starting workers can cost more than it saves for
 small examples. No random numbers are drawn in these calls: the simulated
@@ -612,6 +651,7 @@ patterns have already been generated with fixed seeds.
 run_patterns <- function(patterns, variables, bands, workers = 2L) {
   cluster <- parallel::makePSOCKcluster(workers)
   on.exit(parallel::stopCluster(cluster), add = TRUE)
+  parallel::clusterCall(cluster, function(paths) .libPaths(paths), .libPaths())
 
   parallel::parLapply(
     cluster,

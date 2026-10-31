@@ -57,6 +57,12 @@
 #'   as local extrema. Exact shares may use finite absolute `cuts` instead of
 #'   `probs`, with implicit infinite tails. Cuts require exact values and shares
 #'   mode. Tied values remain together, so achieved group sizes may differ.
+#'   Probability-defined groups use percentile labels such as `"P0-P25"` and
+#'   `"P75-P100"`. For exact data these reflect achieved population shares after
+#'   preserving ties. Explicit `cuts` use value-based labels. Resolved value
+#'   cutoffs and labels remain in `definition$summary$groups$breaks` and
+#'   `value_labels` for exact data; `boundaries` records the percentile boundaries
+#'   on the [0, 1] scale for both representations.
 #'   Interval input retains the requested grid. Categories crossing requested
 #'   boundaries are proportionally apportioned in global-percentile space, using
 #'   the same fractions for original focal populations and local target shares.

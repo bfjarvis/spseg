@@ -1,5 +1,10 @@
 # spseg (development version)
 
+- Probability-defined continuous groups now use percentile-range labels in
+  pairwise indices, exposures, and retained shares. Exact-data labels reflect
+  achieved population shares when ties shift the requested boundaries. Explicit
+  value cuts keep value-based labels; resolved cutoffs remain in metadata.
+
 - Renamed scope `"multigroup"` and the corresponding result fields to
   `"overall"`, covering categorical, ordinal, and continuous overall indices.
   Variable constructors now accept `scope`, `output`, `keep_scores`, and

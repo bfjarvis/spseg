@@ -108,6 +108,19 @@
   group_definition$effective_groups <- length(group_labels)
   group_definition$boundaries <- c(0,
     utils::head(cumsum(group_definition$shares), -1L), 1)
+  group_definition$label_scale <- if (is.null(options$cuts)) "percentile" else "value"
+  if (!intervals) group_definition$value_labels <- group_labels
+  if (is.null(options$cuts)) {
+    percentiles <- vapply(100 * group_definition$boundaries, function(p)
+      format(p, digits = 12, trim = TRUE, scientific = FALSE), character(1))
+    group_labels <- paste0("P", utils::head(percentiles, -1L), "-P",
+                           utils::tail(percentiles, -1L))
+    group_definition$labels <- group_labels
+    if (intervals) {
+      colnames(fractions) <- group_labels
+      group_definition$allocation <- fractions
+    }
+  }
   statistics <- if (options$type == "shares") {
     data.frame(statistic = "share", prob = NA_real_, label = group_labels)
   } else {

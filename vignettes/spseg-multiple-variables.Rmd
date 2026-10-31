@@ -211,8 +211,13 @@ guide for the formula and its distinction from normalized scalar exposure.
 
 Continuous variables use one summary specification. Shares are the default;
 the default interior probabilities `.25`, `.5`, and `.75` define four global
-focal/target income groups. Exact tied values stay together, so achieved group
+focal/target income groups, labeled `P0-P25`, `P25-P50`, `P50-P75`, and `P75-P100`.
+These labels identify population percentile ranges. Exact tied values stay together, so achieved group
 sizes need not be equal. For interval input, the requested grid is preserved.
+For exact input, labels reflect the achieved weighted percentile boundaries.
+Explicit `cuts` retain labels in the variable's units. Exact value cutoffs and
+their labels are also available in `definition$summary$groups$breaks` and
+`value_labels`; `boundaries` records the achieved rank boundaries on [0, 1].
 If the highest category contains 15% of the regional population, a top-decile
 group receives `10/15` of that category's population in every unit. This is an
 explicit model-based allocation, not observed membership within that category.

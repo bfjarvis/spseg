@@ -20,6 +20,17 @@ test_that("continuous summaries default to synchronized quartile shares", {
   expect_equal(result$diagnostics$focal_searches, 2L)
   expect_identical(names(as.data.frame(result, what = "exposure")),
     c("variable", "band", "from_group", "to_group", "value"))
+  labels <- c("P0-P25", "P25-P50", "P50-P75", "P75-P100")
+  analysis <- result$analyses$income
+  expect_equal(colnames(analysis$env[[1]]), labels)
+  expect_equal(rownames(analysis$indices$overall$p[[1]]), labels)
+  expect_equal(colnames(analysis$indices$pairwise$h[[1]]), labels)
+  expect_equal(analysis$definition$summary$groups$breaks, c(-Inf, 10, 20, 30, Inf))
+  expect_equal(analysis$definition$summary$groups$label_scale, "percentile")
+  pairs <- as.data.frame(result, what = "pairwise")
+  expect_true(all(pairs$group_a %in% labels & pairs$group_b %in% labels))
+  exposure <- as.data.frame(result, what = "exposure")
+  expect_true(all(exposure$from_group %in% labels & exposure$to_group %in% labels))
 })
 
 test_that("local and grouped rank statistics use the same focal-weighted quantities", {
@@ -65,6 +76,10 @@ test_that("exact cuts preserve ties and reject ambiguous specifications", {
   result <- summary_run(summary_fixture(), list(cuts = 20))
   expect_equal(result$analyses$income$env[[1]],
                rbind(c(.75, .25), c(.25, .75)), ignore_attr = TRUE)
+  groups <- result$analyses$income$definition$summary$groups
+  expect_equal(groups$label_scale, "value")
+  expect_equal(groups$labels, groups$value_labels)
+  expect_match(groups$labels[1], "20", fixed = TRUE)
   expect_error(spseg_continuous(vars = "v", summary = list(cuts = 20, probs = .5)),
                "only one")
   expect_error(spseg_continuous(vars = "v",
@@ -86,12 +101,39 @@ test_that("interval allocation retains requested groups and is auditable", {
   expect_equal(definition$requested_probs, c(.25, .5, .75))
   expect_equal(definition$effective_probs, c(.25, .5, .75))
   expect_equal(definition$groups$effective_groups, 4L)
+  expect_equal(definition$groups$labels,
+    c("P0-P25", "P25-P50", "P50-P75", "P75-P100"))
+  expect_equal(colnames(definition$groups$allocation), definition$groups$labels)
   expect_equal(colSums(definition$groups$allocation * c(.1, .1, .7, .1)),
                rep(.25, 4), ignore_attr = TRUE)
   expect_equal(ncol(result$analyses$income$env[[1]]), 3L)
   expect_error(spseg(d, list(income = spseg_continuous(vars = c("a", "b"),
     representation = "intervals", summary = list(cuts = 20))),
     coords = c("x", "y"), bands = 0), "require exact")
+})
+
+test_that("percentile labels follow achieved weighted boundaries with ties", {
+  d <- data.frame(x = 1:4, y = 0, income = c(1, 1, 2, 3), w = c(1, 2, 1, 4))
+  run <- function(summary) spseg(d, list(income = spseg_continuous(
+    vars = "income", weights = "w", summary = summary)), coords = c("x", "y"),
+    bands = 0, keep_contributions = TRUE, output = "full")
+  shares <- run(list(probs = c(.25, .5, .75)))
+  ranks <- run(list(type = "quantiles", probs = c(.25, .5, .75)))
+  a <- shares$analyses$income
+  labels <- c("P0-P37.5", "P37.5-P50", "P50-P100")
+  expect_equal(a$definition$summary$groups$labels, labels)
+  expect_equal(a$definition$summary$groups$boundaries, c(0, .375, .5, 1))
+  expect_equal(a$indices$pairwise, ranks$analyses$income$indices$pairwise)
+  expect_equal(rownames(ranks$analyses$income$rank_summary[[1]]), labels)
+  expect_equal(a$score_pairs$group_a, labels[c(1, 1, 2)])
+  # A value-defined partition at the same cutoffs has identical numerical results.
+  cuts <- run(list(cuts = c(1, 2)))$analyses$income
+  expect_equal(unname(a$env[[1]]), unname(cuts$env[[1]]))
+  for (key in c("h", "r", "s", "d")) {
+    expect_equal(a$indices$overall[[key]], cuts$indices$overall[[key]])
+    expect_equal(unname(a$indices$pairwise[[key]][[1]]),
+      unname(cuts$indices$pairwise[[key]][[1]]))
+  }
 })
 
 test_that("single interval summaries explicitly use the rank interpolation model", {
