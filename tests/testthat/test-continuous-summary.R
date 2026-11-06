@@ -19,7 +19,7 @@ test_that("continuous summaries default to synchronized quartile shares", {
                as.matrix(d[c("a", "b", "c", "d")]) / 4, ignore_attr = TRUE)
   expect_equal(result$diagnostics$focal_searches, 2L)
   expect_identical(names(as.data.frame(result, what = "exposure")),
-    c("variable", "band", "from_group", "to_group", "value"))
+    c("variable", "band", "reference", "target", "value"))
   labels <- c("P0-P25", "P25-P50", "P50-P75", "P75-P100")
   analysis <- result$analyses$income
   expect_equal(colnames(analysis$env[[1]]), labels)
@@ -30,7 +30,7 @@ test_that("continuous summaries default to synchronized quartile shares", {
   pairs <- as.data.frame(result, what = "pairwise")
   expect_true(all(pairs$group_a %in% labels & pairs$group_b %in% labels))
   exposure <- as.data.frame(result, what = "exposure")
-  expect_true(all(exposure$from_group %in% labels & exposure$to_group %in% labels))
+  expect_true(all(exposure$reference %in% labels & exposure$target %in% labels))
 })
 
 test_that("local and grouped rank statistics use the same focal-weighted quantities", {
@@ -44,7 +44,7 @@ test_that("local and grouped rank statistics use the same focal-weighted quantit
   expect_null(analysis$indices$overall$p)
   out <- as.data.frame(result, what = "exposure")
   expect_setequal(out$statistic, c("quantile_rank", "mean_rank"))
-  expect_false(any(c("to_group", "exposure", "rank") %in% names(out)))
+  expect_false(any(c("target", "exposure", "rank") %in% names(out)))
   expect_true(all(is.na(out$prob[out$statistic == "mean_rank"])))
   expect_equal(out$value, c(1/4, 1/2, 7/16, 9/16))
   env <- as.data.frame(result, what = "env")

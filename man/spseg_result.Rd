@@ -50,6 +50,9 @@ Categorical and ordinal pairwise indices compare original categories;
 continuous pairwise indices compare resolved global groups.
 Probability-defined continuous groups are labeled by population percentile
 ranges, such as `P0-P25`. Explicit value cuts retain value-based labels.
+Exposure tables identify the focal population as `reference` and the
+neighboring population category as `target`. Matching categories describe
+isolation. Rank profiles identify `reference` and a rank statistic instead.
 With `variables = NULL`, mixed-output results include analyses with the
 requested stored results. Explicitly selecting an analysis without those
 results raises an error; so does requesting results unavailable everywhere.}
@@ -64,8 +67,8 @@ Printing returns `x` invisibly. Extraction returns a long data frame
   \itemize{
     \item Indices: `variable`, `band`, `measure`, `value`.
     \item Pairwise indices additionally identify `group_a` and `group_b`.
-    \item Share exposure: `variable`, `band`, `from_group`, `to_group`, `value`.
-    \item Quantile exposure: `variable`, `band`, `from_group`, `statistic`,
+    \item Share exposure: `variable`, `band`, `reference`, `target`, `value`.
+    \item Quantile exposure: `variable`, `band`, `reference`, `statistic`,
       `prob`, `value`.
     \item Local shares: `variable`, `band`, `location`, `category`, `value`.
     \item Local ranks: `variable`, `band`, `location`, `statistic`, `prob`, `value`.
@@ -118,6 +121,12 @@ once when environments are stored. Each analysis records effective `scope`,
 `output`, `keep_scores`, and `keep_contributions` in `settings`. Global result
 settings record defaults; variable-specific settings take precedence. Shared
 inputs are retained once when any analysis stores environments.
+Probability-valued local summaries, exposure/isolation, rank summaries, and
+interpolation shares are bounded to [0, 1] to correct floating-point endpoint
+overshoot. Interior values retain full precision; undefined results remain
+missing. Endpoint corrections use an accumulation-aware roundoff allowance.
+Larger violations or non-finite computed
+probabilities raise an error.
 Each definition records its `eligible_population`. For kNN, each analysis
 also contains a `knn` table: requested population, minimum/maximum selected
 population before distance weighting, and minimum/maximum neighborhood

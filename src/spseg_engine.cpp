@@ -16,6 +16,18 @@ using namespace spseg_spatial;
 using namespace spseg_scores;
 
 namespace {
+double bounded_probability(double value, std::size_t terms, const char* quantity) {
+  // Allow accumulated floating-point error, scaled by the contributing terms.
+  const double roundoff = 8 * std::numeric_limits<double>::epsilon() *
+    std::max(1.0, static_cast<double>(terms));
+  if(!std::isfinite(value))
+    stop("%s produced a non-finite probability", quantity);
+  if(value < -roundoff || value > 1 + roundoff)
+    stop("%s probability %.17g is outside [0, 1] beyond the roundoff allowance %.3g",
+         quantity, value, roundoff);
+  return std::clamp(value, 0.0, 1.0);
+}
+
 struct VariableAnalysis {
   // N: focal counts; T_i: focal masses; P: regional category shares.
   // Q: regional CDF; p: current local shares; A: sum_i T_i * a_i by band.
@@ -210,7 +222,7 @@ struct VariableAnalysis {
   // to use the complete p/sparse distribution for this focal row and band.
   std::vector<double> summarize_environment(const std::vector<double>& p,
                          const std::vector<std::pair<int,double>>& sparse,
-                         double local) {
+                         double local, std::size_t neighbors) {
     std::vector<double> summary(env_columns,0.0);
     if(local <= 0) {
       std::fill(summary.begin(),summary.end(),NA_REAL);
@@ -256,6 +268,10 @@ struct VariableAnalysis {
       } else for(int g=0;g<M;++g)
         if(env_map[g]>=0) summary[env_map[g]]+=p[g];
     }
+    // Grouping normalized probabilities can overshoot an endpoint by roundoff.
+    const std::size_t terms = neighbors + std::max(p.size(), sparse.size());
+    for(double& value : summary)
+      value = bounded_probability(value, terms, "Local summary");
     return summary;
   }
 
@@ -372,12 +388,13 @@ struct VariableAnalysis {
       for(int g:split_intervals) apportioned+=p[g];
       diagnostic(i,0)=local>0 ? p.front() : NA_REAL;
       diagnostic(i,1)=local>0 ? p.back() : NA_REAL;
-      diagnostic(i,2)=local>0 ? apportioned : NA_REAL;
+      diagnostic(i,2)=local>0 ?
+        bounded_probability(apportioned, p.size(), "Interpolation share") : NA_REAL;
     }
     const bool need_scores = indices || keep_scores || keep_contributions;
     if(keep_env || (need_scores && continuous &&
                     (flags[Exposure] || (pairwise && env_type==Shares)))) {
-      summary=summarize_environment(p,sparse,local);
+      summary=summarize_environment(p,sparse,local,c.ids.size());
       if(keep_env) {
         NumericMatrix env=environments[band];
         for(int j=0;j<env_columns;++j) env(i,j)=summary[j];
@@ -490,7 +507,8 @@ struct VariableAnalysis {
         NumericMatrix out(n_reporting_groups,env_columns);
         for(int a=0;a<n_reporting_groups;++a) for(int j=0;j<env_columns;++j)
           out(a,j)=!empty[b] && P_reporting[a]>0 ?
-            rank_acc(a,j,b)/(T*P_reporting[a]) : NA_REAL;
+            bounded_probability(rank_acc(a,j,b)/(T*P_reporting[a]),
+              T_i.size()+M, "Rank summary") : NA_REAL;
         rank_summary[b]=out;
       }
     } else if(indices && flags[Exposure]) {
@@ -500,7 +518,9 @@ struct VariableAnalysis {
       for(int b=0;b<n_bands;++b) {
         NumericMatrix out(n_reporting_groups,n_reporting_groups);
         for(int a=0;a<n_reporting_groups;++a) for(int c=0;c<n_reporting_groups;++c)
-          out(a,c)=!empty[b] && totals[a]>0 ? exposure_acc(a,c,b)/totals[a] : NA_REAL;
+          out(a,c)=!empty[b] && totals[a]>0 ?
+            bounded_probability(exposure_acc(a,c,b)/totals[a],
+              T_i.size()+M, "Exposure") : NA_REAL;
         out.attr("dimnames")=List::create(labels,labels); matrices[b]=out;
       }
       overall_out["p"]=matrices;

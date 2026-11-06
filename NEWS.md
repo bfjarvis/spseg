@@ -1,5 +1,16 @@
 # spseg (development version)
 
+- Exposure tables now use `reference` for the focal population and `target`
+  for the neighboring category. Rank profiles use `reference` alongside the
+  reported statistic and probability. Symmetric pairwise index columns are
+  unchanged.
+
+- Corrected floating-point endpoint overshoot in probability-valued local
+  summaries, exposures, rank summaries, and interpolation shares. Returned
+  probabilities stay within [0, 1], preserving interior precision and missing
+  values without decimal rounding. Violations beyond an accumulation-aware
+  roundoff allowance raise an error, as do non-finite computed probabilities.
+
 - Probability-defined continuous groups now use percentile-range labels in
   pairwise indices, exposures, and retained shares. Exact-data labels reflect
   achieved population shares when ties shift the requested boundaries. Explicit

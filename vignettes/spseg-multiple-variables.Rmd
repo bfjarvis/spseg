@@ -258,7 +258,7 @@ share_result <- spseg(
 
 as.data.frame(share_result, what = "exposure") |>
   filter(band == 0) |>
-  select(from_group, to_group, value)
+  select(reference, target, value)
 ```
 
 There are eight people, two in each income category. Their global weighted
@@ -294,14 +294,14 @@ rank_result <- spseg(
 rank_profiles <- as.data.frame(rank_result, what = "exposure")
 rank_profiles |>
   filter(band == 0) |>
-  select(from_group, statistic, prob, value)
+  select(reference, statistic, prob, value)
 ```
 
 At U and V the local mean ranks are `3/8` and `5/8`; local median ranks are
 `1/8` and `5/8`. Averaging by focal income gives low/high mean ranks `7/16`
 and `9/16`, and low/high median ranks `1/4` and `1/2`. `what = "exposure"`
-keeps the familiar request: share tables contain `from_group`, `to_group`, and
-`value`, while quantile tables contain `from_group`, `statistic`, `prob`, and
+keeps the familiar request: share tables contain `reference`, `target`, and
+`value`, while quantile tables contain `reference`, `statistic`, `prob`, and
 `value`. Mean-rank rows use
 `statistic = "mean_rank"` and a missing `prob`. Rank profiles are descriptive,
 not classic exposure matrices or segregation indices.
@@ -368,8 +368,8 @@ as.data.frame(environments, what="exposure", variables="income")
 Use `as.data.frame(result, what="env")` or `sf::st_as_sf(result)` to obtain
 long local tables. Quantile tables have `statistic`, `prob`, and `value`;
 category-share tables have `category` and `value`. Grouped tables from
-`what="exposure"` use `from_group`, `to_group`, and `value` for share
-probabilities; rank profiles use `from_group`, `statistic`, `prob`, and `value`.
+`what="exposure"` use `reference`, `target`, and `value` for share
+probabilities; rank profiles use `reference`, `statistic`, `prob`, and `value`.
 Columns follow the selected summary types; mixed tables contain their union,
 with `statistic="share"` identifying share rows. Mean-rank rows use `statistic="mean_rank"`
 and have no quantile probability. `definition$summary` records the requested

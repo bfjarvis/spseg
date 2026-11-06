@@ -299,14 +299,14 @@ The exposure/isolation values are a bit more complicated, but can be returned in
 head(auck_poly_exp <- as.data.frame(auck_spseg_bw, what = "exposure"))
 
 auck_poly_exp |>
-  ggplot(aes(x = band, y = value, color = from_group)) +
+  ggplot(aes(x = band, y = value, color = reference)) +
   geom_line() +
   geom_point(size = 1.5) +
   scale_y_continuous(labels = function(x) {
     format(100 * x, digits = 2)
   }) +
   facet_wrap(
-    ~to_group,
+    ~target,
     scales = "free_y",
     labeller = as_labeller(
       function(x) {

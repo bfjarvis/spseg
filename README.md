@@ -125,7 +125,7 @@ Extract exposure to each group, averaged over members of each focal group:
 ```r
 result |>
   as.data.frame(what = "exposure", variables = "group", bands = 2) |>
-  select(from_group, to_group, value)
+  select(reference, target, value)
 ```
 
 The diagonal entries are isolation: a group's average exposure to itself.
