@@ -1,0 +1,13 @@
+/.quarto/
+/*_files/
+/*.tex
+/*.log
+/*.aux
+/*.nav
+/*.snm
+/*.toc
+/*.vrb
+/*.out
+/build-info.txt
+/Rplots.pdf
+/*.rmarkdown

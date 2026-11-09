@@ -1,0 +1,53 @@
+project:
+  type: default
+format:
+  beamer:
+    theme: Madrid
+    aspectratio: 169
+    fontsize: 11pt
+    pdf-engine: pdflatex
+    keep-tex: true
+    slide-level: 2
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{array}
+        \setkeys{Gin}{keepaspectratio}
+        \setbeamertemplate{title page}{%
+          \vspace*{0.2cm}
+          \begin{columns}[c,onlytextwidth]
+            \begin{column}{0.25\textwidth}
+              \centering
+              \includegraphics[height=4cm]{../../man/figures/logo.png}
+            \end{column}
+            \begin{column}{0.73\textwidth}
+              \begin{beamercolorbox}[sep=8pt,center,shadow=true,rounded=true]{title}
+                \usebeamerfont{title}\inserttitle\par
+                \vspace{0.25cm}
+                {\usebeamerfont{subtitle}\insertsubtitle\par}
+              \end{beamercolorbox}
+            \end{column}
+          \end{columns}
+          \vspace{0.4cm}
+          \begin{center}
+            {\usebeamerfont{author}\insertauthor\par}
+            \vspace{0.2cm}
+            {\usebeamerfont{institute}\insertinstitute\par}
+            \vspace{0.35cm}
+            {\small Updating urban segregation computation with R, TUDelft\par}
+            \vspace{0.15cm}
+            {\usebeamerfont{date}\insertdate\par}
+          \end{center}
+        }
+        \setbeamertemplate{navigation symbols}{}
+        \setbeamertemplate{footline}[frame number]
+        \setbeamerfont{footnote}{size=\tiny}
+execute:
+  echo: true
+  message: false
+  warning: false
+  cache: false
+knitr:
+  opts_chunk:
+    dev: pdf
+    fig.pos: H

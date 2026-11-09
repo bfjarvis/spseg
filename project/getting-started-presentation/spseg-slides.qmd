@@ -1,0 +1,1219 @@
+---
+title: "A Spatial Segregation Measurement Package in `R`"
+date: "2026-11-09"
+author: "Benjamin F. Jarvis"
+institute: |
+  The Institute for Analytical Sociology
+  Linköping University
+---
+
+```{r}
+#| label: simulation
+#| include: false
+library(spseg)
+library(sf)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+theme_set(
+  theme_minimal(base_size = 15) +
+    theme(legend.position = "bottom", panel.grid.minor = element_blank())
+)
+colours <- c(A = "#2166ac", B = "#b2182b")
+colour_bar <- guide_colourbar(
+  barwidth = grid::unit(5, "cm"),
+  barheight = grid::unit(.35, "cm")
+)
+colour_bar_guides <- guides(colour = colour_bar, fill = colour_bar)
+colour_bar_theme <- theme(
+  legend.title.position = "top",
+  legend.title = element_text(hjust = .5)
+)
+
+set.seed(2026)
+N <- 2000L
+side <- 1000
+resource_mean <- 10
+resource_gini <- 0.5
+resource_sd <- sqrt(2) * qnorm((1 + resource_gini) / 2)
+resource_noise <- 1
+
+resource_sample <- sort(rlnorm(
+  N,
+  log(resource_mean) - resource_sd^2 / 2,
+  resource_sd
+))
+
+stdz <- function(x) {
+  (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
+}
+
+locations <- tibble(
+  point_id = seq_len(N),
+  x = runif(N, 0, side),
+  y = runif(N, 0, side)
+)
+
+agents <- tibble(
+  agent_id = seq_len(N),
+  group = sample(rep(c("A", "B"), each = N / 2))
+) |>
+  mutate(
+    status = stdz(1L * (group == "A")) + resource_noise * rnorm(N),
+    status = rank(status) / n(),
+    status = case_when(
+      status < (1 / 3) ~ 1L,
+      status < (2 / 3) ~ 2L,
+      .default = 3L
+    )
+  ) |>
+  mutate(
+    resources = stdz(status + 1L * (group == "A")) + resource_noise * rnorm(N),
+    resources = resource_sample[rank(resources, ties = "first")],
+    resources_rank = rank(resources),
+    status = factor(status, levels = c(1, 2, 3), ordered = TRUE),
+    group = factor(group)
+  )
+
+location_noise <- rnorm(N)
+assign_city <- function(cycles = 1, noise = 0.5) {
+  periodic <- with(
+    locations,
+    cos(2 * pi * cycles * x / side) *
+      cos(2 * pi * cycles * y / side)
+  )
+  utility <- log((1 + 1e-6 + periodic) / 2)
+  score <- as.numeric(scale(utility)) + noise * location_noise
+  destination <- order(score, locations$point_id)
+  source <- order(agents$resources, agents$agent_id)
+  assigned <- integer(N)
+  assigned[destination] <- source
+  bind_cols(locations, slice(agents, assigned))
+}
+
+scenarios <- crossing(cycles = c(1, 3), noise = c(0, 1)) |>
+  mutate(pattern = paste0(cycles, " cycle(s); noise = ", noise))
+
+patterns <- map2(scenarios$cycles, scenarios$noise, assign_city) |>
+  set_names(scenarios$pattern) |>
+  imap(\(city, label) mutate(city, pattern = label))
+```
+
+## Background
+
+Reardon and colleague's segregation measures continue to represent an important paradigm in segregation measurement in sociology. 
+
+But these measures remain underutilized because of a lack of tools. The `seg` package was the main practical tool, but it had a number of missing features:
+
+- Lack of support for continuous and ordinal varialbes.
+- Incomplete implementation of pycnophylactic interpolation.
+- No built-in support for k-nearest neighbors approaches.
+- No built-in support for network data. 
+
+## Introducing `spseg`
+
+- A C++ engine based on robust Boost.org libraries.
+- Modernized spatial data handling with `sf`.
+- Radial (Reardon et al.) and knn (Östh) neighbor search.
+- Return of spatially weighted local environments.
+- Calculation of multigroup and pairwise indices.
+- Exposure and isolation measures.
+- Support for micro-and aggregated data.
+- Generates measures for categorical, ordinal, and continuous covariates. 
+- New pycnophylactic interpolation procedures.
+- Support for network data (under development)
+
+::: {.notes}
+The three constructors describe different data types within one measurement
+framework. Several variables share neighborhood discovery in a single call.
+Outputs include regional indices, pairwise indices, local environments,
+exposures, and optionally local scores and additive contributions.
+:::
+
+## Local population and regional weights
+
+$$
+p_{ig}=\frac{\sum_j\lambda_{ij}N_{jg}}
+                 {\sum_h\sum_j\lambda_{ij}N_{jh}},
+\qquad
+P_g=\frac{\sum_iN_{ig}}{T},\qquad \alpha_i=\frac{T_i}{T}
+$$
+
+\bigskip
+
+$$
+J_f=1-\frac{\sum_i\alpha_i v_{i,f}}{v_f},
+\qquad
+D=\frac{\sum_i\alpha_i d_i}{d_0}
+$$
+
+\footnotetext[1]{Reardon \& O'Sullivan (2004), \emph{Measures of Spatial Segregation}, Sociological Methodology 34:121--162.}
+
+::: {.notes}
+N_ig is the original eligible population of group g at support i; T_i is its
+row total and T the regional population. Lambda combines neighborhood inclusion
+and kernel weighting. Original focal population weights average local scores.
+J denotes H, R, or S; D is normalized absolute discrepancy. Spatial overlapping
+neighborhoods can alter the focal-weighted marginal. The package uses variation
+ratios; their interpretation depends on neighborhood construction.
+:::
+
+## Binary variation functions
+
+$$
+\begin{aligned}
+\phi_H(p)&=-p\log p-(1-p)\log(1-p),\\[5pt]
+\phi_R(p)&=p(1-p),\\[5pt]
+\phi_S(p)&=2\sqrt{p(1-p)}.
+\end{aligned}
+$$
+
+::: {.notes}
+Entropy, diversity, and square-root variation describe each binary cutoff.
+Their multiplicative scaling constants cancel within the corresponding local
+variation ratios. Use the limiting convention zero log zero equals zero.
+:::
+
+## Cutoffs and ranks
+
+$$
+C_{ik}=\sum_{g\le k}p_{ig},\qquad Q_k=\sum_{g\le k}P_g,
+\qquad \langle a_i\rangle=\sum_i\alpha_i a_i
+$$
+
+$$
+\mathcal J_O[\phi]=1-\frac{\langle\sum_k\phi(C_{ik})\rangle}
+                            {\sum_k\phi(Q_k)}
+\qquad
+\mathcal J_C[\phi]=1-\frac{\langle\int_0^1\phi(F_i(u))\,du\rangle}
+                            {\int_0^1\phi(F(u))\,du}
+$$
+
+$$
+\mathcal D_O=\frac{\langle\sum_k|C_{ik}-Q_k|\rangle}
+                    {2\sum_kQ_k(1-Q_k)},\qquad
+\mathcal D_C=\frac{\langle\int_0^1|F_i(u)-F(u)|\,du\rangle}
+                    {2\int_0^1F(u)(1-F(u))\,du}
+$$
+
+::: {.notes}
+Ordinal sums run across the M-1 cumulative cutoffs. Continuous integrals run
+across regional rank support. F_i and F denote the local and regional CDFs on
+that support. For interval interpolation F(u)=u; exact input uses empirical CDFs
+on weighted midranks. These operators make the next table compact while specifying
+every cell. D_O and D_C are package dissimilarity supplements.
+:::
+
+## Measures by data type
+
+```{=latex}
+\normalsize
+\setlength{\tabcolsep}{14pt}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Measure & Categorical\textsuperscript{1} & Ordinal\textsuperscript{2} & Continuous\textsuperscript{3} \\
+\midrule
+Dissimilarity $D$ & $\displaystyle\frac{\langle\sum_g|p_{ig}-P_g|\rangle}{2\sum_gP_g(1-P_g)}$ & $\mathcal D_O^{\dagger}$ & $\mathcal D_C^{\dagger}$ \\
+Information $H$ & $\displaystyle 1-\frac{\langle E(\mathbf p_i)\rangle}{E(\mathbf P)}$ & $\mathcal J_O[\phi_H]$ & $\mathcal J_C[\phi_H]$ \\
+Diversity $R$ & $\displaystyle 1-\frac{\langle I(\mathbf p_i)\rangle}{I(\mathbf P)}$ & $\mathcal J_O[\phi_R]$ & $\mathcal J_C[\phi_R]$ \\
+Root $S$\textsuperscript{4} & $\displaystyle 1-\frac{\langle G(\mathbf p_i)\rangle}{G(\mathbf P)}$ & $\mathcal J_O[\phi_S]$ & $\mathcal J_C[\phi_S]$ \\
+\bottomrule
+\end{tabular}
+\vspace{1mm}
+
+\scriptsize
+$E(\mathbf p)=-\sum_gp_g\log p_g$; $I(\mathbf p)=\sum_gp_g(1-p_g)$;
+$G(\mathbf p)=(\prod_{g:P_g>0}p_g)^{1/K}$, $K=\#\{g:P_g>0\}$.
+
+$\dagger$ Package dissimilarity supplements.
+\footnotetext[1]{Reardon \& Firebaugh (2002), \emph{Measures of Multigroup Segregation}, Sociological Methodology 32:33--67.}
+\footnotetext[2]{Reardon (2009), \emph{Measures of Ordinal Segregation}, Research on Economic Inequality 17:129--155.}
+\footnotetext[3]{Reardon (2011), \emph{Measures of Income Segregation}, Stanford working paper, revised September. Empirical/interpolation conventions follow spseg.}
+\footnotetext[4]{Hutchens (2004), Int. Econ. Review 45:555--578 (binary root); Frankel \& Volij (2011), J. Econ. Theory 146:1--38 (multigroup Atkinson).}
+```
+
+::: {.notes}
+All formulas reproduce the measure-definitions vignette's local variation and
+regional normalizations. Root uses a geometric mean over globally nonempty
+groups, rather than a sum of binary roots. Scaling constants in the binary
+variation functions cancel within ratios. Ordinal and continuous D are package
+supplements, and are not attributed as published Reardon definitions. The
+continuous notation incorporates exact empirical and modeled interval inputs.
+:::
+
+## Continuous input: exact values and intervals
+
+::: {.columns}
+::: {.column width="50%"}
+**Exact values**
+
+$$z_g=\sum_{h<g}P_h+P_g/2$$
+
+Empirical CDFs · Weighted midranks
+:::
+::: {.column width="50%"}
+**Interval counts**
+
+$$G_i(q)=C_{i,k-1}+\frac{q-Q_{k-1}}{Q_k-Q_{k-1}}(C_{ik}-C_{i,k-1})$$
+
+Linear rank CDF · $G(q)=q$
+:::
+:::
+
+::: {.notes}
+Exact observations keep ties together and use the empirical regional normalizer
+on the same rank support. Interval input assumes a common conditional rank
+distribution within each interval at every location. Finer reporting groups add
+modeled resolution; unknown within-interval sorting remains unobserved. The
+interval normalizers for H,R,S are 1/2, 1/6, pi/4. See the measure-definitions
+vignette for differences from Reardon's polynomial threshold-curve estimator.
+:::
+
+## Installation and inputs
+
+```{r}
+#| label: syntax-2
+#| eval: false
+install.packages("pak")
+pak::pak("bfjarvis/spseg")
+
+library(spseg)
+library(sf)
+library(tidyverse)
+```
+
+
+::: {.notes}
+Use R 4.2 or later, with the platform's C++ build toolchain for source
+installation. The examples use synthetic planar coordinates. Real geographic
+analyses should use an appropriate projected coordinate system. An sf object
+supplies active geometry; a plain table supplies coordinates via coords.
+:::
+
+## Four residential patterns
+
+```{r}
+#| label: plot-patterns
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 3.4
+#| out-width: 96%
+bind_rows(patterns) |>
+  ggplot(aes(x, y, colour = group)) +
+  geom_point(size = .45) +
+  facet_wrap(~pattern, nrow = 1) +
+  scale_colour_manual(values = colours) +
+  coord_equal() +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom")
+```
+
+
+::: {.notes}
+Reuses the current getting-started vignette's agents and distribute-agents
+chunks: seed 2026, 2,000 actors and locations in a 1,000 by 1,000 square.
+Group membership, ordered status, and resources are related. Cycles 1 versus 3
+control cluster scale; assignment noise 0 versus 1 weakens sorting. The locations
+and joint trait distribution stay fixed across all four assignments.
+:::
+
+## Resource distributions in space
+
+```{r}
+#| label: plot-resource-patterns
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 3.4
+#| out-width: 96%
+bind_rows(patterns) |>
+  ggplot(aes(x, y, colour = resources_rank / N)) +
+  geom_point(size = .45) +
+  facet_wrap(~pattern, nrow = 1) +
+  scale_colour_viridis_c(name = "Resource rank", limits = c(0, 1)) +
+  coord_equal() +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom") +
+  colour_bar_guides +
+  colour_bar_theme
+```
+
+
+::: {.notes}
+Resources are lognormally distributed, with population mean parameter 10 and
+Gini parameter .5. Color shows global resource rank. Only the allocation of
+actors to locations changes across patterns; compare clustering at a fixed color
+scale. The first pattern is used for the detailed examples that follow.
+:::
+
+## Status in the microdata
+
+```{r}
+#| label: status-microdata
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 3.4
+#| out-width: 96%
+bind_rows(patterns) |>
+  ggplot(aes(x, y, colour = status)) +
+  geom_point(size = .5) +
+  facet_wrap(~pattern, nrow = 1) +
+  scale_colour_manual(
+    values = c("1" = "#e6ab02", "2" = "#1b9e77", "3" = "#7570b3"),
+    name = "Status"
+  ) +
+  coord_equal() +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom")
+```
+
+::: {.notes}
+Status is an ordered micro-level trait, with categories 1, 2, and 3. The same
+people and joint trait distribution appear in every residential pattern.
+:::
+
+## Specify three variables
+
+```{r}
+#| label: syntax-3
+#| results: hide
+micro_variables <- list(
+  group = spseg_categorical(vars = "group"),
+  status = spseg_ordinal(vars = "status"),
+  resources = spseg_continuous(
+    vars = "resources",
+    summary = list(type = "shares", probs = c(.25, .5, .75))
+  )
+)
+```
+
+
+::: {.notes}
+Status is an ordered factor in the simulation. One observed-value column per
+constructor describes microdata; several selected columns supply category counts.
+The continuous summary defines global quartile shares for local environments
+and grouped exposure. Full-resolution scalar indices use the underlying rank
+distribution independently of these reporting groups.
+:::
+
+## Calculate across distance bands
+
+```{r}
+#| label: syntax-4
+#| results: hide
+result <- spseg(
+  patterns[[1]],
+  coords = c("x", "y"),
+  variables = micro_variables,
+  bands = c(50, seq(100, 1000, 100)),
+  neighbors = "radius",
+  weighting = "biweight",
+  measures = "all",
+  scope = "both",
+  output = "full"
+)
+```
+
+
+::: {.notes}
+This is the current vignette's actual radius calculation. Bands are coordinate
+distances; the vignette's older prose/plot labels sometimes say kNN. Here all
+radius figures are labeled correctly. Variables reuse neighborhood discovery.
+Full output retains the local environments used in subsequent maps.
+:::
+
+## Segregation curves
+
+```{r}
+#| label: plot-indices
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-width: 96%
+indices <- as.data.frame(result, what = "indices")
+indices |>
+  ggplot(aes(band, value, colour = measure)) +
+  geom_line(linewidth = .9) +
+  facet_wrap(~variable, nrow = 1) +
+  labs(
+    x = "Neighborhood radius (coordinate units)",
+    y = "Segregation index",
+    colour = NULL
+  )
+```
+
+
+::: {.notes}
+Each panel is one variable; colors denote measure families. Read scale profiles
+within a variable and family. Smaller-scale arrangements are averaged out as
+radius increases. Levels across categorical, ordinal, and continuous panels
+reflect different definitions and should not be treated as interchangeable.
+:::
+
+## Extract indices and local environments
+
+```{r}
+#| label: syntax-5
+#| results: hide
+indices <- as.data.frame(result, what = "indices")
+pairs <- as.data.frame(result, what = "pairwise")
+
+local <- st_as_sf(result, bands = c(100, 500))
+local |> filter(variable == "group", category == "A")
+```
+
+
+::: {.notes}
+Extraction returns compact long tables suitable for dplyr and ggplot2. Current
+outputs use value, reference, and target where relevant. Pairwise continuous
+results compare the summary groups using binary group shares and original
+full-variable neighborhoods. Optional scores and contributions can be retained
+separately using keep_scores and keep_contributions.
+:::
+
+## Local group composition
+
+```{r}
+#| label: plot-local
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-height: 70%
+#| out-width: 84%
+local |>
+  filter(variable == "group", category == "A") |>
+  ggplot(aes(colour = value)) +
+  geom_sf(size = .5) +
+  facet_wrap(~band, labeller = label_both) +
+  scale_colour_gradient2(
+    low = colours["B"],
+    mid = "white",
+    high = colours["A"],
+    midpoint = .5,
+    limits = c(0, 1),
+    name = "Local share A"
+  ) +
+  coord_sf(datum = NA) +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom") +
+  colour_bar_guides +
+  colour_bar_theme
+```
+
+
+::: {.notes}
+Maps show local share A for radii 100 and 500. White means equal local A/B
+representation, not absent population. The same zero-to-one color scale is used
+in both panels. Local shares describe environments; regional indices summarize
+population-weighted local variation.
+:::
+
+## Local environments for ordinal status
+
+```{r}
+#| label: status-local-environments
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-height: 70%
+#| out-width: 84%
+local |>
+  filter(variable == "status", category == "3") |>
+  ggplot(aes(colour = value)) +
+  geom_sf(size = .5) +
+  facet_wrap(~band, labeller = label_both) +
+  scale_colour_viridis_c(limits = c(0, 1), name = "Local share: status 3") +
+  coord_sf(datum = NA) +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom") +
+  colour_bar_guides +
+  colour_bar_theme
+```
+
+::: {.notes}
+The ordinal index combines cumulative thresholds; this map describes the share
+of status category 3 in each bespoke environment. Radius bands are 100 and 500,
+with the same zero-to-one color scale. All three status categories contribute
+to the ordinal indices already shown in the single-pattern curves.
+:::
+
+## Exposure between resource quartiles
+
+```{r}
+#| label: plot-exposure
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-width: 70%
+exposure <- as.data.frame(result, what = "exposure")
+labels <- result$analyses$resources$definition$summary$groups$labels
+exposure |>
+       filter(variable == "resources", band %in% c(100, 500)) |>
+       mutate(
+              reference = factor(
+                     reference,
+                     levels = labels,
+                     labels = paste0("Q", 1:4)
+              ),
+              target = factor(
+                     target,
+                     levels = labels,
+                     labels = paste0("Q", 1:4)
+              )
+       ) |>
+       ggplot(aes(target, reference, fill = value)) +
+       geom_tile() +
+       facet_wrap(~band, labeller = label_both) +
+       coord_equal() +
+       scale_fill_viridis_c(limits = c(0, 1), name = "Exposure") +
+       labs(x = "Target quartile", y = "Reference quartile") +
+       colour_bar_guides +
+       colour_bar_theme
+```
+
+
+$$P^*_{ab}=\sum_i\frac{N_{ia}}{T_a}\,p_{ib}$$
+
+\footnotetext[1]{Reardon \& O'Sullivan (2004), \emph{Measures of Spatial Segregation}.}
+
+::: {.notes}
+Rows are reference/focal quartiles and columns target/neighbor quartiles.
+Diagonal entries are isolation. Each valid row sums to one. Exposure is
+directional, so the matrix need not be symmetric. Quartile labels are simplified
+from the exact resource thresholds for presentation.
+:::
+
+## Aggregate people into 80 Voronoi areas
+
+```{r}
+#| label: aggregate-people
+#| include: false
+domain <- st_as_sfc(st_bbox(c(
+  xmin = 0,
+  ymin = 0,
+  xmax = side,
+  ymax = side
+)))
+
+polygons <- 80
+set.seed(2027)
+
+voronoi <- tibble(
+  x = runif(80, 0, side),
+  y = runif(80, 0, side)
+) |>
+  st_as_sf(coords = c("x", "y")) |>
+  st_union() |>
+  st_voronoi(envelope = domain) |>
+  st_collection_extract("POLYGON") |>
+  st_intersection(domain) |>
+  st_sf(geometry = _) |>
+  mutate(zone_id = row_number())
+
+# Keep every marginal category and polygon, including zero counts.
+column_names <- c(
+  paste0("group_", c("A", "B")),
+  paste0("status_", 1:3),
+  paste0("resources_", 1:10)
+)
+people <- patterns[[1]] |>
+  mutate(
+    resources = as.character(as.integer(cut_number(resources, 10))),
+    group = as.character(group),
+    status = as.character(status)
+  ) |>
+  st_as_sf(coords = c("x", "y"), remove = FALSE)
+stopifnot(all(lengths(st_within(people, voronoi)) == 1L))
+counts <- people |>
+  st_join(voronoi, join = st_within) |>
+  st_drop_geometry() |>
+  select(zone_id, group, status, resources) |>
+  pivot_longer(-zone_id, names_to = "trait", values_to = "category") |>
+  count(zone_id, trait, category) |>
+  unite("column", trait, category) |>
+  complete(
+    zone_id = voronoi$zone_id,
+    column = column_names,
+    fill = list(n = 0L)
+  ) |>
+  pivot_wider(names_from = column, values_from = n)
+voronoi_counts <- left_join(voronoi, counts, by = "zone_id")
+stopifnot(
+  sum(counts$group_A + counts$group_B) == N,
+  sum(as.matrix(select(counts, all_of(paste0("resources_", 1:10))))) == N
+)
+```
+
+
+```{r}
+#| label: plot-voronoi
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-width: 96%
+voronoi_counts |>
+  mutate(share = group_A / (group_A + group_B)) |>
+  ggplot() +
+  geom_sf(aes(fill = share), colour = "white", linewidth = .2) +
+  scale_fill_gradient2(
+    low = colours["B"],
+    mid = "white",
+    high = colours["A"],
+    midpoint = .5,
+    limits = c(0, 1),
+    name = "Area share A"
+  ) +
+  coord_sf(datum = NA) +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom") +
+  colour_bar_guides +
+  colour_bar_theme
+```
+
+
+::: {.notes}
+The current vignette uses 80 randomly seeded Voronoi polygons, seed 2027.
+Counts retain group, status, and ten resource-decile margins. The embedded code
+completes empty categories explicitly and verifies population conservation.
+This is the first micro pattern, with the same spatial domain and original actors.
+:::
+
+## Select count columns
+
+```{r}
+#| label: syntax-6
+#| results: hide
+count_variables <- list(
+  group = spseg_categorical(vars = c("group_A", "group_B")),
+  status = spseg_ordinal(vars = paste0("status_", 1:3)),
+  resources = spseg_continuous(
+    vars = paste0("resources_", 1:10),
+    representation = "intervals"
+  )
+)
+```
+
+
+::: {.notes}
+Supply ordered count-column names from lowest to highest for ordinal and
+interval data. Defaults give quartile shares for continuous summaries.
+Quartile boundaries split some input deciles, producing an interpolation warning.
+The same allocation fractions apply to focal and target population weights.
+:::
+
+## Own-area and spatial neighborhoods
+
+```{r}
+#| label: syntax-7
+#| results: hide
+nonspatial <- spseg(
+  voronoi_counts,
+  variables = count_variables,
+  bands = 0,
+  surface = "raw",
+  weighting = "unweighted"
+)
+
+result_polygons <- spseg(
+  voronoi_counts,
+  variables = count_variables,
+  bands = seq(0, 1000, 100),
+  surface = "raw",
+  output = "full"
+)
+```
+
+
+::: {.notes}
+With distinct polygon centroids and radius zero, each environment is the
+polygon's own population: the non-spatial partition calculation. Positive
+radii include other centroids. Radius zero on microdata has a different support,
+namely the coincident persons at each location. The worked curves use the
+vignette's biweight raw call, including its band-zero result.
+:::
+
+## Choose a population surface
+
+```{r}
+#| label: population-surfaces
+#| results: hide
+result_grid <- spseg(
+  voronoi_counts,
+  variables = count_variables,
+  bands = seq(0, 1000, 100),
+  surface = "grid",
+  nrow = 30,
+  ncol = 30,
+  scope = "overall",
+  output = "full",
+  surface_geometry = "polygons"
+)
+result_pycno <- spseg(
+  voronoi_counts,
+  variables = count_variables,
+  bands = seq(0, 1000, 100),
+  surface = "pycno",
+  nrow = 30,
+  ncol = 30,
+  scope = "overall",
+  output = "full",
+  surface_geometry = "polygons"
+)
+```
+
+
+::: {.notes}
+The executable chunks above contain both surface calls from the vignette. Polygons, resource intervals, and within-area population
+allocation introduce distinct modeling choices. Compare them at common distance
+bands when assessing sensitivity.
+:::
+
+## Uniform and smoothed population surfaces
+
+```{r}
+#| label: plot-surfaces
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-width: 96%
+surfaces <- list(
+  "Uniform grid" = result_grid,
+  "Smoothed grid" = result_pycno
+) |>
+  map(\(x) {
+    st_as_sf(x, variables = "group", bands = 0) |> filter(category == "group_A")
+  }) |>
+  list_rbind(names_to = "surface") |>
+  st_as_sf()
+surfaces |>
+  ggplot(aes(fill = value)) +
+  geom_sf(colour = NA) +
+  facet_wrap(~surface) +
+  scale_fill_gradient2(
+    low = colours["B"],
+    mid = "white",
+    high = colours["A"],
+    midpoint = .5,
+    limits = c(0, 1),
+    name = "Cell share A"
+  ) +
+  coord_sf(datum = NA) +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom") +
+  colour_bar_guides +
+  colour_bar_theme
+```
+
+
+::: {.notes}
+Both examples use a 30 by 30 grid. Surface grid transports each category's counts
+to grid cells. Surface pycno smooths groupwise and rescales within source zones.
+These maps extract band zero to display cell composition before additional
+neighborhood weighting. Surface resolution and source-zone fallback affect the
+population representation; inspect surface_info in applied work.
+:::
+
+## Compare population representations
+
+```{r}
+#| label: plot-supports
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-width: 96%
+comparison <- list(
+  "Microdata" = result,
+  "Polygon centroids" = result_polygons,
+  "Uniform grid" = result_grid,
+  "Smoothed grid" = result_pycno
+) |>
+  map(as.data.frame) |>
+  list_rbind(names_to = "support")
+comparison |>
+  filter(measure == "information", band > 0) |>
+  ggplot(aes(band, value, colour = support)) +
+  geom_line(linewidth = .9) +
+  facet_wrap(~variable, nrow = 1) +
+  labs(
+    x = "Neighborhood radius (coordinate units)",
+    y = "Information index",
+    colour = NULL
+  )
+```
+
+
+::: {.notes}
+Information-index curves use common radius bands. Microdata retain exact resource
+values and locations. Polygon/grid/pycno versions retain only decile income
+counts and aggregate geography, so resource contrasts combine binning and spatial
+representation. Group and status keep their original categories. The chart does
+not identify one representation as a universal correction for another.
+:::
+
+## Residential patterns
+
+```{r}
+#| label: parallel-patterns
+#| include: false
+run_patterns <- function() {
+  cluster <- parallel::makePSOCKcluster(2L)
+  on.exit(parallel::stopCluster(cluster), add = TRUE)
+  parallel::clusterCall(cluster, function(paths) .libPaths(paths), .libPaths())
+  parallel::parLapply(cluster, patterns, \(x) {
+    spseg::spseg(
+      x,
+      coords = c("x", "y"),
+      variables = list(group = spseg::spseg_categorical(vars = "group")),
+      bands = c(10, 20, 30, 40, seq(50, 950, by = 100)),
+      neighbors = "knn",
+      weighting = "biweight",
+      measures = "all",
+      scope = "both",
+      output = "full"
+    )
+  })
+}
+
+result_patterns <- run_patterns()
+```
+
+```{r}
+#| label: pattern-reminder
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 3.4
+#| out-width: 96%
+bind_rows(patterns) |>
+  ggplot(aes(x, y, colour = group)) +
+  geom_point(size = .45) +
+  facet_wrap(~pattern, nrow = 1) +
+  scale_colour_manual(values = colours) +
+  coord_equal() +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom")
+```
+
+::: {.notes}
+Return to the four group-membership patterns before comparing their segregation
+curves. Locations, population, and group totals are fixed; cluster scale and
+assignment noise vary. The next slide compares the same group variable at common
+population kNN thresholds. The independent calculations execute in the hidden
+chunk above and are checked against sequential execution.
+:::
+
+## Compare patterns at population scales
+
+```{r}
+#| label: plot-parallel-curves
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-width: 96%
+curves <- result_patterns |>
+  map(as.data.frame) |>
+  list_rbind(names_to = "pattern")
+curves |>
+  ggplot(aes(band, value, colour = pattern)) +
+  geom_line(linewidth = .9) +
+  facet_wrap(~measure, nrow = 1) +
+  labs(
+    x = "Neighborhood population (kNN)",
+    y = "Group segregation",
+    colour = NULL
+  ) +
+  guides(colour = guide_legend(nrow = 2))
+```
+
+
+::: {.notes}
+Same categorical group, four residential patterns, common population thresholds.
+Large low-noise clusters remain segregated over larger neighborhood populations.
+Smaller low-noise clusters lose segregation more rapidly as k increases. The
+relative ordering of noisy large clusters and cleaner small clusters may change
+with scale; compare the actual generated profiles instead of one index value.
+:::
+
+## A 100-person population network
+
+```{r}
+#| label: build-population-network
+#| include: false
+set.seed(2028)
+network_people <- patterns[[1]] |>
+  slice_sample(n = 100) |>
+  mutate(node = as.character(row_number()))
+xy <- as.matrix(select(network_people, x, y))
+distance <- as.matrix(dist(xy))
+diag(distance) <- Inf
+candidates <- map_dfr(seq_len(nrow(xy)), function(i) {
+  tibble(from = i, to = order(distance[i, ], seq_len(nrow(xy)))[1:4])
+}) |>
+  transmute(a = pmin(from, to), b = pmax(from, to)) |>
+  distinct() |>
+  mutate(
+    length = sqrt(rowSums((xy[a, , drop = FALSE] - xy[b, , drop = FALSE])^2))
+  ) |>
+  arrange(length, a, b)
+segments <- map2(
+  candidates$a,
+  candidates$b,
+  ~ st_linestring(xy[c(.x, .y), , drop = FALSE])
+) |>
+  st_sfc()
+crossings <- st_crosses(segments)
+keep <- rep(FALSE, nrow(candidates))
+for (i in seq_len(nrow(candidates))) {
+  # Retain shortest edges first; endpoints shared by edges are allowed.
+  keep[i] <- !any(keep[crossings[[i]]])
+}
+network_edges <- candidates |>
+  filter(keep) |>
+  transmute(from = as.character(a), to = as.character(b))
+edge_geometry <- st_sf(network_edges, geometry = segments[keep])
+stopifnot(all(lengths(st_crosses(edge_geometry)) == 0L))
+graph <- igraph::graph_from_data_frame(
+  network_edges,
+  directed = FALSE,
+  vertices = select(network_people, node)
+)
+component <- igraph::components(graph)$membership
+set.seed(2029)
+layout <- igraph::layout_with_fr(graph, niter = 1000)
+layout <- layout[
+  match(network_people$node, igraph::V(graph)$name),
+  ,
+  drop = FALSE
+]
+network_people <- network_people |>
+  mutate(x = layout[, 1], y = layout[, 2])
+layout_edges <- map2(network_edges$from, network_edges$to, function(from, to) {
+  ids <- match(c(from, to), network_people$node)
+  st_linestring(as.matrix(select(network_people[ids, ], x, y)))
+})
+edge_geometry <- st_sf(network_edges, geometry = st_sfc(layout_edges))
+stopifnot(igraph::vcount(graph) == 100L)
+network <- spseg_network(network_edges)
+network_points <- network_people |>
+  select(node, x, y, group) |>
+  st_as_sf(coords = c("x", "y"))
+```
+
+```{r}
+#| label: network-microdata
+#| echo: false
+#| fig-width: 7
+#| fig-height: 5
+#| out-height: 70%
+ggplot() +
+  geom_sf(data = edge_geometry, colour = "grey65", linewidth = .3) +
+  geom_sf(
+    data = network_points,
+    aes(fill = group),
+    shape = 21,
+    colour = "black",
+    stroke = .35,
+    size = 2.5
+  ) +
+  scale_fill_manual(values = colours, name = "Group") +
+  coord_sf(datum = NA) +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom")
+```
+
+100 nodes · `r nrow(network_edges)` edges 
+
+::: {.notes}
+Sample 100 actors with their locations and traits from the first micro pattern,
+seed 2028. Each node nominates its four nearest geographic neighbors. Take the
+undirected union, then consider edges in increasing Euclidean length, breaking
+ties by endpoint IDs. Keep an edge if it crosses no already retained edge.
+Shared endpoints are allowed. This is a deterministic greedy noncrossing subgraph
+of the symmetrized 4-NN candidates, not a claim that final degree equals four.
+No bridge edges are added: the code records components, and isolated nodes retain
+their own populations. Hop-radius calculations work within reachable components.
+This graph is a transparent synthetic example, rather than a model of observed
+social ties. The figures use igraph's Fruchterman--Reingold layout, seed 2029, based on the
+retained edges. All panels share these display coordinates. Crossing removal
+was applied in the original geographic embedding; the force-directed drawing
+can place the same edges differently. Supplied edges define hop proximity.
+:::
+
+## Calculate along network paths
+
+```{r}
+#| label: network-analysis
+#| results: hide
+network_result <- spseg(
+  network_people,
+  coords = c("x", "y"),
+  variables = list(group = spseg_categorical(vars = "group")),
+  network = network,
+  node_id = "node",
+  bands = c(0, 1, 2, 3, 4, 6),
+  weighting = "unweighted",
+  output = "full"
+)
+```
+
+::: {.notes}
+One actor occupies each node. Band zero is the actor's own node, band one includes
+adjacent nodes, and larger hop radii follow the graph. These bands are network
+radius thresholds; they are distinct from the geometric four-nearest-neighbor
+rule that created candidate edges. Measures use the supplied regional population,
+including all components. Group membership supplies the population composition at each node. The supplied
+coordinates are the force-directed layout, retained for plotting.
+:::
+
+## Local environments on the network
+
+```{r}
+#| label: network-local-environments
+#| echo: false
+#| fig-width: 12
+#| fig-height: 4.5
+#| out-width: 100%
+#| out-height: 78%
+network_local <- st_as_sf(network_result, bands = c(1, 2, 3)) |>
+  filter(variable == "group", category == "B")
+ggplot() +
+  geom_sf(data = edge_geometry, colour = "grey80", linewidth = .25) +
+  geom_sf(
+    data = network_local,
+    aes(fill = value),
+    shape = 21,
+    colour = "black",
+    stroke = .35,
+    size = 2.5
+  ) +
+  facet_wrap(
+    ~band,
+    nrow = 1,
+    labeller = labeller(band = function(x) paste(x, "hop(s)"))
+  ) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0.5,
+    limits = c(0, 1),
+    name = "Local share of group B"
+  ) +
+  coord_sf(datum = NA) +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom") +
+  colour_bar_guides +
+  colour_bar_theme
+```
+
+::: {.notes}
+Each point's color describes the local share of group B within one, two, or
+three hops, with equal resident weights. All three panels share a zero-to-one
+scale and appear in one row. Edges are shown in grey for orientation. Local environments follow network reachability,
+even when geographically close nodes have no short connecting path.
+:::
+
+```{r}
+#| label: verify-network-local-shares
+#| include: false
+one_hop <- unique(c(
+  "1",
+  network_edges$to[network_edges$from == "1"],
+  network_edges$from[network_edges$to == "1"]
+))
+focal_environment <- as.data.frame(network_result, what = "env", bands = 1) |>
+  filter(location == 1)
+expected_group <- mean(
+  network_people$group[network_people$node %in% one_hop] == "B"
+)
+actual_group <- focal_environment |>
+  filter(variable == "group", category == "B") |>
+  pull(value)
+stopifnot(
+  isTRUE(all.equal(actual_group, expected_group)),
+  setequal(network_local$band, c(1, 2, 3)),
+  nrow(network_local) == 300L
+)
+# Layout coordinates do not enter shortest-path neighborhood calculations.
+topology_only <- spseg(
+  select(network_people, node, group),
+  variables = list(group = spseg_categorical(vars = "group")),
+  network = network,
+  node_id = "node",
+  bands = c(0, 1, 2, 3, 4, 6),
+  weighting = "unweighted",
+  output = "full"
+)
+stopifnot(
+  isTRUE(all.equal(
+    network_result$analyses$group$indices,
+    topology_only$analyses$group$indices
+  )),
+  isTRUE(all.equal(
+    network_result$analyses$group$env,
+    topology_only$analyses$group$env
+  ))
+)
+```
+
+## Segregation across network scales
+
+```{r}
+#| label: network-indices
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 5
+#| out-width: 96%
+network_result |>
+  as.data.frame(what = "indices") |>
+  filter(measure == "information") |>
+  ggplot(aes(band, value)) +
+  geom_line(linewidth = .9, colour = "#2166ac") +
+  geom_point(size = 2) +
+  scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 6)) +
+  labs(x = "Neighborhood radius (shortest-path hops)", y = "Information index")
+```
+
+::: {.notes}
+The curve shows categorical group segregation as hop radius increases. Component
+structure may preserve differences at larger bands; an expanding radius does
+not necessarily reach the entire regional population. The source retains the
+microdata, candidate edges, pruning rule, components, and calculated environments.
+:::
+
+## Further examples
+
+```{r}
+#| label: syntax-11
+#| eval: false
+vignette("spseg-getting-started")
+vignette("spseg-measure-definitions")
+vignette("spseg-networks")
+?spseg
+```
+
+
+\bigskip
+
+\url{https://github.com/bfjarvis/spseg}
+
+::: {.notes}
+The Quarto source embeds the simulation, calculations, and plotting code. The package vignettes contain the full workflows and mathematical
+definitions. Source builds need vignette installation enabled to use vignette().
+All figures in this deck are regenerated from the vignette's simulation rather
+than illustrative or hand-drawn data.
+:::
+
+```{r}
+#| label: verify-parallel-results
+#| include: false
+sequential <- spseg(
+  patterns[[1]],
+  coords = c("x", "y"),
+  variables = list(group = spseg_categorical(vars = "group")),
+  bands = c(10, 20, 30, 40, seq(50, 950, by = 100)),
+  neighbors = "knn",
+  output = "full"
+)
+stopifnot(isTRUE(all.equal(sequential$analyses, result_patterns[[1]]$analyses)))
+```
