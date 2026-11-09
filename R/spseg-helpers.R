@@ -77,10 +77,3 @@ spseg_default_bands <- function(x, coords = NULL, population = NULL, n = 500,
 .spseg_weighting_id <- function(weighting) {
   match(weighting, c("unweighted", "biweight", "inverse", "exponential")) - 1L
 }
-
-.spseg_scope_flags <- function(scope) {
-  c(
-    multigroup = scope %in% c("multigroup", "both"),
-    pairwise = scope %in% c("pairwise", "both")
-  )
-}

@@ -1,5 +1,34 @@
 # spseg (development version)
 
+- Exposure tables now use `reference` for the focal population and `target`
+  for the neighboring category. Rank profiles use `reference` alongside the
+  reported statistic and probability. Symmetric pairwise index columns are
+  unchanged.
+
+- Corrected floating-point endpoint overshoot in probability-valued local
+  summaries, exposures, rank summaries, and interpolation shares. Returned
+  probabilities stay within [0, 1], preserving interior precision and missing
+  values without decimal rounding. Violations beyond an accumulation-aware
+  roundoff allowance raise an error, as do non-finite computed probabilities.
+
+- Probability-defined continuous groups now use percentile-range labels in
+  pairwise indices, exposures, and retained shares. Exact-data labels reflect
+  achieved population shares when ties shift the requested boundaries. Explicit
+  value cuts keep value-based labels; resolved cutoffs remain in metadata.
+
+- Renamed scope `"multigroup"` and the corresponding result fields to
+  `"overall"`, covering categorical, ordinal, and continuous overall indices.
+  Variable constructors now accept `scope`, `output`, `keep_scores`, and
+  `keep_contributions`; `NULL` inherits the global default and explicit values
+  override it. Mixed-output extraction selects available analyses by default.
+  Pairwise-only scope now consistently omits overall scalar indices for every
+  variable type; exposure remains independently selected through `measures`.
+
+- Ordinal variables now return pairwise category indices when requested by
+  `scope`, alongside their ordered multigroup indices and existing category
+  exposure/isolation matrices. Pairwise scores and contributions can also be
+  retained, independently of the ordinal environment summary.
+
 - Extracted and expanded the technical measure definitions into a separate
   vignette, documenting local variation/deviation functions, normalizers,
   pairwise conditioning, additive contributions, and methodological provenance.

@@ -24,8 +24,8 @@
 #' needed and including equidistant boundary units proportionately. Neighboring
 #' units are added by centroid distance. An unattainable threshold raises an error.
 #'
-#' Each named variable has a result in `result$analyses`. Its multigroup
-#' measures are stored in `indices$multigroup` and requested pairwise
+#' Each named variable has a result in `result$analyses`. Its overall
+#' measures are stored in `indices$overall` and requested pairwise
 #' measures in `indices$pairwise`.
 #' Pairwise scalar measures are returned as one symmetric matrix per
 #' bandwidth with one row and column for each population group. Units with
@@ -85,12 +85,15 @@
 #'   contributions, the initial gridded counts, and pycnophylactically smoothed
 #'   counts when applicable. The default retains only lightweight grid and
 #'   fallback metadata.
-#' @param scope Whether to calculate "multigroup" measures, "pairwise"
-#'   two-group measures, or "both" for categorical outcomes and resolved continuous
-#'   global groups. Continuous pairwise indices use binary group shares within
-#'   the original full-variable neighborhoods, independently of summary mode.
-#'   They do not replace full-resolution continuous scalar indices. Ordered outcomes
-#'   always return their cumulative-threshold summaries; exposure is separate.
+#' @param scope Whether to calculate "overall" measures, "pairwise"
+#'   two-group measures, or "both" for categorical/ordinal categories and resolved
+#'   continuous global groups. Ordinal pairwise indices compare individual
+#'   categories using the same pair-conditioned formulas as categorical input.
+#'   Overall indices use the full categorical distribution, ordinal cumulative
+#'   thresholds, or continuous rank distribution. Continuous pairwise indices
+#'   use binary group shares within the original full-variable neighborhoods,
+#'   independently of summary mode. Exposure is selected through `measures`
+#'   independently of scope. This global default can be overridden per variable.
 #' @param output Return mode. "indices" stores only segregation indices.
 #'   "full" stores both indices and local environments. "localenv"
 #'   stores local environments without calculating indices.
@@ -100,6 +103,9 @@
 #'   summaries, with `mean_rank = TRUE` in that list for a separate mean.
 #'   Customize continuous summaries with `summary`, or ordinal summaries with
 #'   `localenv`, independently of full-resolution scalar indices.
+#'   This global default can be overridden per variable. Shared input geometry,
+#'   coordinates, data, and population are retained once if any variable stores
+#'   environments.
 #' @param keep_scores Logical. Retain per-location H/R/S local variation and
 #'   D discrepancies, for the requested measures and scopes. Extract with
 #'   `as.data.frame(result, what = "scores")`.
@@ -111,6 +117,7 @@
 #'   allocated. Exposure and rank profiles have separate output.
 #'   Retention memory grows with locations, bands, requested scalar measures,
 #'   and group pairs; each enabled option stores its own arrays.
+#'   Both retention options can be overridden per variable, including by `FALSE`.
 #' @param verbose Logical. If `TRUE`, report progress messages.
 #' @param variables Column names for a single categorical variable, or a uniquely
 #'   named list of [spseg_variables] specifications. A single column name is
@@ -221,7 +228,7 @@ spseg <- function(
   search = c("boost", "brute"),
   surface = c("raw", "grid", "pycno"),
   surface_audit = FALSE,
-  scope = c("both", "multigroup", "pairwise"),
+  scope = c("both", "overall", "pairwise"),
   output = c("indices", "full", "localenv"),
   keep_scores = FALSE,
   keep_contributions = FALSE,
@@ -267,7 +274,7 @@ spseg <- function(
   relational <- !is.null(network)
   if (relational && surface != "raw")
     stop("Network input requires surface = 'raw'", call. = FALSE)
-  scope <- match.arg(scope, c("both", "multigroup", "pairwise"))
+  scope <- match.arg(scope, c("both", "overall", "pairwise"))
   output <- match.arg(output, c("indices", "full", "localenv"))
   retention <- list(keep_scores = keep_scores,
                     keep_contributions = keep_contributions)
@@ -344,28 +351,36 @@ spseg <- function(
     }
   }
   if (verbose) message("Calculating ", length(compiled), " variables with shared neighborhood searches")
+  compiled <- Map(function(config, spec) {
+    config$settings <- list(scope = spec$scope %||% scope,
+      output = spec$output %||% output,
+      keep_scores = spec$keep_scores %||% keep_scores,
+      keep_contributions = spec$keep_contributions %||% keep_contributions)
+    config
+  }, compiled, variables)
+  store_input <- any(vapply(compiled, function(z)
+    z$settings$output != "indices", logical(1)))
+  store_local_keys <- store_input || any(vapply(compiled, function(z)
+    z$settings$keep_scores || z$settings$keep_contributions, logical(1)))
   engine <- spseg_engine_cpp(checked$coords %||% matrix(numeric(), 0L, 2L),
                          compiled, as.numeric(bands),
                          power, .spseg_weighting_id(weighting), normalize,
                          match(neighbors, c("radius", "knn")) - 1L,
                          match(search, c("boost", "brute")) - 1L,
-                         if (relational) prepared_network$graph else list(),
-                         as.integer(.spseg_scope_flags(scope)), output != "indices",
-                         output != "localenv", keep_scores, keep_contributions)
+                         if (relational) prepared_network$graph else list())
   analyses <- Map(.spseg_prepare_result, engine$analyses, compiled,
-                  MoreArgs = list(bands = bands, keep_env = output != "indices"))
+                  MoreArgs = list(bands = bands))
   result <- list(analyses = analyses, bands = as.numeric(bands),
-                 coords = if (output != "indices") checked$coords else NULL,
-                 data = if (output != "indices") checked$data else NULL,
-                 geometry = if (output != "indices") checked$geometry else NULL,
-                 population = if (output != "indices") population else NULL,
+                 coords = if (store_input) checked$coords else NULL,
+                 data = if (store_input) checked$data else NULL,
+                 geometry = if (store_input) checked$geometry else NULL,
+                 population = if (store_input) population else NULL,
                  crs = checked$crs, weighting = weighting, power = power,
                  normalize = normalize, surface = surface, output = output,
                  keep_scores = keep_scores, keep_contributions = keep_contributions,
                  surface_info = surface_info,
                  network = if (relational) prepared_network$summary else NULL,
-                 node_id = if (relational &&
-                   (output != "indices" || keep_scores || keep_contributions)) prepared_network$ids else NULL,
+                 node_id = if (relational && store_local_keys) prepared_network$ids else NULL,
                  neighbors = list(type = neighbors, values = bands,
                                   space = if (relational) "network" else "euclidean",
                                   units = if (neighbors == "knn") "population" else

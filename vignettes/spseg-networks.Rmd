@@ -75,7 +75,7 @@ network_income <- spseg(
 )
 
 as.data.frame(network_income, what = "exposure") |>
-  select(from_group, band, statistic, prob, value)
+  select(reference, band, statistic, prob, value)
 network_income$analyses$income$definition$summary[c(
   "requested_probs", "effective_probs", "groups", "interpolation"
 )]

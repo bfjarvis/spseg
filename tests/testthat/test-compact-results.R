@@ -14,9 +14,16 @@ test_that("compact tables expose results rather than duplicated metadata", {
   expect_identical(names(as.data.frame(r, what = "pairwise")),
     c("variable", "band", "measure", "group_a", "group_b", "value"))
   expect_identical(names(as.data.frame(r, what = "exposure", variables = "race")),
-    c("variable", "band", "from_group", "to_group", "value"))
+    c("variable", "band", "reference", "target", "value"))
   expect_identical(names(as.data.frame(r, what = "exposure", variables = "income")),
-    c("variable", "band", "from_group", "statistic", "prob", "value"))
+    c("variable", "band", "reference", "statistic", "prob", "value"))
+  shares <- as.data.frame(r, what = "exposure", variables = "race", bands = 0)
+  exposure_matrix <- r$analyses$race$indices$overall$p[[1]]
+  expect_equal(shares$value,
+    unname(exposure_matrix[cbind(match(shares$reference, rownames(exposure_matrix)),
+                                match(shares$target, colnames(exposure_matrix)))]))
+  expect_equal(shares$value[shares$reference == shares$target],
+    unname(diag(exposure_matrix)))
   expect_identical(names(as.data.frame(r, what = "env", variables = "race")),
     c("variable", "band", "location", "category", "value"))
   expect_identical(names(as.data.frame(r, what = "env", variables = "income")),
@@ -40,21 +47,21 @@ test_that("mixed summaries include only their semantic union of columns", {
   expect_true(all(is.na(env$prob[env$variable == "race"])))
   exposure <- as.data.frame(r, what = "exposure")
   expect_identical(names(exposure),
-    c("variable", "band", "from_group", "to_group", "statistic", "prob", "value"))
+    c("variable", "band", "reference", "target", "statistic", "prob", "value"))
   expect_true(all(exposure$statistic[exposure$variable == "race"] == "share"))
-  expect_true(all(is.na(exposure$to_group[exposure$variable == "income"])))
+  expect_true(all(is.na(exposure$target[exposure$variable == "income"])))
   expect_true(all(is.na(exposure$prob[exposure$statistic == "mean_rank"])))
 })
 
 test_that("empty and all-missing tables retain meaningful typed columns", {
   r <- compact_fixture(measures = "information")
   empty <- as.data.frame(r, what = "exposure", variables = "race")
-  expect_identical(names(empty), c("variable", "band", "from_group", "to_group", "value"))
+  expect_identical(names(empty), c("variable", "band", "reference", "target", "value"))
   expect_equal(nrow(empty), 0L)
   expect_type(empty$value, "double")
   empty_rank <- as.data.frame(r, what = "exposure", variables = "income")
   expect_identical(names(empty_rank),
-    c("variable", "band", "from_group", "statistic", "prob", "value"))
+    c("variable", "band", "reference", "statistic", "prob", "value"))
   expect_type(empty_rank$prob, "double")
   expect_type(empty_rank$value, "double")
   constant <- spseg(data.frame(x = 0:1, y = 0, a = 1, b = 0),

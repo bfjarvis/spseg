@@ -270,7 +270,7 @@ weighted_calc$units |>
 
 The hand calculations above should match `spseg()` exactly. The calls below
 calculate only the information theory and dissimilarity indices, using
-multigroup scope to keep the output focused.
+overall scope to keep the output focused.
 
 ```{r spseg-comparison}
 coords <- as.matrix(grid[, c("x", "y")])
@@ -294,7 +294,7 @@ spseg_raw <- spseg(
   bands = 0,
   weighting = "unweighted",
   measures = c("information", "dissimilarity"),
-  scope = "multigroup"
+  scope = "overall"
 )
 
 spseg_unweighted <- spseg(
@@ -304,7 +304,7 @@ spseg_unweighted <- spseg(
   bands = 1,
   weighting = "unweighted",
   measures = c("information", "dissimilarity"),
-  scope = "multigroup",
+  scope = "overall",
   output = "full"
 )
 
@@ -315,7 +315,7 @@ spseg_weighted <- spseg(
   bands = 1,
   weighting = "exponential",
   measures = c("information", "dissimilarity"),
-  scope = "multigroup",
+  scope = "overall",
   output = "full"
 )
 

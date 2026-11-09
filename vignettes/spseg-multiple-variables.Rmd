@@ -42,7 +42,7 @@ variables <- list(
   age = spseg_continuous(vars="age")
 )
 result <- spseg(people, coords=c("x", "y"), variables=variables,
-                measures="all", bands=c(2, 4), scope="multigroup")
+                measures="all", bands=c(2, 4), scope="overall")
 as.data.frame(result)
 ```
 
@@ -93,9 +93,39 @@ Each specification can override `measures`. The common selectors are
 `"relative_diversity"` and `"variance_ratio"` are aliases for the diversity
 family; the nominal measure is specifically relative diversity, not the other
 multigroup indices that share its binary reduction. `"all"` includes all five families.
-`scope` controls categorical multigroup/pairwise calculations and pairwise
-comparisons between resolved continuous groups. Ordinal indices combine
-cumulative thresholds, not nominal comparisons between all pairs of categories.
+`scope = "overall"` selects categorical multigroup indices, ordinal
+cumulative-threshold indices, or continuous rank-order indices.
+`scope = "pairwise"` selects comparisons between categorical/ordinal categories
+or resolved continuous groups; `"both"` is the default. Exposure is selected
+separately through `measures`.
+
+## Variable-specific output
+
+Each variable can override `scope`, `output`, `keep_scores`, and
+`keep_contributions`, as well as `measures`. `NULL` in a variable specification
+inherits the corresponding global setting. An explicit `FALSE` overrides a
+global retention setting of `TRUE`.
+
+```{r variable-output}
+mixed_output <- spseg(
+  blocks, coords = c("x", "y"), bands = c(2, 4),
+  variables = list(
+    groups = spseg_categorical(vars = c("low", "middle", "high"),
+      scope = "both", output = "full"),
+    education = spseg_ordinal(vars = c("low", "middle", "high"),
+      keep_contributions = TRUE)
+  ),
+  scope = "overall", output = "indices"
+)
+mixed_output$analyses$groups$settings
+mixed_output$analyses$education$settings
+head(as.data.frame(mixed_output, what = "env"))
+```
+
+Extraction across all variables includes the analyses with the requested stored
+results. In this example, the environment table contains only `groups`.
+Selecting `variables = "education"` explicitly when requesting environments
+reports that they were not retained. Shared spatial inputs are stored once.
 
 # Population and spatial contributions
 
@@ -181,8 +211,13 @@ guide for the formula and its distinction from normalized scalar exposure.
 
 Continuous variables use one summary specification. Shares are the default;
 the default interior probabilities `.25`, `.5`, and `.75` define four global
-focal/target income groups. Exact tied values stay together, so achieved group
+focal/target income groups, labeled `P0-P25`, `P25-P50`, `P50-P75`, and `P75-P100`.
+These labels identify population percentile ranges. Exact tied values stay together, so achieved group
 sizes need not be equal. For interval input, the requested grid is preserved.
+For exact input, labels reflect the achieved weighted percentile boundaries.
+Explicit `cuts` retain labels in the variable's units. Exact value cutoffs and
+their labels are also available in `definition$summary$groups$breaks` and
+`value_labels`; `boundaries` records the achieved rank boundaries on [0, 1].
 If the highest category contains 15% of the regional population, a top-decile
 group receives `10/15` of that category's population in every unit. This is an
 explicit model-based allocation, not observed membership within that category.
@@ -223,7 +258,7 @@ share_result <- spseg(
 
 as.data.frame(share_result, what = "exposure") |>
   filter(band == 0) |>
-  select(from_group, to_group, value)
+  select(reference, target, value)
 ```
 
 There are eight people, two in each income category. Their global weighted
@@ -259,14 +294,14 @@ rank_result <- spseg(
 rank_profiles <- as.data.frame(rank_result, what = "exposure")
 rank_profiles |>
   filter(band == 0) |>
-  select(from_group, statistic, prob, value)
+  select(reference, statistic, prob, value)
 ```
 
 At U and V the local mean ranks are `3/8` and `5/8`; local median ranks are
 `1/8` and `5/8`. Averaging by focal income gives low/high mean ranks `7/16`
 and `9/16`, and low/high median ranks `1/4` and `1/2`. `what = "exposure"`
-keeps the familiar request: share tables contain `from_group`, `to_group`, and
-`value`, while quantile tables contain `from_group`, `statistic`, `prob`, and
+keeps the familiar request: share tables contain `reference`, `target`, and
+`value`, while quantile tables contain `reference`, `statistic`, `prob`, and
 `value`. Mean-rank rows use
 `statistic = "mean_rank"` and a missing `prob`. Rank profiles are descriptive,
 not classic exposure matrices or segregation indices.
@@ -333,8 +368,8 @@ as.data.frame(environments, what="exposure", variables="income")
 Use `as.data.frame(result, what="env")` or `sf::st_as_sf(result)` to obtain
 long local tables. Quantile tables have `statistic`, `prob`, and `value`;
 category-share tables have `category` and `value`. Grouped tables from
-`what="exposure"` use `from_group`, `to_group`, and `value` for share
-probabilities; rank profiles use `from_group`, `statistic`, `prob`, and `value`.
+`what="exposure"` use `reference`, `target`, and `value` for share
+probabilities; rank profiles use `reference`, `statistic`, `prob`, and `value`.
 Columns follow the selected summary types; mixed tables contain their union,
 with `statistic="share"` identifying share rows. Mean-rank rows use `statistic="mean_rank"`
 and have no quantile probability. `definition$summary` records the requested

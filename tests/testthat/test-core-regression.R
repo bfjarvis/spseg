@@ -15,7 +15,7 @@ test_that("spseg returns S3 index results by default", {
   expect_null(result$data)
   expect_null(result$analyses$groups$env)
   expect_equal(result$bands, spseg_default_bands(toy$coords, population = rowSums(toy$values)))
-  expect_length(result$analyses$groups$indices$multigroup$d, length(result$bands))
+  expect_length(result$analyses$groups$indices$overall$d, length(result$bands))
 })
 
 test_that("spseg can store local environments without indices", {
@@ -42,14 +42,14 @@ test_that("spseg full output stores local environments and indices", {
 
   expect_s3_class(result, "spseg_result")
   expect_equal(result$analyses$groups$env[[2]], env_only$analyses$groups$env[[1]], tolerance = 1e-12)
-  expect_equal(result$analyses$groups$indices$multigroup$d[["2"]],
-               indices_only$analyses$groups$indices$multigroup$d[["2"]], tolerance = 1e-12)
-  expect_equal(result$analyses$groups$indices$multigroup$r[["2"]],
-               indices_only$analyses$groups$indices$multigroup$r[["2"]], tolerance = 1e-12)
-  expect_equal(result$analyses$groups$indices$multigroup$h[["2"]],
-               indices_only$analyses$groups$indices$multigroup$h[["2"]], tolerance = 1e-12)
-  expect_equal(result$analyses$groups$indices$multigroup$p[["2"]],
-               indices_only$analyses$groups$indices$multigroup$p[["2"]], tolerance = 1e-12)
+  expect_equal(result$analyses$groups$indices$overall$d[["2"]],
+               indices_only$analyses$groups$indices$overall$d[["2"]], tolerance = 1e-12)
+  expect_equal(result$analyses$groups$indices$overall$r[["2"]],
+               indices_only$analyses$groups$indices$overall$r[["2"]], tolerance = 1e-12)
+  expect_equal(result$analyses$groups$indices$overall$h[["2"]],
+               indices_only$analyses$groups$indices$overall$h[["2"]], tolerance = 1e-12)
+  expect_equal(result$analyses$groups$indices$overall$p[["2"]],
+               indices_only$analyses$groups$indices$overall$p[["2"]], tolerance = 1e-12)
 })
 
 test_that("indices from stored local environments match full spseg output", {
@@ -58,14 +58,14 @@ test_that("indices from stored local environments match full spseg output", {
                   scope = "both", output = "full")
   indices <- categorical_reference(toy$values, result$analyses$groups$env[[1]])
 
-  expect_equal(indices$multigroup$d[[1]],
-               result$analyses$groups$indices$multigroup$d[["2"]], tolerance = 1e-12)
-  expect_equal(indices$multigroup$r[[1]],
-               result$analyses$groups$indices$multigroup$r[["2"]], tolerance = 1e-12)
-  expect_equal(indices$multigroup$h[[1]],
-               result$analyses$groups$indices$multigroup$h[["2"]], tolerance = 1e-12)
-  expect_equal(indices$multigroup$p[[1]],
-               result$analyses$groups$indices$multigroup$p[["2"]], tolerance = 1e-12)
+  expect_equal(indices$overall$d[[1]],
+               result$analyses$groups$indices$overall$d[["2"]], tolerance = 1e-12)
+  expect_equal(indices$overall$r[[1]],
+               result$analyses$groups$indices$overall$r[["2"]], tolerance = 1e-12)
+  expect_equal(indices$overall$h[[1]],
+               result$analyses$groups$indices$overall$h[["2"]], tolerance = 1e-12)
+  expect_equal(indices$overall$p[[1]],
+               result$analyses$groups$indices$overall$p[["2"]], tolerance = 1e-12)
   expect_equal(indices$pairwise$d[[1]],
                result$analyses$groups$indices$pairwise$d[["2"]], tolerance = 1e-12)
   expect_equal(indices$pairwise$r[[1]],
@@ -101,10 +101,10 @@ test_that("selected measures control stored indices", {
                   bands = c(1, 2),
                   output = "indices")
 
-  expect_length(result$analyses$groups$indices$multigroup$h, 2L)
-  expect_length(result$analyses$groups$indices$multigroup$d, 2L)
-  expect_length(result$analyses$groups$indices$multigroup$r, 0L)
-  expect_length(result$analyses$groups$indices$multigroup$p, 0L)
+  expect_length(result$analyses$groups$indices$overall$h, 2L)
+  expect_length(result$analyses$groups$indices$overall$d, 2L)
+  expect_length(result$analyses$groups$indices$overall$r, 0L)
+  expect_length(result$analyses$groups$indices$overall$p, 0L)
   expect_equal(as.data.frame(result)$measure, rep(c("dissimilarity", "information"), 2))
 })
 
@@ -121,22 +121,22 @@ test_that("zero bandwidth produces unsmoothed indices", {
                   measures = "information")
 
   expect_equal(unname(result$analyses$groups$env[[1]]), unname(values/rowSums(values)))
-  expect_true(is.finite(result$analyses$groups$indices$multigroup$h[[1]]))
-  expect_equal(result$analyses$groups$indices$multigroup$h[[1]], 1, tolerance = 1e-12)
+  expect_true(is.finite(result$analyses$groups$indices$overall$h[[1]]))
+  expect_equal(result$analyses$groups$indices$overall$h[[1]], 1, tolerance = 1e-12)
 })
 
-test_that("pairwise scalar indices agree with multigroup indices for two groups", {
+test_that("pairwise scalar indices agree with overall indices for two groups", {
   toy <- toy_grid(cols = 5:6)
   result <- spseg(toy$coords, variables = list(groups = spseg_categorical(vars = seq_len(ncol(toy$values)))), data = toy$values, bands = 2,
                   output = "indices", scope = "both")
 
-  for (band in names(result$analyses$groups$indices$multigroup$d)) {
+  for (band in names(result$analyses$groups$indices$overall$d)) {
     expect_equal(result$analyses$groups$indices$pairwise$d[[band]][1, 2],
-                 result$analyses$groups$indices$multigroup$d[[band]], tolerance = 1e-12)
+                 result$analyses$groups$indices$overall$d[[band]], tolerance = 1e-12)
     expect_equal(result$analyses$groups$indices$pairwise$r[[band]][1, 2],
-                 result$analyses$groups$indices$multigroup$r[[band]], tolerance = 1e-12)
+                 result$analyses$groups$indices$overall$r[[band]], tolerance = 1e-12)
     expect_equal(result$analyses$groups$indices$pairwise$h[[band]][1, 2],
-                 result$analyses$groups$indices$multigroup$h[[band]], tolerance = 1e-12)
+                 result$analyses$groups$indices$overall$h[[band]], tolerance = 1e-12)
   }
 })
 

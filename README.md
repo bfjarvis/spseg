@@ -125,7 +125,7 @@ Extract exposure to each group, averaged over members of each focal group:
 ```r
 result |>
   as.data.frame(what = "exposure", variables = "group", bands = 2) |>
-  select(from_group, to_group, value)
+  select(reference, target, value)
 ```
 
 The diagonal entries are isolation: a group's average exposure to itself.
@@ -142,11 +142,17 @@ result |>
 
 Use `sf::st_as_sf(result, variables = "group", bands = 2)` to obtain the same
 local summaries with geometry, ready for mapping. `what = "pairwise"` extracts
-binary segregation indices between categorical groups or resolved income groups.
+binary segregation indices between categorical/ordinal categories or resolved income groups.
 
 For larger analyses, the default `output = "indices"` retains indices and grouped
 exposures. Use `output = "localenv"` when the local environments are the desired
 result.
+
+`scope = "overall"` selects full-distribution indices, `"pairwise"` selects
+two-group comparisons, and the default `"both"` includes both. Variable
+constructors can override `scope`, `output`, `keep_scores`, and
+`keep_contributions`; `NULL` inherits the global setting. Effective choices are
+recorded in `result$analyses[[name]]$settings`.
 
 ### Choose a neighborhood
 

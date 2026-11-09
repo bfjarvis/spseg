@@ -27,10 +27,10 @@ test_that("score retention is optional and preserves streaming results", {
       expect_null(a$contributions)
       expect_equal(a$indices, b$indices)
       expect_equal(a$env, b$env)
-      for (key in names(b$contributions$multigroup)) {
+      for (key in names(b$contributions$overall)) {
         for (band in 1:2) expect_equal(
-          sum(b$contributions$multigroup[[key]][[band]]),
-          unname(b$indices$multigroup[[key]][band]), tolerance = 1e-12)
+          sum(b$contributions$overall[[key]][[band]]),
+          unname(b$indices$overall[[key]][band]), tolerance = 1e-12)
       }
       for (key in names(b$contributions$pairwise)) {
         pairs <- utils::combn(nrow(b$indices$pairwise[[key]][[1]]), 2)
@@ -50,29 +50,29 @@ test_that("raw categorical scores follow the vector primitives", {
   expected <- c(h = -sum(p[p > 0] * log(p[p > 0])),
     r = sum(p * (1 - p)), s = 0, d = sum(abs(p - P)))
   for (key in names(expected)) expect_equal(
-    a$scores$multigroup[[key]][[1]][1], unname(expected[key]))
+    a$scores$overall[[key]][[1]][1], unname(expected[key]))
   expect_null(a$env)
   expect_null(a$contributions)
-  expect_true(all(is.na(vapply(a$scores$multigroup,
+  expect_true(all(is.na(vapply(a$scores$overall,
     function(z) z[[1]][5], numeric(1)))))
   rows <- as.data.frame(result, what = "scores")
   expect_true(all(c("location", "scope", "measure", "value") %in% names(rows)))
-  expect_true(all(c("multigroup", "pairwise") %in% rows$scope))
+  expect_true(all(c("overall", "pairwise") %in% rows$scope))
   expect_error(as.data.frame(result, what = "contributions"), "keep_contributions")
 })
 
 test_that("contributions can be retained without indices or environments", {
   result <- score_example(output = "localenv", keep_contributions = TRUE,
-                          scope = "multigroup", measures = "information")
-  reference <- score_example(scope = "multigroup", measures = "information")
+                          scope = "overall", measures = "information")
+  reference <- score_example(scope = "overall", measures = "information")
   for (name in names(result$analyses)) {
     a <- result$analyses[[name]]
-    expect_length(a$indices$multigroup, 0)
+    expect_length(a$indices$overall, 0)
     expect_null(a$scores)
-    expect_named(a$contributions$multigroup, "h")
+    expect_named(a$contributions$overall, "h")
     expect_length(a$contributions$pairwise, 0)
-    expect_equal(vapply(a$contributions$multigroup$h, sum, numeric(1)),
-      reference$analyses[[name]]$indices$multigroup$h, tolerance = 1e-12)
+    expect_equal(vapply(a$contributions$overall$h, sum, numeric(1)),
+      reference$analyses[[name]]$indices$overall$h, tolerance = 1e-12)
   }
   indices_only <- score_example(keep_contributions = TRUE)
   expect_null(indices_only$analyses$category$env)
@@ -98,8 +98,8 @@ test_that("absent groups and zero-population focal units have defined handling",
   }
   pair_only <- spseg(d, list(g = spseg_categorical(vars = c("a", "b"))),
     coords = c("x", "y"), bands = 0, scope = "pairwise", keep_scores = TRUE)
-  expect_length(pair_only$analyses$g$scores$multigroup, 0)
-  expect_named(pair_only$analyses$g$indices$multigroup, "p")
+  expect_length(pair_only$analyses$g$scores$overall, 0)
+  expect_named(pair_only$analyses$g$indices$overall, "p")
 })
 
 test_that("retained local results preserve geographic and network row keys", {
@@ -124,10 +124,10 @@ test_that("constant variables and exposure-only requests keep compact arrays", {
     list(g = spseg_categorical(vars = c("a", "b"))), coords = c("x", "y"),
     bands = 0, keep_scores = TRUE, keep_contributions = TRUE, ...)
   constant <- run()
-  for (values in constant$analyses$g$contributions$multigroup)
+  for (values in constant$analyses$g$contributions$overall)
     expect_true(all(is.na(values[[1]])))
   exposure <- run(measures = "exposure")
-  expect_length(exposure$analyses$g$scores$multigroup, 0)
+  expect_length(exposure$analyses$g$scores$overall, 0)
   expect_length(exposure$analyses$g$scores$pairwise, 0)
   expect_equal(nrow(as.data.frame(exposure, what = "scores")), 0)
 })
