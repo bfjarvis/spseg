@@ -1,5 +1,14 @@
 # spseg (development version)
 
+- Continuous inputs now default to `representation = "auto"`: numeric microdata
+  and counts with scores use exact values; ordered factors, explicit membership
+  levels, and count columns without scores use intervals. Explicit overrides
+  remain available, and analysis definitions record the resolved representation.
+
+- Raw polygon analyses now use `sf::st_point_on_surface()` by default. Select
+  `polygon_points = "centroid"` for centroids, also in `spseg_default_bands()`.
+  Grid-cell assignment and surface fallback rules retain their existing behavior.
+
 - Surface-construction vignette figures use a temporary directory, keeping
   generated plot files out of the source checkout.
 

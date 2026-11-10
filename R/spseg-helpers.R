@@ -6,7 +6,8 @@
 #' the caller's random-number state. Coincident-point distances are omitted.
 #'
 #' @param x A numeric two-column coordinate matrix, a data frame with columns
-#'   selected by `coords`, or an [sf::sf] object. Polygon inputs use centroids.
+#'   selected by `coords`, or an [sf::sf] object. Polygon inputs use the
+#'   representative locations selected by `polygon_points`.
 #' @param coords Two coordinate column names or positions for a data frame.
 #'   Omit for sf input or a two-column coordinate matrix.
 #' @param population Optional population-weight column name or numeric vector.
@@ -15,6 +16,8 @@
 #' @param n Maximum number of support points to sample; an integer of at least 2.
 #' @param probs Requested distance quantiles, in [0, 1]. The defaults are 0.01,
 #'   0.05, and 0.1 through 0.7 in increments of 0.1.
+#' @param polygon_points Representative polygon locations: `"point_on_surface"`
+#'   (default) or `"centroid"`. See [spseg()].
 #' @return A numeric vector of distance bands, in coordinate units.
 #' @seealso [spseg()]
 #' @examples
@@ -22,13 +25,14 @@
 #' spseg_default_bands(points, coords = c("x", "y"), population = "residents")
 #' @export
 spseg_default_bands <- function(x, coords = NULL, population = NULL, n = 500,
-                          probs = c(0.01, 0.05, seq(0.1, 0.7, 0.1))) {
+                          probs = c(0.01, 0.05, seq(0.1, 0.7, 0.1)),
+                          polygon_points = c("point_on_surface", "centroid")) {
   if (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 2 || n != floor(n))
     stop("'n' must be an integer of at least 2", call. = FALSE)
   if (!is.numeric(probs) || !length(probs) || any(!is.finite(probs)) ||
       any(probs < 0 | probs > 1))
     stop("'probs' must contain probabilities in [0, 1]", call. = FALSE)
-  checked <- .spseg_geometry(x, NULL, coords)
+  checked <- .spseg_geometry(x, NULL, coords, polygon_points)
   coords <- checked$coords
   n_points <- nrow(coords)
   weights <- .spseg_mass(population, checked$data, n_points)

@@ -26,14 +26,15 @@ spseg(
   verbose = FALSE,
   network = NULL,
   node_id = NULL,
+  polygon_points = c("point_on_surface", "centroid"),
   ...
 )
 }
 \arguments{
 \item{x}{A numeric matrix or data frame with two coordinate columns, or
-an object of class [sf::sf]. For polygon [sf::sf] inputs, centroids
-are used as the focal coordinates. With `variables`, a plain data frame
-may contain both attributes and the columns selected by `coords`.
+an object of class [sf::sf]. Polygon inputs use representative points
+selected by `polygon_points` as focal coordinates. With `variables`, a plain
+data frame may contain both attributes and the columns selected by `coords`.
 With `network`, supply an observation table; coordinates are optional.}
 
 \item{variables}{Column names for a single categorical variable, or a uniquely
@@ -163,6 +164,14 @@ reference distribution still includes all supplied observations.}
 \item{node_id}{Single attribute column name or position mapping each
 observation to a network node. Required with `network`; otherwise omit.}
 
+\item{polygon_points}{Representative locations for polygonal `sf` inputs.
+Defaults to `"point_on_surface"`, using [sf::st_point_on_surface()] to
+select interior points. Use `"centroid"` for [sf::st_centroid()]. This
+controls raw Euclidean polygon neighborhoods and their default bands.
+Grid surfaces use grid-cell centers; their polygon-allocation and interior
+fallback rules are independent of this option. Point inputs and network
+shortest-path distances are unaffected. Stored polygon geometry is preserved.}
+
 \item{...}{Additional population-surface options, such as `cellsize`,
 `celldim`, `nrow`, `ncol`, `max_iter`, `converge`,
 `surface_geometry`. Grid and pycnophylactic surfaces use
@@ -204,7 +213,7 @@ When `neighbors = "knn"`, `bands` is interpreted as population-count
 thresholds before distance weighting. Each variable
 selects the requested eligible population, truncating the focal unit when
 needed and including equidistant boundary units proportionately. Neighboring
-units are added by centroid distance. An unattainable threshold raises an error.
+units are added by representative-point distance. An unattainable threshold raises an error.
 
 Each named variable has a result in `result$analyses`. Its overall
 measures are stored in `indices$overall` and requested pairwise

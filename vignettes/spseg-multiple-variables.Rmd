@@ -21,8 +21,9 @@ The caller can parallelize independent cities or simulation runs.
 # Inputs and syntax
 
 Each row represents a geographic support point or an aggregated population.
-An `sf` object uses its active geometry column, with polygon centroids as
-support points. A plain data frame supplies `coords = c("x", "y")`.
+An `sf` object uses its active geometry column, with interior polygon points
+from `sf::st_point_on_surface()` as support points by default. Select
+`polygon_points = "centroid"` to use centroids instead. A plain data frame supplies `coords = c("x", "y")`.
 Distances are Euclidean in coordinate units; project geographic coordinates
 appropriately before requesting bandwidths in meters.
 
@@ -47,9 +48,11 @@ as.data.frame(result)
 ```
 
 `spseg_ordinal(vars=...)` requires an ordered factor or explicit `levels`.
-`spseg_continuous(vars=..., representation="intervals", levels=...)` describes
-membership in intervals of an underlying continuous variable. The default
-`representation="exact"` instead requires numeric observations. Supplied
+`spseg_continuous()` defaults to `representation = "auto"`: numeric observations
+use exact values, while ordered factors, explicit membership `levels`, and count
+columns without `scores` use intervals of an underlying continuous variable.
+Count columns with `scores` use exact values. Select `representation = "exact"`
+or `"intervals"` to specify the interpretation directly. Supplied
 interval labels do not determine numerical spacing. A single column in `vars`
 selects observed memberships or values; multiple columns select counts. For
 long-form aggregated data, select the membership/value column and supply the

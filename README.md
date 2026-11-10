@@ -101,8 +101,9 @@ exposure summaries. `output = "full"` also retains local environments for inspec
 and mapping.
 
 For an `sf` object, pass it directly as the first argument; its active geometry
-supplies the locations. Points use their coordinates and raw polygons use their
-centroids.
+supplies the locations. Points use their coordinates. Raw polygons use interior
+representative points from `sf::st_point_on_surface()` by default. Set `polygon_points = "centroid"`
+to use polygon centroids. The same option is available in `spseg_default_bands()`.
 
 ### Explore the results
 
@@ -176,6 +177,13 @@ uses its own eligible population.
 
 ## Income and other continuous variables
 
+`spseg_continuous()` infers the input representation: numeric microdata use exact
+values; ordered-factor microdata and multiple count columns use income intervals.
+Supply `scores` with count columns when they represent exact observed values.
+Explicit `levels` provide an order for interval memberships. The selected
+representation is recorded in `result$analyses$income$definition$representation`;
+use `representation = "exact"` or `"intervals"` to choose explicitly.
+
 Continuous indices use the underlying income distribution. The `summary` option
 chooses how to describe local environments and groups' experiences. The default
 reports shares of four global quartile groups. For a different grouping, supply
@@ -221,8 +229,7 @@ area_result <- spseg(
   variables = list(
     group = spseg_categorical(vars = c("group_A", "group_B")),
     income = spseg_continuous(
-      vars = c("income_low", "income_middle", "income_high"),
-      representation = "intervals"
+      vars = c("income_low", "income_middle", "income_high")
     )
   ),
   bands = 0,

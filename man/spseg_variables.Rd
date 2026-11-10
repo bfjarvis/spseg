@@ -34,7 +34,7 @@ spseg_ordinal(
 
 spseg_continuous(
   vars,
-  representation = c("exact", "intervals"),
+  representation = c("auto", "exact", "intervals"),
   levels = NULL,
   scores = NULL,
   measures = NULL,
@@ -91,14 +91,20 @@ categories by global population quantiles, keeping ties together.
 These options affect retained environments only, not indices or exposure.
 Continuous variables use `summary` instead.}
 
-\item{representation}{Continuous input representation: `"exact"` (default)
-for observed numeric values or exact-value counts, or `"intervals"` for
-interval membership or ordered interval counts. Membership requires an
-ordered factor or explicit `levels`; count columns supply interval order.}
+\item{representation}{Continuous input representation. The default `"auto"`
+selects `"exact"` for numeric observations and for count columns with
+`scores`. Count columns without scores, ordered-factor observations, and
+observations with explicit `levels` select `"intervals"`. Unordered
+memberships require an explicit order through `levels` or an ordered factor.
+Select `"exact"` or `"intervals"` to specify the interpretation directly.
+Resolved representation is recorded in the analysis definition. Interval
+membership requires an ordered factor or explicit `levels`; count columns
+supply interval order.}
 
 \item{scores}{Exact numerical values corresponding to continuous count
 columns with `representation = "exact"`. These are observed values, not
-interval midpoints. Interval input does not accept scores.}
+interval midpoints. Supplying scores selects exact-value counts in automatic
+mode. Interval input does not accept scores.}
 
 \item{interpolation}{For `representation = "intervals"`, CDF interpolation.
 `NULL` selects `"linear"` in overall percentile space, not in the original
@@ -154,7 +160,7 @@ exposures use full category shares even when retained environments are quantiles
 \examples{
 spseg_categorical(vars = "ethnicity")
 spseg_ordinal(vars = c("primary", "secondary", "tertiary"))
-spseg_continuous(vars = c("low", "middle", "high"), representation = "intervals")
+spseg_continuous(vars = c("low", "middle", "high"))
 spseg_continuous(vars = "income", summary = list(probs = c(.2, .8)))
 spseg_continuous(vars = "income",
                  summary = list(type = "quantiles", mean_rank = TRUE))

@@ -37,16 +37,22 @@
 #' @param na.action Missing-value policy: `"fail"` or `"omit"`. Omission applies
 #'   only to this variable, including its kNN stopping population. Other
 #'   variables and radius bandwidths are unaffected.
-#' @param representation Continuous input representation: `"exact"` (default)
-#'   for observed numeric values or exact-value counts, or `"intervals"` for
-#'   interval membership or ordered interval counts. Membership requires an
-#'   ordered factor or explicit `levels`; count columns supply interval order.
+#' @param representation Continuous input representation. The default `"auto"`
+#'   selects `"exact"` for numeric observations and for count columns with
+#'   `scores`. Count columns without scores, ordered-factor observations, and
+#'   observations with explicit `levels` select `"intervals"`. Unordered
+#'   memberships require an explicit order through `levels` or an ordered factor.
+#'   Select `"exact"` or `"intervals"` to specify the interpretation directly.
+#'   Resolved representation is recorded in the analysis definition. Interval
+#'   membership requires an ordered factor or explicit `levels`; count columns
+#'   supply interval order.
 #' @param interpolation For `representation = "intervals"`, CDF interpolation.
 #'   `NULL` selects `"linear"` in overall percentile space, not in the original
 #'   measurement units. Exact input does not accept this option.
 #' @param scores Exact numerical values corresponding to continuous count
 #'   columns with `representation = "exact"`. These are observed values, not
-#'   interval midpoints. Interval input does not accept scores.
+#'   interval midpoints. Supplying scores selects exact-value counts in automatic
+#'   mode. Interval input does not accept scores.
 #' @param summary Continuous summary specification, defaulting to
 #'   `list(type = "shares", probs = c(.25, .5, .75))`. Shares use the same
 #'   global groups for retained local shares and group-averaged exposure.
@@ -90,7 +96,7 @@
 #' @examples
 #' spseg_categorical(vars = "ethnicity")
 #' spseg_ordinal(vars = c("primary", "secondary", "tertiary"))
-#' spseg_continuous(vars = c("low", "middle", "high"), representation = "intervals")
+#' spseg_continuous(vars = c("low", "middle", "high"))
 #' spseg_continuous(vars = "income", summary = list(probs = c(.2, .8)))
 #' spseg_continuous(vars = "income",
 #'                  summary = list(type = "quantiles", mean_rank = TRUE))
@@ -171,7 +177,7 @@ spseg_ordinal <- function(vars, levels = NULL,
 #' @rdname spseg_variables
 #' @export
 spseg_continuous <- function(vars,
-                          representation = c("exact", "intervals"),
+                          representation = c("auto", "exact", "intervals"),
                           levels = NULL, scores = NULL,
                           measures = NULL, weights = NULL,
                           na.action = c("fail", "omit"), interpolation = NULL,
@@ -184,11 +190,14 @@ spseg_continuous <- function(vars,
     interpolation <- interpolation %||% "linear"
     if (!identical(interpolation, "linear"))
       stop("Only 'linear' interpolation is supported", call. = FALSE)
-  } else {
+  } else if (representation == "exact") {
     if (!is.null(levels))
       stop("Continuous 'levels' applies only to representation = 'intervals'", call. = FALSE)
     if (!is.null(interpolation))
       stop("'interpolation' applies only to representation = 'intervals'", call. = FALSE)
+  }
+  if (!is.null(interpolation) && !identical(interpolation, "linear")) {
+    stop("Only 'linear' interpolation is supported", call. = FALSE)
   }
   if (length(vars) == 1L && !is.null(scores)) {
     stop("'scores' applies only to continuous count columns", call. = FALSE)
@@ -337,6 +346,33 @@ spseg_continuous <- function(vars,
 .spseg_compile <- function(spec, data, population, measures, resolution = NULL,
                            variable = NULL, counts = NULL) {
   n <- nrow(data)
+  if (spec$type == "continuous") {
+    if (spec$representation == "auto") {
+      if (!is.null(spec$counts)) {
+        spec$representation <- if (is.null(spec$scores)) "intervals" else "exact"
+      } else {
+        values <- .spseg_select(data, spec$values)[[1L]]
+        spec$representation <- if (!is.null(spec$levels) || is.ordered(values)) {
+          "intervals"
+        } else if (is.numeric(values)) {
+          "exact"
+        } else {
+          stop("Continuous memberships require an ordered factor or explicit 'levels'; ",
+               "use numeric observations for exact values", call. = FALSE)
+        }
+      }
+    }
+    if (spec$representation == "intervals") {
+      if (!is.null(spec$scores))
+        stop("'scores' applies only to representation = 'exact'", call. = FALSE)
+      spec$interpolation <- spec$interpolation %||% "linear"
+    } else {
+      if (!is.null(spec$levels))
+        stop("Continuous 'levels' applies only to representation = 'intervals'", call. = FALSE)
+      if (!is.null(spec$interpolation))
+        stop("'interpolation' applies only to representation = 'intervals'", call. = FALSE)
+    }
+  }
   intervals <- identical(spec$representation, "intervals")
   exact <- spec$type == "continuous" && !intervals
   selected <- .spseg_measures(spec$measures %||% measures)

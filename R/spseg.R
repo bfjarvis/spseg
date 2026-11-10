@@ -22,7 +22,7 @@
 #' thresholds before distance weighting. Each variable
 #' selects the requested eligible population, truncating the focal unit when
 #' needed and including equidistant boundary units proportionately. Neighboring
-#' units are added by centroid distance. An unattainable threshold raises an error.
+#' units are added by representative-point distance. An unattainable threshold raises an error.
 #'
 #' Each named variable has a result in `result$analyses`. Its overall
 #' measures are stored in `indices$overall` and requested pairwise
@@ -46,9 +46,9 @@
 #' `0 * log(0)` from producing `NaN`.
 #'
 #' @param x A numeric matrix or data frame with two coordinate columns, or
-#'   an object of class [sf::sf]. For polygon [sf::sf] inputs, centroids
-#'   are used as the focal coordinates. With `variables`, a plain data frame
-#'   may contain both attributes and the columns selected by `coords`.
+#'   an object of class [sf::sf]. Polygon inputs use representative points
+#'   selected by `polygon_points` as focal coordinates. With `variables`, a plain
+#'   data frame may contain both attributes and the columns selected by `coords`.
 #'   With `network`, supply an observation table; coordinates are optional.
 #' @param data Optional attribute data with one row per coordinate or feature.
 #'   This may contain category memberships, observed
@@ -137,6 +137,13 @@
 #'   two coordinate column names or positions. For sf input, omit this argument
 #'   to use the active geometry. Distances are Euclidean in coordinate units;
 #'   use an appropriate projected CRS for metric bandwidths.
+#' @param polygon_points Representative locations for polygonal `sf` inputs.
+#'   Defaults to `"point_on_surface"`, using [sf::st_point_on_surface()] to
+#'   select interior points. Use `"centroid"` for [sf::st_centroid()]. This
+#'   controls raw Euclidean polygon neighborhoods and their default bands.
+#'   Grid surfaces use grid-cell centers; their polygon-allocation and interior
+#'   fallback rules are independent of this option. Point inputs and network
+#'   shortest-path distances are unaffected. Stored polygon geometry is preserved.
 #' @param network Optional [spseg_network()] specification. If omitted,
 #'   neighborhoods use Euclidean distances. Supplying a network uses shortest
 #'   paths exclusively, regardless of any geometry. Network calculations require
@@ -235,6 +242,7 @@ spseg <- function(
   verbose = FALSE,
   network = NULL,
   node_id = NULL,
+  polygon_points = c("point_on_surface", "centroid"),
   ...
 ) {
   if (missing(variables)) {
@@ -271,6 +279,7 @@ spseg <- function(
   search <- match.arg(search, c("boost", "brute"))
   weighting <- match.arg(weighting, c("biweight", "unweighted", "inverse", "exponential"))
   surface <- match.arg(surface, c("raw", "grid", "pycno"))
+  polygon_points <- match.arg(polygon_points)
   relational <- !is.null(network)
   if (relational && surface != "raw")
     stop("Network input requires surface = 'raw'", call. = FALSE)
@@ -302,7 +311,7 @@ spseg <- function(
     checked <- prepared_network$checked
   } else {
     if (!is.null(node_id)) stop("'node_id' requires a network", call. = FALSE)
-    checked <- .spseg_geometry(x, data, coords)
+    checked <- .spseg_geometry(x, data, coords, polygon_points)
   }
   count_data <- lapply(variables, function(spec) {
     if (!is.null(spec$counts)) .spseg_counts(spec, checked$data) else NULL
@@ -378,6 +387,7 @@ spseg <- function(
                  crs = checked$crs, weighting = weighting, power = power,
                  normalize = normalize, surface = surface, output = output,
                  keep_scores = keep_scores, keep_contributions = keep_contributions,
+                 polygon_points = polygon_points,
                  surface_info = surface_info,
                  network = if (relational) prepared_network$summary else NULL,
                  node_id = if (relational && store_local_keys) prepared_network$ids else NULL,

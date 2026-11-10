@@ -117,7 +117,7 @@ test_that("three constructors distinguish exact and interval continuous input", 
   intervals <- spseg_continuous(vars="band",representation="intervals")
   expect_identical(exact$type,"continuous")
   expect_identical(intervals$type,"continuous")
-  expect_identical(exact$representation,"exact")
+  expect_identical(exact$representation,"auto")
   expect_identical(intervals$representation,"intervals")
   expect_null(exact$interpolation)
   expect_identical(intervals$interpolation,"linear")
@@ -185,10 +185,10 @@ test_that("continuous representation options reject incompatible interpretations
                                exposure=list(probs=c(0,1))),"unused argument")
   expect_error(spseg_continuous(vars="a",representation="intervals",
                                interpolation="polynomial"),"linear")
-  expect_error(spseg_continuous(vars="v",levels=c("a","b")),"levels")
-  expect_error(spseg_continuous(vars="v",interpolation="linear"),"interpolation")
+  expect_error(spseg_continuous(vars="v",representation="exact",levels=c("a","b")),"levels")
+  expect_error(spseg_continuous(vars="v",representation="exact",interpolation="linear"),"interpolation")
   d <- data.frame(x=1:2,y=0,v=ordered(c("a","b")))
-  expect_error(spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(vars="v")),
+  expect_error(spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(vars="v",representation="exact")),
                      bands=1),"finite numeric")
 })
 

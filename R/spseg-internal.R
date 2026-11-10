@@ -1,9 +1,19 @@
-.spseg_geometry <- function(x, data, coords) {
+.spseg_geometry <- function(x, data, coords,
+                            polygon_points = c("point_on_surface", "centroid")) {
+  polygon_points <- match.arg(polygon_points)
   if (inherits(x, "sf")) {
     if (!is.null(coords)) stop("For sf input, use the active geometry instead of 'coords'",
                               call. = FALSE)
     geometry <- sf::st_geometry(x)
-    xy <- suppressWarnings(sf::st_coordinates(sf::st_centroid(sf::st_make_valid(geometry))))
+    valid_geometry <- sf::st_make_valid(geometry)
+    points <- suppressWarnings(sf::st_centroid(valid_geometry))
+    polygonal <- sf::st_geometry_type(valid_geometry) %in% c("POLYGON", "MULTIPOLYGON")
+    if (polygon_points == "point_on_surface" && any(polygonal)) {
+      points[polygonal] <- suppressWarnings(
+        sf::st_point_on_surface(valid_geometry[polygonal])
+      )
+    }
+    xy <- sf::st_coordinates(points)
     source <- if (is.null(data)) sf::st_drop_geometry(x) else as.data.frame(data)
     crs <- sf::st_crs(x)
   } else {
