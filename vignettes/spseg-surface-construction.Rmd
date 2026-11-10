@@ -12,7 +12,9 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
   fig.width = 7,
-  fig.height = 4.5
+  fig.height = 4.5,
+  # Keep knitr intermediates outside the checkout, including when knitted directly.
+  fig.path = file.path(tempdir(), "spseg-surface-figures", "")
 )
 ```
 

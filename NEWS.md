@@ -1,5 +1,8 @@
 # spseg (development version)
 
+- Surface-construction vignette figures use a temporary directory, keeping
+  generated plot files out of the source checkout.
+
 - Exposure tables now use `reference` for the focal population and `target`
   for the neighboring category. Rank profiles use `reference` alongside the
   reported statistic and probability. Symmetric pairwise index columns are

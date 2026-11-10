@@ -227,7 +227,7 @@ Root $S$\textsuperscript{4} & $\displaystyle 1-\frac{\langle G(\mathbf p_i)\rang
 $E(\mathbf p)=-\sum_gp_g\log p_g$; $I(\mathbf p)=\sum_gp_g(1-p_g)$;
 $G(\mathbf p)=(\prod_{g:P_g>0}p_g)^{1/K}$, $K=\#\{g:P_g>0\}$.
 
-$\dagger$ Package dissimilarity supplements.
+
 \footnotetext[1]{Reardon \& Firebaugh (2002), \emph{Measures of Multigroup Segregation}, Sociological Methodology 32:33--67.}
 \footnotetext[2]{Reardon (2009), \emph{Measures of Ordinal Segregation}, Research on Economic Inequality 17:129--155.}
 \footnotetext[3]{Reardon (2011), \emph{Measures of Income Segregation}, Stanford working paper, revised September. Empirical/interpolation conventions follow spseg.}
@@ -274,7 +274,7 @@ vignette for differences from Reardon's polynomial threshold-curve estimator.
 ## Installation and inputs
 
 ```{r}
-#| label: syntax-2
+#| label: libraries
 #| eval: false
 install.packages("pak")
 pak::pak("bfjarvis/spseg")
@@ -292,37 +292,10 @@ analyses should use an appropriate projected coordinate system. An sf object
 supplies active geometry; a plain table supplies coordinates via coords.
 :::
 
-## Four residential patterns
+## Four residential patterns based on  
 
 ```{r}
 #| label: plot-patterns
-#| echo: false
-#| fig-width: 10.5
-#| fig-height: 3.4
-#| out-width: 96%
-bind_rows(patterns) |>
-  ggplot(aes(x, y, colour = group)) +
-  geom_point(size = .45) +
-  facet_wrap(~pattern, nrow = 1) +
-  scale_colour_manual(values = colours) +
-  coord_equal() +
-  theme_void(base_size = 15) +
-  theme(legend.position = "bottom")
-```
-
-
-::: {.notes}
-Reuses the current getting-started vignette's agents and distribute-agents
-chunks: seed 2026, 2,000 actors and locations in a 1,000 by 1,000 square.
-Group membership, ordered status, and resources are related. Cycles 1 versus 3
-control cluster scale; assignment noise 0 versus 1 weakens sorting. The locations
-and joint trait distribution stay fixed across all four assignments.
-:::
-
-## Resource distributions in space
-
-```{r}
-#| label: plot-resource-patterns
 #| echo: false
 #| fig-width: 10.5
 #| fig-height: 3.4
@@ -341,13 +314,40 @@ bind_rows(patterns) |>
 
 
 ::: {.notes}
+Reuses the current getting-started vignette's agents and distribute-agents
+chunks: seed 2026, 2,000 actors and locations in a 1,000 by 1,000 square.
+Group membership, ordered status, and resources are related. Cycles 1 versus 3
+control cluster scale; assignment noise 0 versus 1 weakens sorting. The locations
+and joint trait distribution stay fixed across all four assignments.
+:::
+
+## Correlated group membership
+
+```{r}
+#| label: plot-resource-patterns
+#| echo: false
+#| fig-width: 10.5
+#| fig-height: 3.4
+#| out-width: 96%
+bind_rows(patterns) |>
+  ggplot(aes(x, y, colour = group)) +
+  geom_point(size = .45) +
+  facet_wrap(~pattern, nrow = 1) +
+  scale_colour_manual(values = colours) +
+  coord_equal() +
+  theme_void(base_size = 15) +
+  theme(legend.position = "bottom")
+```
+
+
+::: {.notes}
 Resources are lognormally distributed, with population mean parameter 10 and
 Gini parameter .5. Color shows global resource rank. Only the allocation of
 actors to locations changes across patterns; compare clustering at a fixed color
 scale. The first pattern is used for the detailed examples that follow.
 :::
 
-## Status in the microdata
+## And correlated status
 
 ```{r}
 #| label: status-microdata
@@ -373,10 +373,35 @@ Status is an ordered micro-level trait, with categories 1, 2, and 3. The same
 people and joint trait distribution appear in every residential pattern.
 :::
 
-## Specify three variables
+## `spseg` syntax
 
 ```{r}
-#| label: syntax-3
+#| label: syntax-1
+#| eval: FALSE
+spseg(
+  x,
+  variables,
+  coords = NULL,
+  measures = "all",
+  bands = NULL,
+  weighting = c("biweight", "unweighted", "inverse", "exponential"),
+  power = 3,
+  normalize = TRUE,
+  neighbors = c("radius", "knn"),
+  search = c("boost", "brute"),
+  surface = c("raw", "grid", "pycno"),
+  scope = c("both", "overall", "pairwise"),
+  output = c("indices", "full", "localenv"),
+  keep_scores = FALSE,
+  ...
+)
+```
+
+
+## Specifying the `variables` option
+
+```{r}
+#| label: syntax-2
 #| results: hide
 micro_variables <- list(
   group = spseg_categorical(vars = "group"),
@@ -397,10 +422,10 @@ and grouped exposure. Full-resolution scalar indices use the underlying rank
 distribution independently of these reporting groups.
 :::
 
-## Calculate across distance bands
+## Calling `spseg`
 
 ```{r}
-#| label: syntax-4
+#| label: syntax-3
 #| results: hide
 result <- spseg(
   patterns[[1]],
@@ -423,7 +448,7 @@ radius figures are labeled correctly. Variables reuse neighborhood discovery.
 Full output retains the local environments used in subsequent maps.
 :::
 
-## Segregation curves
+## Spatial segregation curves
 
 ```{r}
 #| label: plot-indices
@@ -454,7 +479,7 @@ reflect different definitions and should not be treated as interchangeable.
 ## Extract indices and local environments
 
 ```{r}
-#| label: syntax-5
+#| label: syntax-4
 #| results: hide
 indices <- as.data.frame(result, what = "indices")
 pairs <- as.data.frame(result, what = "pairwise")

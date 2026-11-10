@@ -600,7 +600,7 @@ We now return to the original microdata. Up to now, we have only analyzed the fi
 `spseg` has been designed under the assumption that people will want to perform many measurements in parallel. Each call of `spseg` runs on only one core at a time. This allows for efficient re-use of the spatial neighbor calculations across variables within measurement cases. If a typical user has dozens of cities and/or timepoints to analyze, the work for each case can be distributed to a single core, with multiple measurement instances running in parallel. The following code uses the `parallel::` package and its PSOCK cluster approach to do this parallelization across our four cases. For the sake of variety, I use the `neighbors="knn"` approach, and for the sake of simplicity, I only calculate segregation based on the `group` variable.
 
 ```{r parallel-patterns}
-cluster <- parallel::makePSOCKcluster(4L)
+cluster <- parallel::makePSOCKcluster(2L)
 parallel::clusterCall(cluster, function(paths) .libPaths(paths), .libPaths())
 result_patterns <- parallel::parLapply(
   cluster,
