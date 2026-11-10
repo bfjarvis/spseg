@@ -1,5 +1,10 @@
 # spseg (development version)
 
+- Continuous interval input and aggregate counts now retain input categories
+  for default local shares, exposure, and pairwise indices. Explicit summary
+  probabilities request quantile groups, with the existing warning when interval
+  categories require proportional splitting. Numeric microdata retain quartiles.
+
 - Continuous inputs now default to `representation = "auto"`: numeric microdata
   and counts with scores use exact values; ordered factors, explicit membership
   levels, and count columns without scores use intervals. Explicit overrides

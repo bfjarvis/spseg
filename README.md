@@ -186,8 +186,10 @@ use `representation = "exact"` or `"intervals"` to choose explicitly.
 
 Continuous indices use the underlying income distribution. The `summary` option
 chooses how to describe local environments and groups' experiences. The default
-reports shares of four global quartile groups. For a different grouping, supply
-interior probabilities:
+reports shares of the supplied categories for interval data and aggregate
+counts, using those categories for exposure and pairwise indices. Numeric
+microdata default to four global quartile groups. To request quantile groups
+for either input, supply interior probabilities:
 
 ```r
 spseg_continuous(vars = "income", summary = list(probs = c(.2, .4, .6, .8)))
@@ -250,8 +252,9 @@ alone does not provide spatial locations. With multiple `vars`, the selected
 columns already contain counts, so do not also supply `weights`.
 
 For interval income, column order defines the income ordering. spseg interpolates
-in global-rank space and proportionally allocates interval populations to the
-requested summary groups. A warning identifies when groups split supplied
+in global-rank space. Summary groups default to the supplied income categories.
+Explicit `summary$probs` proportionally allocates interval populations to the
+requested quantile groups. A warning identifies when groups split supplied
 intervals. The model assumes the same within-interval rank distribution at each
 location; allocation fractions and local diagnostics are available in the result.
 Extract the neighborhood diagnostics with `as.data.frame(result, what = "interpolation")`.

@@ -44,11 +44,12 @@
     stop("summary 'probs' must increase strictly within [0, 1]", call. = FALSE)
   }
   list(type = type, probs = as.numeric(probs[probs > 0 & probs < 1]),
-       cuts = NULL, mean_rank = mean_rank)
+       cuts = NULL, mean_rank = mean_rank,
+       probs_explicit = !is.null(summary$probs))
 }
 
 .spseg_resolve_summary <- function(options, labels, totals, scores, intervals,
-                                   variable = NULL) {
+                                   variable = NULL, source_groups = intervals) {
   requested <- options$probs
   effective <- requested
   shares <- as.numeric(totals / sum(totals))
@@ -56,7 +57,28 @@
   reasons <- character()
   fractions <- matrix(numeric(), 0L, 0L)
   split_intervals <- integer()
-  if (intervals) {
+  use_categories <- source_groups && !isTRUE(options$probs_explicit) &&
+    is.null(options$cuts)
+  if (use_categories) {
+    requested <- NULL
+    if (options$type == "shares") effective <- NULL
+    group_labels <- labels
+    map <- seq_along(labels) - 1L
+    if (intervals) {
+      fractions <- diag(length(labels))
+      dimnames(fractions) <- list(labels, labels)
+      map <- integer()
+    }
+    group_definition <- list(labels = labels, shares = shares,
+      method = "input_categories")
+    if (intervals) {
+      group_definition$interval_ids <- as.list(seq_along(labels))
+      group_definition$interval_labels <- labels
+      group_definition$zero_mass_intervals <- which(totals == 0)
+      group_definition$source_shares <- shares
+      group_definition$allocation <- fractions
+    }
+  } else if (intervals) {
     if (!is.null(options$cuts)) {
       stop("Absolute summary 'cuts' require exact values, not interval labels",
            call. = FALSE)
@@ -102,15 +124,18 @@
     group_labels <- exposure$labels
     group_definition <- exposure$definition
   }
-  group_definition$requested_groups <- if (is.null(options$cuts)) {
+  group_definition$requested_groups <- if (use_categories) {
+    length(labels)
+  } else if (is.null(options$cuts)) {
     length(requested) + 1L
   } else length(options$cuts) + 1L
   group_definition$effective_groups <- length(group_labels)
   group_definition$boundaries <- c(0,
     utils::head(cumsum(group_definition$shares), -1L), 1)
-  group_definition$label_scale <- if (is.null(options$cuts)) "percentile" else "value"
+  group_definition$label_scale <- if (use_categories) "category" else
+    if (is.null(options$cuts)) "percentile" else "value"
   if (!intervals) group_definition$value_labels <- group_labels
-  if (is.null(options$cuts)) {
+  if (!use_categories && is.null(options$cuts)) {
     percentiles <- vapply(100 * group_definition$boundaries, function(p)
       format(p, digits = 12, trim = TRUE, scientific = FALSE), character(1))
     group_labels <- paste0("P", utils::head(percentiles, -1L), "-P",

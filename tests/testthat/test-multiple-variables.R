@@ -116,7 +116,8 @@ test_that("raw tied and weighted observations equal exact-value count input", {
   b <- spseg(expanded,coords=c("x","y"),variables=list(v=spseg_continuous(vars="v")),
              bands=c(0,2,10))
   c <- spseg(cbind(d,counts),coords=c("x","y"),population="w",
-             variables=list(v=spseg_continuous(vars=c("a","b","c"),scores=c(-3, -3+5,9))),
+             variables=list(v=spseg_continuous(vars=c("a","b","c"),scores=c(-3, -3+5,9),
+               summary=list(probs=c(.25,.5,.75)))),
              bands=c(0,2,10))
   expect_equal(a$analyses$v$indices,b$analyses$v$indices,tolerance=1e-12)
   expect_equal(a$analyses$v$indices,c$analyses$v$indices,tolerance=1e-12)
@@ -212,11 +213,11 @@ test_that("deterministic new-interface calls do not create an RNG state", {
 
 test_that("single populated intervals and near-endpoint grouped integrals are stable", {
   d <- data.frame(x=1:3,y=0,a=c(1,4,2),b=0)
-  expect_warning(r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", vars=c("a","b"))),bands=2), "Interval summary interpolation")
+  expect_warning(r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", vars=c("a","b"), summary=list(probs=c(.25,.5,.75)))),bands=2), "Interval summary interpolation")
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-12)
   d$a <- c(1e-8,2e-8,3e-8); d$b <- c(1,2,3)
   d$c <- c(1e8,2e8,3e8)
-  expect_warning(r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", vars=c("a","b","c"))),bands=2), "Interval summary interpolation")
+  expect_warning(r <- spseg(d,coords=c("x","y"),variables=list(v=spseg_continuous(representation = "intervals", vars=c("a","b","c"), summary=list(probs=c(.25,.5,.75)))),bands=2), "Interval summary interpolation")
   expect_equal(as.data.frame(r)$value,rep(0,4),tolerance=1e-10)
 })
 

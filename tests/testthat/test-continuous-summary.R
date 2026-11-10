@@ -9,9 +9,9 @@ summary_run <- function(d, summary = NULL, ...) {
     bands = 0, weighting = "unweighted", output = "full", ...)
 }
 
-test_that("continuous summaries default to synchronized quartile shares", {
+test_that("explicit quartile summaries use synchronized shares", {
   d <- summary_fixture()
-  result <- summary_run(d)
+  result <- summary_run(d, list(probs = c(.25, .5, .75)))
   endpoints <- summary_run(d, list(probs = c(0, .25, .5, .75, 1)))
   expect_identical(spseg_continuous(vars = "income")$summary$type, "shares")
   expect_equal(result$analyses, endpoints$analyses)
@@ -94,7 +94,7 @@ test_that("interval allocation retains requested groups and is auditable", {
   d <- data.frame(x = 0:1, y = 0, a = c(10, 0), b = c(0, 10),
                   c = c(30, 40), d = c(10, 0))
   vars <- list(income = spseg_continuous(vars = c("a", "b", "c", "d"),
-    representation = "intervals", summary = list(type = "quantiles")))
+    representation = "intervals", summary = list(type = "quantiles", probs = c(.25, .5, .75))))
   expect_warning(result <- spseg(d, vars, coords = c("x", "y"), bands = c(0, 2),
                                  output = "full"), "Interval summary interpolation")
   definition <- result$analyses$income$definition$summary
@@ -141,15 +141,15 @@ test_that("single interval summaries explicitly use the rank interpolation model
   run <- function(summary) spseg(d, list(income = spseg_continuous(
     vars = c("a", "b"), representation = "intervals", summary = summary)),
     coords = c("x", "y"), bands = 0, output = "full")
-  expect_warning(ranks <- run(list(type = "quantiles")), "Interval summary interpolation")
+  expect_warning(ranks <- run(list(type = "quantiles", probs = c(.25, .5, .75))), "Interval summary interpolation")
   expect_equal(unname(ranks$analyses$income$env[[1]]),
                matrix(rep(c(.25, .5, .75), each = 2), 2))
   expect_equal(nrow(as.data.frame(ranks, what = "env")), 6L)
   expect_equal(nrow(as.data.frame(ranks, what = "exposure")), 12L)
-  expect_warning(mean <- run(list(type = "quantiles", mean_rank = TRUE)),
+  expect_warning(mean <- run(list(type = "quantiles", probs = c(.25, .5, .75), mean_rank = TRUE)),
                  "Interval summary interpolation")
   expect_equal(unname(mean$analyses$income$env[[1]][, 4]), c(.5, .5))
-  expect_warning(shares <- run(list(type = "shares")), "Interval summary interpolation")
+  expect_warning(shares <- run(list(type = "shares", probs = c(.25, .5, .75))), "Interval summary interpolation")
   expect_equal(unname(shares$analyses$income$indices$overall$p[[1]]), matrix(.25, 4, 4))
 })
 
@@ -199,4 +199,46 @@ test_that("removed continuous arguments fail instead of selecting an old path", 
   expect_error(spseg_continuous(vars = "v", localenv = "shares",
                                 summary = list(type = "shares")), "unused argument")
   expect_no_warning(spseg_ordinal(vars = "v", localenv = "quantiles"))
+})
+
+test_that("aggregate defaults preserve input groups without proportional splitting", {
+  d <- data.frame(x = c(0, 10), y = 0,
+                  low = c(4, 0), middle = c(1, 2), high = c(0, 3), empty = 0)
+  columns <- c("low", "middle", "high", "empty")
+  run <- function(spec) spseg(d, list(income = spec), coords = c("x", "y"),
+    bands = c(0, 20), weighting = "unweighted", output = "full")
+  expect_warning(result <- run(spseg_continuous(vars = columns)), NA)
+  a <- result$analyses$income
+  expect_equal(a$env[[1]], as.matrix(d[columns]) / 5, ignore_attr = TRUE)
+  expect_equal(a$definition$summary$groups$labels, columns)
+  expect_equal(a$definition$summary$groups$shares, c(.4, .3, .3, 0))
+  expect_equal(a$definition$summary$groups$allocation, diag(4), ignore_attr = TRUE)
+  expect_null(a$definition$summary$requested_probs)
+  expect_false(a$definition$summary$interpolation$needed)
+  # Exposure and pairwise measures have an independent categorical reference.
+  categorical <- run(spseg_categorical(vars = columns))$analyses$income
+  expect_equal(a$indices$overall$p, categorical$indices$overall$p)
+  expect_equal(a$indices$pairwise, categorical$indices$pairwise)
+  exact <- run(spseg_continuous(vars = columns, scores = 1:4))$analyses$income
+  expect_equal(exact$definition$summary$groups$labels, columns)
+  expect_equal(exact$env, a$env)
+  expect_equal(exact$indices$pairwise, a$indices$pairwise, ignore_attr = TRUE)
+  expect_warning(quantiles <- run(spseg_continuous(vars = columns,
+    summary = list(type = "quantiles"))), NA)
+  expect_equal(quantiles$analyses$income$definition$summary$groups$labels, columns)
+  expect_equal(quantiles$analyses$income$definition$summary$effective_probs,
+               c(.25, .5, .75))
+  expect_warning(requested <- run(spseg_continuous(vars = columns,
+    summary = list(probs = c(.25, .5, .75)))), "Interval summary interpolation")
+  scalar <- c("d", "h", "r", "s")
+  expect_equal(a$indices$overall[scalar],
+               requested$analyses$income$indices$overall[scalar])
+})
+
+test_that("numeric microdata retain quartile grouping by default", {
+  d <- data.frame(x = 1:8, y = 0, income = 1:8)
+  run <- function(summary = NULL) spseg(d, list(income = spseg_continuous(
+    vars = "income", summary = summary)), coords = c("x", "y"), bands = 0)
+  expect_equal(run()$analyses,
+               run(list(probs = c(.25, .5, .75)))$analyses)
 })

@@ -213,10 +213,12 @@ isolation; off-diagonals describe exposure to other groups. See the technical
 guide for the formula and its distinction from normalized scalar exposure.
 
 Continuous variables use one summary specification. Shares are the default;
-the default interior probabilities `.25`, `.5`, and `.75` define four global
-focal/target income groups, labeled `P0-P25`, `P25-P50`, `P50-P75`, and `P75-P100`.
+interval data and aggregate counts retain their supplied categories for local
+shares, exposure, and pairwise indices. Numeric microdata default to interior
+probabilities `.25`, `.5`, and `.75`, defining four global focal/target groups,
+labeled `P0-P25`, `P25-P50`, `P50-P75`, and `P75-P100`.
 These labels identify population percentile ranges. Exact tied values stay together, so achieved group
-sizes need not be equal. For interval input, the requested grid is preserved.
+sizes need not be equal. For interval input, explicitly supplying `probs` preserves the requested grid.
 For exact input, labels reflect the achieved weighted percentile boundaries.
 Explicit `cuts` retain labels in the variable's units. Exact value cutoffs and
 their labels are also available in `definition$summary$groups$breaks` and
@@ -333,11 +335,14 @@ Type, method, and representation remain in `analyses[[name]]$definition`;
 `output="full"` or `"localenv"` retains compact local summaries. Categorical
 and ordinal variables default to category shares. Continuous variables use one
 `summary` setting for local output and focal-group summaries. The default
-shares mode groups exact values at global quartiles; interval input preserves
-the requested grid by proportionally allocating categories that cross group
-boundaries in global-percentile space. Explicit
+shares mode retains input categories for interval data and aggregate counts,
+and groups numeric microdata at global quartiles. Explicit `probs` requests
+groups at quantile boundaries; interval categories crossing those boundaries are
+proportionally allocated in global-percentile space. Explicit
 `summary = list(type = "quantiles")` returns local quantiles of **global
 population ranks**, not original income units, and their focal-group averages.
+Local quantiles default to quartiles. With omitted `probs`, focal groups and
+pairwise indices retain input categories for interval data and aggregate counts.
 A local median rank of `.8` locates the weighted median neighbor at the
 population's 80th percentile. Kernel weights, population weights, and kNN
 boundary fractions enter local summaries.

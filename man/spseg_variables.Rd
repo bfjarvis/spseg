@@ -110,12 +110,16 @@ mode. Interval input does not accept scores.}
 `NULL` selects `"linear"` in overall percentile space, not in the original
 measurement units. Exact input does not accept this option.}
 
-\item{summary}{Continuous summary specification, defaulting to
-`list(type = "shares", probs = c(.25, .5, .75))`. Shares use the same
+\item{summary}{Continuous summary specification, defaulting to shares of the
+supplied categories for interval input and aggregate counts, or global
+quartile groups for numeric microdata. Explicit `probs` requests quantile
+groups for either input. Shares use the same
 global groups for retained local shares and group-averaged exposure.
 `type = "quantiles"` returns local global-rank quantiles and their
-focal-group averages instead; `mean_rank = TRUE` additionally reports the
-mean of the full local rank distribution. `probs` is one strictly increasing
+focal-group averages instead, evaluated at quartiles by default. With
+omitted `probs`, these averages and pairwise indices retain the supplied
+categories for interval input and aggregate counts. `mean_rank = TRUE`
+additionally reports the mean of the full local rank distribution. `probs` is one strictly increasing
 vector in [0, 1]; optional 0/1 delimiters define tails but are not evaluated
 as local extrema. Exact shares may use finite absolute `cuts` instead of
 `probs`, with implicit infinite tails. Cuts require exact values and shares
@@ -126,7 +130,8 @@ preserving ties. Explicit `cuts` use value-based labels. Resolved value
 cutoffs and labels remain in `definition$summary$groups$breaks` and
 `value_labels` for exact data; `boundaries` records the percentile boundaries
 on the [0, 1] scale for both representations.
-Interval input retains the requested grid. Categories crossing requested
+Default category groups retain their input labels. When `probs` is supplied,
+interval input retains the requested grid. Categories crossing requested
 boundaries are proportionally apportioned in global-percentile space, using
 the same fractions for original focal populations and local target shares.
 This assumes the same within-category rank distribution at every location;
